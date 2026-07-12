@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Find every literal mention of a doc path, heading, or symbol across the
+codebase - so a rename can be propagated everywhere it's referenced. Backs
+the `/doc-xref` skill and the `update-docs` loop's path-mode rename
+propagation.
+
+CLI:
+    python linkify_doc_mentions.py "<needle>" [--roots docs src tests .claude]
+                                    [--ignore-case] [--json]
+
+Scans text files (`.md`, `.py`, `.txt`, `.yaml`, `.yml`, `.json`) under each
+root for the literal substring `<needle>` and prints `path:line: text` for
+every hit (or a JSON array with ``--json``).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from _common import REPO_ROOT
+
+TEXT_SUFFIXES = {".md", ".py", ".txt", ".yaml", ".yml", ".json"}
+DEFAULT_ROOTS = ["docs", "src", "tests", ".claude"]
+
+
+def find_mentions(needle: str, roots: list[str], ignore_case: bool = False) -> list[tuple[Path, int, str]]:
+    hits: list[tuple[Path, int, str]] = []
+    haystack_needle = needle.lower() if ignore_case else needle
+    for root_name in roots:
+        root = Path(root_name)
+        if not root.is_absolute():
+            root = REPO_ROOT / root
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                haystack = line.lower() if ignore_case else line
+                if haystack_needle in haystack:
+                    hits.append((path, lineno, line.strip()[:160]))
+    return hits
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("needle", help="the old doc path, heading text, or symbol to search for")
+    parser.add_argument("--roots", nargs="*", default=DEFAULT_ROOTS, help=f"default: {DEFAULT_ROOTS}")
+    parser.add_argument("--ignore-case", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    hits = find_mentions(args.needle, args.roots, ignore_case=args.ignore_case)
+
+    if args.json:
+        print(json.dumps(
+            [{"file": str(p.relative_to(REPO_ROOT)), "line": n, "text": t} for p, n, t in hits],
+            indent=2,
+        ))
+    else:
+        for p, n, t in hits:
+            rel = p.relative_to(REPO_ROOT) if str(p).startswith(str(REPO_ROOT)) else p
+            print(f"{rel}:{n}: {t}")
+        print(f"\nlinkify_doc_mentions: {len(hits)} mention(s) of {args.needle!r} found.")
+
+    sys.exit(0)  # informational tool - never a failing exit code
+
+
+if __name__ == "__main__":
+    main()

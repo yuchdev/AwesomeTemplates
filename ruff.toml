@@ -1,0 +1,35 @@
+src = ["src"]
+line-length = 120
+target-version = "py312"
+exclude = ["samples"]
+# Generated protobuf/gRPC stubs are committed as-is (see
+# `uv run python scripts/proto_gen.py`); generated code is not hand-maintained
+# product code, so it is not linted.
+extend-exclude = ["*_pb2.py", "*_pb2_grpc.py"]
+
+[lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "SIM102",
+    "SIM108",
+    "C4",
+    "UP017",
+    "UP037"
+]
+
+# Disable the pyupgrade rules that rewrite it to the `X | None` shorthand:
+#   UP007 - Union[...] -> X | Y; Optional[X] -> X | None
+#   UP038 - ininstance(X, Y) -> X | Y
+#   SIM300 - Yoda condition x == f(a, b)
+#   E501 - line too long
+ignore = [
+    "UP007",
+    "UP038",
+    "SIM300",
+    "E402",
+    "E501"
+]
+

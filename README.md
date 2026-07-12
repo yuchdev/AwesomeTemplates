@@ -1,1 +1,58 @@
-# awesome-claude-templates
+The goal of the project is to create easily deplayable sets of Claude Code agents, skills, hooks, loops obtained from the set of templates with easily substituted values, based on .claude that performed well on one of the Python projects (located in `_TO_SORT`)
+
+The idea is as follows:
+
+1. Replace explicit project name and other project-specific values in files with template that is easily to misrepresent in Markdown, e.g. `{{PROJECT_NAME}}`, `{{PROJECT_PURPOSE}}` and so on.
+After this step, with simple replace arfifacts can de added to another Python project.
+
+2. Sort agents and skills from `_TO_SORT` to specific categoties by offered dirs under `templates/`
+(kept separate from this repo's own `src/awesome_claude` package and docs, so the templates being
+generated are never confused with the generator's own source/docs):
+
+```
+templates/core
+templates/helpers
+templates/java
+templates/orchestrators
+templates/python
+```
+
+Each should contain
+
+```
+agents
+hooks
+loops
+skills
+```
+
+3. Markdown files contain multiple documents links. Rather than introducing templates, create `MIGRATION_REPORT.md` per each entitiy with all document references. Perhaps will be introduced templates for documents, or special documents conventions accross projects, e.g. `docs/adr` and `docs/roadmap`. The following design will be the subject of further design steps
+
+4. Analyze any project- or technology dependent entities aside names and links and provide then in each `MIGRATION_REPORT.md`
+
+This would be gate for the next design round or the first implementation round.
+
+## Usage
+
+The generator lives in `src/awesome_claude` and installs as the `awesome-claude` console script via `uv`.
+
+```bash
+uv sync                          # one-time setup - creates .venv and uv.lock
+
+uv run awesome-claude list       # see every preset/category/entity available
+
+uv run awesome-claude generate --preset python-minimal \
+    --name "Acme Sync" --package acme_sync --out .claude
+
+uv run awesome-claude docs copy --out docs                # copy the docs/ scaffold verbatim
+uv run awesome-claude docs new adr "Adopt structured logging"  # scaffold a new ADR
+```
+
+`generate` also accepts `--config <file.json|file.toml>` (any flag passed alongside overrides the matching config value), `--copy-docs`/`--check-requirements`, `--dry-run --json` for a machine-readable preview, and `--include type:name` / `--exclude type:name` to cherry-pick individual agents/hooks/loops/skills on top of a preset. Run `uv run awesome-claude generate --help` for the full flag reference.
+
+### Development
+
+```bash
+uv run pytest --cov=awesome_claude   # test suite
+uv run ruff check src/ tests/        # lint
+```
