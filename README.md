@@ -1,4 +1,4 @@
-The goal of the project is to create easily deplayable sets of Claude Code agents, skills, hooks, loops obtained from the set of templates with easily substituted values, based on .claude that performed well on one of the Python projects (located in `_TO_SORT`)
+The goal of the project is to create easily deplayable sets of Claude Code agents, skills, hooks, loops obtained from the set of templates with easily substituted values.
 
 The idea is as follows:
 
