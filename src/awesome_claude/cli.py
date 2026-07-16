@@ -3,6 +3,7 @@ and starter documents from this repo's templates.
 
 Command tree:
   awesome-claude list
+  awesome-claude graph [...]
   awesome-claude generate [...]
   awesome-claude docs copy [...]
   awesome-claude docs new adr "<title>"
@@ -19,6 +20,8 @@ from rich.table import Table
 
 from awesome_claude.catalog import CATEGORIES, KINDS, PRESETS, discover
 from awesome_claude.config import ConfigError, load_config
+from awesome_claude.dependencies import build_dependency_graph, render_doc, write_inline_dependencies
+from awesome_claude.dependencies import to_json as graph_to_json
 from awesome_claude.docs_scaffold import copy_docs_tree
 from awesome_claude.doctemplates import DOC_TYPES, DocTemplateError, render_new_document
 from awesome_claude.requirements import check_target_requirements
@@ -81,6 +84,43 @@ def list_cmd(
                 console.print(f"  [bold]{kind}[/bold]: {', '.join(names)}")
 
 
+@app.command("graph")
+def graph_cmd(
+    out: str = typer.Option(
+        "docs/dependency-graph.md", "--out", help="where to write the rendered graph doc"
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", help="print the raw graph as JSON instead of writing the doc"
+    ),
+    inline: bool = typer.Option(
+        False,
+        "--inline",
+        help="also upsert a per-file 'Dependencies' block into every templates/** entity - "
+        "MUTATES templates/** in place; review `git diff` before committing",
+    ),
+) -> None:
+    """Render this repo's own agent/hook/loop/skill reference graph (maintainer tool, docs-only)."""
+    if json_out and inline:
+        _fail("--inline is not supported together with --json")
+        return
+    workspace = _workspace()
+    catalog = discover(workspace)
+    graph = build_dependency_graph(workspace, catalog)
+    if json_out:
+        typer.echo(json.dumps(graph_to_json(graph), indent=2))
+        return
+    out_path = Path(out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(render_doc(graph), encoding="utf-8")
+    console.print(f"Wrote dependency graph to {out_path} ({len(graph.nodes)} nodes, {len(graph.edges)} edges)")
+    if inline:
+        updated = write_inline_dependencies(workspace, catalog)
+        console.print(
+            f"Updated inline Dependencies block in {updated} template file(s) under templates/** "
+            "- review `git diff` before committing."
+        )
+
+
 @app.command()
 def generate(
     config: str | None = typer.Option(
@@ -114,7 +154,7 @@ def generate(
         None, "--no-settings/--settings", help="skip writing settings.json"
     ),
     copy_docs: bool | None = typer.Option(
-        None, "--copy-docs/--no-copy-docs", help="also copy docs/ verbatim"
+        None, "--copy-docs/--no-copy-docs", help="also copy docs/ (with {{PLACEHOLDER}} substitution)"
     ),
     docs_out: str | None = typer.Option(None, help="where --copy-docs writes to (default: docs)"),
     check_requirements: bool | None = typer.Option(
@@ -226,7 +266,7 @@ def generate(
             if not no_settings_value and workspace.path("core", "settings.json").exists():
                 console.print("  settings.json: yes")
             if copy_docs_value:
-                console.print(f"  docs/ -> {docs_out_value} (verbatim, no templating)")
+                console.print(f"  docs/ -> {docs_out_value} (templated with substitutions)")
             if warnings:
                 console.print("\n[yellow]Warnings:[/yellow]")
                 for w in warnings:
@@ -266,7 +306,7 @@ def generate(
                 f"docs copy skipped: '{docs_out_dir}' is not empty - pass --force to overwrite"
             )
         else:
-            docs_written = copy_docs_tree(workspace, docs_out_dir, force_value)
+            docs_written = copy_docs_tree(workspace, docs_out_dir, force_value, subs, warnings)
 
     summary = {
         "out": str(out_dir),
@@ -293,17 +333,39 @@ def generate(
 
 @docs_app.command("copy")
 def docs_copy(
+    name: str | None = typer.Option(None, help="PROJECT_NAME substitution value"),
+    package: str | None = typer.Option(
+        None, help="PROJECT_PACKAGE value (default: slugified --name)"
+    ),
+    purpose: str | None = typer.Option(None, help="PROJECT_PURPOSE value"),
+    slug: str | None = typer.Option(
+        None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"
+    ),
     out: str = typer.Option("docs", "--out", help="where to copy docs/ to"),
     force: bool = typer.Option(False, "--force", help="overwrite existing files"),
 ) -> None:
-    """Copy this repo's docs/ tree verbatim (no placeholder substitution)."""
+    """Copy this repo's docs/ tree, applying {{PLACEHOLDER}} substitution (same engine as generate)."""
+    if not name:
+        _fail("--name is required")
+        return
     workspace = _workspace()
     out_dir = Path(out)
     if out_dir.exists() and any(out_dir.iterdir()) and not force:
         _fail(f"'{out_dir}' is not empty - pass --force to overwrite")
         return
-    count = copy_docs_tree(workspace, out_dir, force)
+    subs = {
+        "PROJECT_NAME": name,
+        "PROJECT_PACKAGE": package or slugify_package(name),
+        "PROJECT_SLUG_UPPER": slug or slugify_upper(name),
+        "PROJECT_PURPOSE": purpose or "TODO: describe what this project does",
+    }
+    warnings: list[str] = []
+    count = copy_docs_tree(workspace, out_dir, force, subs, warnings)
     console.print(f"docs/: {count} file(s) copied to {out_dir}")
+    if warnings:
+        console.print("\n[yellow]Warnings:[/yellow]")
+        for w in warnings:
+            console.print(f"  - {w}")
 
 
 @docs_app.command("new")

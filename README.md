@@ -2,12 +2,8 @@ The goal of the project is to create easily deplayable sets of Claude Code agent
 
 The idea is as follows:
 
-1. Replace explicit project name and other project-specific values in files with template that is easily to misrepresent in Markdown, e.g. `{{PROJECT_NAME}}`, `{{PROJECT_PURPOSE}}` and so on.
+Replace explicit project name and other project-specific values in files with template that is easily to misrepresent in Markdown, e.g. `{{PROJECT_NAME}}`, `{{PROJECT_PURPOSE}}` and so on.
 After this step, with simple replace arfifacts can de added to another Python project.
-
-2. Sort agents and skills from `_TO_SORT` to specific categoties by offered dirs under `templates/`
-(kept separate from this repo's own `src/awesome_claude` package and docs, so the templates being
-generated are never confused with the generator's own source/docs):
 
 ```
 templates/core
@@ -37,22 +33,27 @@ This would be gate for the next design round or the first implementation round.
 The generator lives in `src/awesome_claude` and installs as the `awesome-claude` console script via `uv`.
 
 ```bash
-uv sync                          # one-time setup - creates .venv and uv.lock
+# one-time setup - creates .venv and uv.lock
+uv sync
 
-uv run awesome-claude list       # see every preset/category/entity available
+# see every preset/category/entity available
+uv run awesome-claude list
+uv run awesome-claude generate --preset python-minimal  --name "Acme Sync" --package acme_sync --out .claude
 
-uv run awesome-claude generate --preset python-minimal \
-    --name "Acme Sync" --package acme_sync --out .claude
+# copy the docs/ scaffold, with {{PLACEHOLDER}} substitution applied
+uv run awesome-claude docs copy --name "Acme Sync" --package acme_sync --out docs
 
-uv run awesome-claude docs copy --out docs                # copy the docs/ scaffold verbatim
-uv run awesome-claude docs new adr "Adopt structured logging"  # scaffold a new ADR
+# scaffold a new ADR
+uv run awesome-claude docs new adr "Adopt structured logging"
 ```
 
 `generate` also accepts `--config <file.json|file.toml>` (any flag passed alongside overrides the matching config value), `--copy-docs`/`--check-requirements`, `--dry-run --json` for a machine-readable preview, and `--include type:name` / `--exclude type:name` to cherry-pick individual agents/hooks/loops/skills on top of a preset. Run `uv run awesome-claude generate --help` for the full flag reference.
 
 ### Development
 
+Test suite and lint
+
 ```bash
-uv run pytest --cov=awesome_claude   # test suite
-uv run ruff check src/ tests/        # lint
+uv run pytest --cov=awesome_claude
+uv run ruff check src/ tests/
 ```

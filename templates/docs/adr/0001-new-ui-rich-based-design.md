@@ -1,4 +1,4 @@
-# 0001 - Live-updating terminal UI for CLI output
+# 0001 - Template ADR Record
 
 > **Status:** Implemented
 >

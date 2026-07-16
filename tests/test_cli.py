@@ -79,9 +79,116 @@ def test_generate_refuses_nonempty_out_without_force(fixture_workspace, tmp_path
 def test_docs_copy_writes_files(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "docs-out"
-    result = runner.invoke(app, ["docs", "copy", "--out", str(out_dir)])
+    result = runner.invoke(app, ["docs", "copy", "--name", "Acme Sync", "--out", str(out_dir)])
     assert result.exit_code == 0, result.stdout
     assert (out_dir / "adr" / "template.md").is_file()
+
+
+def test_docs_copy_requires_name(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "docs-out"
+    result = runner.invoke(app, ["docs", "copy", "--out", str(out_dir)])
+    assert result.exit_code == 1
+
+
+def test_docs_copy_applies_substitution(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "foo.md").write_text("Hello {{PROJECT_NAME}}\n")
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", root)
+
+    out_dir = tmp_path / "docs-out"
+    result = runner.invoke(app, ["docs", "copy", "--name", "Acme Sync", "--out", str(out_dir)])
+    assert result.exit_code == 0, result.stdout
+    text = (out_dir / "foo.md").read_text()
+    assert "Acme Sync" in text
+    assert "{{PROJECT_NAME}}" not in text
+
+
+def test_docs_copy_reports_unresolved_placeholder_warning(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "foo.md").write_text("Value: {{NOT_A_REAL_KEY}}\n")
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", root)
+
+    out_dir = tmp_path / "docs-out"
+    result = runner.invoke(app, ["docs", "copy", "--name", "Acme Sync", "--out", str(out_dir)])
+    assert result.exit_code == 0, result.stdout
+    assert "Warnings:" in result.stdout
+    assert "unresolved placeholder" in result.stdout
+
+
+def test_generate_copy_docs_applies_substitution(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    (root / "core" / "agents").mkdir(parents=True)
+    (root / "core" / "agents" / "widget-verifier.md").write_text("An agent.\n")
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "x.md").write_text("Project: {{PROJECT_NAME}}\n")
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", root)
+
+    out_dir = tmp_path / ".claude"
+    docs_out_dir = tmp_path / "docs-out"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--categories",
+            "core",
+            "--name",
+            "Acme",
+            "--out",
+            str(out_dir),
+            "--copy-docs",
+            "--docs-out",
+            str(docs_out_dir),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    text = (docs_out_dir / "x.md").read_text()
+    assert text == "Project: Acme\n"
+
+
+def test_graph_command_writes_mermaid_doc(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_file = tmp_path / "dependency-graph.md"
+    result = runner.invoke(app, ["graph", "--out", str(out_file)])
+    assert result.exit_code == 0, result.stdout
+    text = out_file.read_text()
+    assert "```mermaid" in text
+    assert "graph LR" in text
+
+
+def test_graph_command_json_output(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["graph", "--json"])
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert "nodes" in payload
+    assert "edges" in payload
+
+
+def test_graph_inline_flag_upserts_and_is_idempotent(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_file = tmp_path / "dependency-graph.md"
+
+    result = runner.invoke(app, ["graph", "--out", str(out_file), "--inline"])
+    assert result.exit_code == 0, result.stdout
+
+    root = fixture_workspace.root
+    before = {f: f.read_bytes() for f in root.rglob("*") if f.is_file()}
+
+    result2 = runner.invoke(app, ["graph", "--out", str(out_file), "--inline"])
+    assert result2.exit_code == 0, result2.stdout
+    assert "Updated inline Dependencies block in 0 template file(s)" in result2.stdout
+
+    after = {f: f.read_bytes() for f in root.rglob("*") if f.is_file()}
+    assert before == after
+
+
+def test_graph_inline_and_json_rejected_together(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["graph", "--json", "--inline"])
+    assert result.exit_code == 1
 
 
 def test_docs_new_adr_writes_file(fixture_workspace, monkeypatch):
