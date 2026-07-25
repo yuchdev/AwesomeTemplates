@@ -30,11 +30,16 @@ class Selection:
                 f"unknown category '{category}' (choices: {', '.join(CATEGORIES)})"
             )
         for kind in KINDS:
-            self.entries[category][kind] |= set(catalog.entries[category][kind])
+            if category in catalog.entries:
+                self.entries[category][kind] |= set(catalog.entries[category][kind])
 
     @staticmethod
     def find_by_name(catalog: Catalog, kind: str, name: str) -> list[tuple[str, str]]:
-        return [(cat, name) for cat in CATEGORIES if name in catalog.entries[cat][kind]]
+        return [
+            (cat, name)
+            for cat in CATEGORIES
+            if cat in catalog.entries and name in catalog.entries[cat][kind]
+        ]
 
     def apply_tokens(self, catalog: Catalog, tokens: list[str], adding: bool) -> None:
         # token shape: "type:name" or "type:category/name" (the qualified form is

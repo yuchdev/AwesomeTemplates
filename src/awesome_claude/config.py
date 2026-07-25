@@ -5,7 +5,10 @@ override the matching config value - see cli.py's merge step."""
 from __future__ import annotations
 
 import json
-import tomllib
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 from pathlib import Path
 
 

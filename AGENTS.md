@@ -27,9 +27,6 @@ uv run awesome-claude docs new adr "Adopt structured logging"
 
 # maintainer-only: render this repo's own agent/hook/loop/skill reference graph
 uv run awesome-claude graph --out docs/dependency-graph.md
-uv run awesome-claude graph --template-mode --preset python-full
-uv run awesome-claude graph --inline --force
-uv run awesome-claude graph --remove
 
 # tests
 uv run pytest --cov=awesome_claude
@@ -100,11 +97,9 @@ the four entity kinds above.
   `--check-requirements`.
 - `dependencies.py` — a maintainer-only tool for *this* repo's own catalog, not part of the `generate`
   flow: scans every entity's content for whole-word mentions of every other entity's name, builds a
-  graph, and can render it as Mermaid/Markdown (`awesome-claude graph`), or upsert a per-file
-  "Dependencies" block directly into `templates/**` (`--inline`), or remove them (`--remove`).
-  Use `--template-mode` to deploy a selection to a temporary directory before graphing, which verifies
-  that root-relative references (like `.claude/hooks/*.py`) resolve correctly in their deployed state.
-  Both flags mutate the template tree in place (unless in `--template-mode`) — review `git diff` before committing.
+  graph, and can render it as Mermaid/Markdown (`awesome-claude graph`) or upsert a per-file
+  "Dependencies" block directly into `templates/**` (`--inline`, which mutates the template tree in
+  place — review `git diff` before committing after using it).
 - `cli.py` — Typer app; command tree is `list`, `graph`, `generate`, `docs copy`, `docs new`. Each
   `generate`/`docs copy` flag has a config-file fallback (`--config file.json|.toml`) merged before CLI
   flags, which always win.

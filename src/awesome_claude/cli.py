@@ -12,11 +12,16 @@ Command tree:
 from __future__ import annotations
 
 import json
+import tempfile
+import shutil
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
+
+import typing
+from typing import List, Optional, Union
 
 from awesome_claude.catalog import CATEGORIES, KINDS, PRESETS, discover
 from awesome_claude.config import ConfigError, load_config
@@ -86,6 +91,14 @@ def list_cmd(
 
 @app.command("graph")
 def graph_cmd(
+    target: Path = typer.Argument(
+        TEMPLATES_ROOT,
+        help="path to the directory to analyze (default: templates/)",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     out: str = typer.Option(
         "docs/dependency-graph.md", "--out", help="where to write the rendered graph doc"
     ),
@@ -95,69 +108,192 @@ def graph_cmd(
     inline: bool = typer.Option(
         False,
         "--inline",
-        help="also upsert a per-file 'Dependencies' block into every templates/** entity - "
-        "MUTATES templates/** in place; review `git diff` before committing",
+        help="also upsert a per-file 'Dependencies' block into every template entity - "
+        "MUTATES files in place; review `git diff` before committing",
+    ),
+    remove: bool = typer.Option(
+        False,
+        "--remove",
+        help="remove per-file 'Dependencies' blocks from every template entity - "
+        "MUTATES files in place; review `git diff` before committing",
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="overwrite existing inline dependency blocks"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="print detailed progress during analysis"
+    ),
+    template_mode: bool = typer.Option(
+        False,
+        "--template-mode",
+        help="deploy templates to a temporary directory before graphing to verify deployed references",
+    ),
+    template_cleanup: bool = typer.Option(
+        True,
+        "--template-cleanup/--no-template-cleanup",
+        help="delete the temporary directory after building the graph",
+    ),
+    preset: Optional[str] = typer.Option(
+        None, "--preset", "-p", help="named bundle of categories to deploy in template-mode"
+    ),
+    include: List[str] = typer.Option(
+        [], "--include", "-i", help="add individual entity (type:name) in template-mode"
+    ),
+    exclude: List[str] = typer.Option(
+        [], "--exclude", "-e", help="remove individual entity (type:name) in template-mode"
     ),
 ) -> None:
-    """Render this repo's own agent/hook/loop/skill reference graph (maintainer tool, docs-only)."""
+    """Render a reference graph and analyze external dependencies."""
     if json_out and inline:
         _fail("--inline is not supported together with --json")
         return
-    workspace = _workspace()
-    catalog = discover(workspace)
-    graph = build_dependency_graph(workspace, catalog)
-    if json_out:
-        typer.echo(json.dumps(graph_to_json(graph), indent=2))
-        return
-    out_path = Path(out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render_doc(graph), encoding="utf-8")
-    console.print(f"Wrote dependency graph to {out_path} ({len(graph.nodes)} nodes, {len(graph.edges)} edges)")
-    if inline:
-        updated = write_inline_dependencies(workspace, catalog)
+
+    temp_dir_obj = None
+    try:
+        if template_mode:
+            # 1. Resolve source and selection
+            source_workspace = Workspace(root=target)
+            source_catalog = discover(source_workspace)
+
+            sel = Selection.empty()
+            if preset:
+                if preset not in PRESETS:
+                    _fail(
+                        f"unknown preset '{preset}' (choices: {', '.join(sorted(PRESETS))})"
+                    )
+                for cat in PRESETS[preset]:
+                    sel.add_category(source_catalog, cat)
+
+            if include:
+                sel.apply_tokens(source_catalog, include, adding=True)
+            if exclude:
+                sel.apply_tokens(source_catalog, exclude, adding=False)
+
+            # Default to all categories if nothing selected in template mode
+            if sel.is_empty():
+                for cat in CATEGORIES:
+                    if cat in source_catalog.entries:
+                        sel.add_category(source_catalog, cat)
+
+            # 2. Create temp dir
+            if template_cleanup:
+                temp_dir_obj = tempfile.TemporaryDirectory(prefix="awesome-claude-graph-")
+                target = Path(temp_dir_obj.name)
+            else:
+                target = Path(tempfile.mkdtemp(prefix="awesome-claude-graph-")).resolve()
+                # Use standard print to avoid Rich wrapping the path
+                print(f"Template mode: deploying to {target.as_posix()}")
+
+            # 3. Deploy
+            subs = {
+                "PROJECT_NAME": "Template Test",
+                "PROJECT_PACKAGE": "template_test",
+                "PROJECT_SLUG_UPPER": "TEMPLATE_TEST",
+                "PROJECT_PURPOSE": "Verification of template dependencies",
+            }
+            warnings: List[str] = []
+            claude_out = target / ".claude"
+
+            for cat, kinds in sel.entries.items():
+                for kind in KINDS:
+                    for entity_name in sorted(kinds[kind]):
+                        src = source_catalog.entries[cat][kind][entity_name]
+                        dst = (
+                            claude_out / kind / entity_name
+                            if kind == "skills"
+                            else claude_out / kind / src.name
+                        )
+                        copy_entity(src, dst, kind, subs, warnings)
+
+            copy_docs_tree(source_workspace, target / "docs", True, subs, warnings)
+
+            if warnings and verbose:
+                for w in warnings:
+                    console.print(f"[yellow]warning:[/yellow] {w}")
+
+        workspace = Workspace(root=target)
+        catalog = discover(workspace)
+        # If the target has a docs/ dir, scan it for references too
+        docs_dir = workspace.path("docs")
+        graph = build_dependency_graph(workspace, catalog, extra_scan_path=docs_dir)
+        if json_out:
+            typer.echo(json.dumps(graph_to_json(graph), indent=2))
+            return
+        out_path = Path(out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(render_doc(graph), encoding="utf-8")
         console.print(
-            f"Updated inline Dependencies block in {updated} template file(s) under templates/** "
-            "- review `git diff` before committing."
+            f"Wrote dependency graph for {target} to {out_path} "
+            f"({len(graph.nodes)} nodes, {len(graph.edges)} edges)"
         )
+        if inline or remove:
+            if inline and remove:
+                _fail("--inline and --remove are mutually exclusive")
+                return
+
+            action_verb = "Removing" if remove else "Updating"
+            if verbose:
+                console.print(f"{action_verb} inline dependencies in {target}...")
+            try:
+                updated = write_inline_dependencies(
+                    workspace,
+                    catalog,
+                    verbose=verbose,
+                    extra_scan_path=docs_dir,
+                    force=force,
+                    remove=remove,
+                )
+            except RuntimeError as exc:
+                _fail(str(exc))
+                return
+
+            target_verb = "Removed" if remove else "Updated"
+            console.print(
+                f"{target_verb} inline Dependencies block in {updated} template file(s) "
+                "- review `git diff` before committing."
+            )
+    finally:
+        if temp_dir_obj:
+            temp_dir_obj.cleanup()
 
 
 @app.command()
 def generate(
-    config: str | None = typer.Option(
+    config: Optional[str] = typer.Option(
         None, "--config", help="JSON or TOML config file; CLI flags override it"
     ),
-    preset: str | None = typer.Option(
+    preset: Optional[str] = typer.Option(
         None, help=f"start from a predefined category set ({', '.join(sorted(PRESETS))})"
     ),
-    categories: str | None = typer.Option(
+    categories: Optional[str] = typer.Option(
         None, help="comma-separated category list, e.g. core,python"
     ),
-    include: list[str] = typer.Option(
+    include: List[str] = typer.Option(
         [], "--include", help="add one entity: agent|hook|loop|skill:NAME (repeatable)"
     ),
-    exclude: list[str] = typer.Option(
+    exclude: List[str] = typer.Option(
         [], "--exclude", help="remove one entity, same form (repeatable)"
     ),
-    name: str | None = typer.Option(None, help="PROJECT_NAME substitution value"),
-    package: str | None = typer.Option(
+    name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
+    package: Optional[str] = typer.Option(
         None, help="PROJECT_PACKAGE value (default: slugified --name)"
     ),
-    purpose: str | None = typer.Option(None, help="PROJECT_PURPOSE value"),
-    slug: str | None = typer.Option(
+    purpose: Optional[str] = typer.Option(None, help="PROJECT_PURPOSE value"),
+    slug: Optional[str] = typer.Option(
         None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"
     ),
-    out: str | None = typer.Option(None, help="output directory (default: .claude)"),
-    force: bool | None = typer.Option(
+    out: Optional[str] = typer.Option(None, help="output directory (default: .claude)"),
+    force: Optional[bool] = typer.Option(
         None, "--force/--no-force", help="overwrite a non-empty --out/--docs-out"
     ),
-    no_settings: bool | None = typer.Option(
+    no_settings: Optional[bool] = typer.Option(
         None, "--no-settings/--settings", help="skip writing settings.json"
     ),
-    copy_docs: bool | None = typer.Option(
+    copy_docs: Optional[bool] = typer.Option(
         None, "--copy-docs/--no-copy-docs", help="also copy docs/ (with {{PLACEHOLDER}} substitution)"
     ),
-    docs_out: str | None = typer.Option(None, help="where --copy-docs writes to (default: docs)"),
-    check_requirements: bool | None = typer.Option(
+    docs_out: Optional[str] = typer.Option(None, help="where --copy-docs writes to (default: docs)"),
+    check_requirements: Optional[bool] = typer.Option(
         None,
         "--check-requirements/--no-check-requirements",
         help="warn about files the selection assumes exist",
@@ -333,12 +469,12 @@ def generate(
 
 @docs_app.command("copy")
 def docs_copy(
-    name: str | None = typer.Option(None, help="PROJECT_NAME substitution value"),
-    package: str | None = typer.Option(
+    name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
+    package: Optional[str] = typer.Option(
         None, help="PROJECT_PACKAGE value (default: slugified --name)"
     ),
-    purpose: str | None = typer.Option(None, help="PROJECT_PURPOSE value"),
-    slug: str | None = typer.Option(
+    purpose: Optional[str] = typer.Option(None, help="PROJECT_PURPOSE value"),
+    slug: Optional[str] = typer.Option(
         None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"
     ),
     out: str = typer.Option("docs", "--out", help="where to copy docs/ to"),

@@ -10,7 +10,7 @@ command for the only consumer.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from awesome_claude.catalog import KINDS, SKIP_NAMES, Catalog, discover
@@ -31,6 +31,10 @@ class EntityRef:
     kind: str
     name: str
 
+    @property
+    def is_doc(self) -> bool:
+        return self.kind == "doc"
+
 
 @dataclass(frozen=True)
 class Edge:
@@ -46,6 +50,7 @@ class Edge:
 class DependencyGraph:
     nodes: list[EntityRef]
     edges: list[Edge]
+    missing: set[EntityRef] = field(default_factory=set)
 
 
 def _entity_text(kind: str, path: Path) -> str:
@@ -65,7 +70,11 @@ def _entity_text(kind: str, path: Path) -> str:
         return ""
 
 
-def build_dependency_graph(workspace: Workspace, catalog: Catalog | None = None) -> DependencyGraph:
+def build_dependency_graph(
+    workspace: Workspace,
+    catalog: Catalog | None = None,
+    extra_scan_path: Path | None = None,
+) -> DependencyGraph:
     """Scan every entity's own content for whole-word mentions of every other
     entity's name. A match on the source entity's own name is never an edge
     (self-mentions are discarded outright, not just self-loops). A match on
@@ -89,32 +98,91 @@ def build_dependency_graph(workspace: Workspace, catalog: Catalog | None = None)
                 by_name.setdefault(name, []).append(ref)
                 texts[ref] = _entity_text(kind, path)
 
+    # If an extra scan path (like docs/) is provided, we scan its files too
+    if extra_scan_path and extra_scan_path.is_dir():
+        for f in extra_scan_path.rglob("*"):
+            if f.is_file() and f.suffix in (".md", ".py") and f.name not in SKIP_NAMES:
+                try:
+                    rel_path = f.relative_to(extra_scan_path)
+                    ref = EntityRef(category="docs", kind="doc", name=str(rel_path))
+                    nodes.append(ref)
+                    texts[ref] = f.read_text(encoding="utf-8")
+                except (UnicodeDecodeError, ValueError):
+                    continue
+
     nodes.sort()
 
-    if not by_name:
+    if not nodes:
         return DependencyGraph(nodes=nodes, edges=[])
 
-    pattern = re.compile(
-        r"(?<![\w-])("
-        + "|".join(re.escape(n) for n in sorted(by_name, key=len, reverse=True))
-        + r")(?![\w-])"
+    pattern_names = sorted(by_name, key=len, reverse=True)
+    pattern = (
+        re.compile(
+            r"(?<![\w-])(" + "|".join(re.escape(n) for n in pattern_names) + r")(?![\w-])"
+        )
+        if pattern_names
+        else None
     )
+
+    doc_pattern = re.compile(r"@docs/([a-zA-Z0-9_\-/]+\.md)")
+    source_pattern = re.compile(r"(?<![\w\-/])(\.?[a-zA-Z0-9_\-/]+\.py)(?![\w\.])")
 
     edges: list[Edge] = []
     seen: set[tuple[EntityRef, EntityRef]] = set()
-    for ref in nodes:
-        matched_names = {m.group(1) for m in pattern.finditer(texts[ref])}
-        matched_names.discard(ref.name)
-        for name in matched_names:
-            targets = by_name[name]
-            same_category = [t for t in targets if t.category == ref.category]
-            for target in same_category or targets:
-                key = (ref, target)
-                if key not in seen:
-                    seen.add(key)
-                    edges.append(Edge(source=ref, target=target))
 
-    return DependencyGraph(nodes=nodes, edges=edges)
+    # To track discovered documentation and source files (those that are targets but not in nodes)
+    extra_nodes: set[EntityRef] = set()
+
+    for ref in nodes:
+        # Match standard entities
+        if pattern:
+            matched_names = {m.group(1) for m in pattern.finditer(texts[ref])}
+            matched_names.discard(ref.name)
+            for name in matched_names:
+                targets = by_name[name]
+                same_category = [t for t in targets if t.category == ref.category]
+                for target in same_category or targets:
+                    key = (ref, target)
+                    if key not in seen:
+                        seen.add(key)
+                        edges.append(Edge(source=ref, target=target))
+
+        # Match @docs/ references
+        matched_docs = {m.group(1) for m in doc_pattern.finditer(texts[ref])}
+        for doc_path in matched_docs:
+            target = EntityRef(category="docs", kind="doc", name=doc_path)
+            extra_nodes.add(target)
+            key = (ref, target)
+            if key not in seen:
+                seen.add(key)
+                edges.append(Edge(source=ref, target=target))
+
+        # Match .py source references
+        matched_sources = {m.group(1) for m in source_pattern.finditer(texts[ref])}
+        for src_path in matched_sources:
+            # We treat these as a special "src" kind
+            target = EntityRef(category="src", kind="file", name=src_path)
+            extra_nodes.add(target)
+            key = (ref, target)
+            if key not in seen:
+                seen.add(key)
+                edges.append(Edge(source=ref, target=target))
+
+    # Add discovered extra nodes to nodes
+    missing: set[EntityRef] = set()
+    for extra_ref in sorted(extra_nodes):
+        if extra_ref not in nodes:
+            nodes.append(extra_ref)
+            # Check existence for docs and files
+            if extra_ref.kind == "doc":
+                if not (workspace.root / "docs" / extra_ref.name).exists():
+                    missing.add(extra_ref)
+            elif extra_ref.kind == "file":
+                if not (workspace.root / extra_ref.name).exists():
+                    missing.add(extra_ref)
+
+    nodes.sort()
+    return DependencyGraph(nodes=nodes, edges=edges, missing=missing)
 
 
 def _sanitize(name: str) -> str:
@@ -126,7 +194,14 @@ def _node_id(ref: EntityRef) -> str:
 
 
 def _node_label(ref: EntityRef) -> str:
-    return f"{KIND_SINGULAR.get(ref.kind, ref.kind)}:{ref.name}"
+    if ref.kind == "doc":
+        return f"doc:{ref.name}"
+    if ref.kind == "file":
+        return f"src:{ref.name}"
+    label = f"{KIND_SINGULAR.get(ref.kind, ref.kind)}:{ref.name}"
+    if ref.category != ".":
+        label = f"{ref.category}/{label}"
+    return label
 
 
 def render_mermaid(graph: DependencyGraph) -> str:
@@ -141,10 +216,14 @@ def render_mermaid(graph: DependencyGraph) -> str:
 
     lines = ["graph LR"]
     for cat in sorted(by_category):
-        lines.append(f"  subgraph {cat}")
+        use_subgraph = cat != "."
+        if use_subgraph:
+            lines.append(f"  subgraph {cat}")
         for ref in by_category[cat]:
-            lines.append(f'    {_node_id(ref)}["{_node_label(ref)}"]')
-        lines.append("  end")
+            indent = "    " if use_subgraph else "  "
+            lines.append(f'{indent}{_node_id(ref)}["{_node_label(ref)}"]')
+        if use_subgraph:
+            lines.append("  end")
 
     for edge in graph.edges:
         arrow = "-->" if edge.same_category else "-.->"
@@ -180,12 +259,33 @@ def render_doc(graph: DependencyGraph) -> str:
     ]
     if cross_category:
         for e in cross_category:
-            lines.append(
-                f"- `{e.source.kind}:{e.source.category}/{e.source.name}` -> "
-                f"`{e.target.kind}:{e.target.category}/{e.target.name}`"
+            source_label = (
+                f"{e.source.kind}:{e.source.name}"
+                if e.source.category == "."
+                else f"{e.source.kind}:{e.source.category}/{e.source.name}"
             )
+            target_label = (
+                f"{e.target.kind}:{e.target.name}"
+                if e.target.category == "."
+                else f"{e.target.kind}:{e.target.category}/{e.target.name}"
+            )
+            lines.append(f"- `{source_label}` -> `{target_label}`")
     else:
         lines.append("(none found)")
+
+    lines += [
+        "",
+        "## Missing references",
+        "",
+        "These files are referenced in the catalog but do not exist on disk.",
+        "",
+    ]
+    if graph.missing:
+        for ref in sorted(graph.missing):
+            label = "@docs/" + ref.name if ref.kind == "doc" else ref.name
+            lines.append(f"- `{label}`")
+    else:
+        lines.append("(none detected)")
 
     lines += [
         "",
@@ -198,7 +298,12 @@ def render_doc(graph: DependencyGraph) -> str:
     ]
     if orphans:
         for ref in orphans:
-            lines.append(f"- `{ref.kind}:{ref.category}/{ref.name}`")
+            label = (
+                f"{ref.kind}:{ref.name}"
+                if ref.category == "."
+                else f"{ref.kind}:{ref.category}/{ref.name}"
+            )
+            lines.append(f"- `{label}`")
     else:
         lines.append("(none - every node is referenced by at least one other entity)")
 
@@ -206,8 +311,12 @@ def render_doc(graph: DependencyGraph) -> str:
 
 
 def _dependency_token(source: EntityRef, target: EntityRef) -> str:
+    if target.kind == "doc":
+        return f"doc:{target.name}"
+    if target.kind == "file":
+        return f"src:{target.name}"
     singular = KIND_SINGULAR.get(target.kind, target.kind)
-    if target.category == source.category:
+    if target.category == source.category or target.category == ".":
         return f"{singular}:{target.name}"
     return f"{singular}:{target.category}/{target.name}"
 
@@ -261,6 +370,31 @@ def python_insertion_point(text: str) -> int:
     return pos
 
 
+def remove_marked_block(text: str, begin_marker: str, end_marker: str) -> tuple[str, bool]:
+    """Remove a marker-delimited block and its surrounding padding."""
+    region_re = re.compile(
+        r"\n*" + re.escape(begin_marker) + r".*?" + re.escape(end_marker) + r"\n*", re.DOTALL
+    )
+    m = region_re.search(text)
+    if not m:
+        return text, False
+
+    head, tail = text[: m.start()], text[m.end() :]
+    head = head.rstrip("\n")
+    tail = tail.lstrip("\n")
+
+    if head and tail:
+        new_text = head + "\n\n" + tail
+    else:
+        new_text = head + tail
+
+    # Ensure it ends with exactly one newline if not empty
+    if new_text and not new_text.endswith("\n"):
+        new_text += "\n"
+
+    return new_text, True
+
+
 def upsert_marked_block(
     text: str, canonical_block: str, begin_marker: str, end_marker: str, insertion_point: int
 ) -> str:
@@ -288,11 +422,18 @@ def upsert_marked_block(
     return "".join(pieces)
 
 
-def write_inline_dependencies(workspace: Workspace, catalog: Catalog | None = None) -> int:
-    """Upsert a per-entity 'Dependencies' block into every templates/**
-    entity file, listing its own outgoing references only.
+def write_inline_dependencies(
+    workspace: Workspace,
+    catalog: Catalog | None = None,
+    verbose: bool = False,
+    extra_scan_path: Path | None = None,
+    force: bool = False,
+    remove: bool = False,
+) -> int:
+    """Upsert or remove a per-entity 'Dependencies' block into every
+    templates/** entity file.
 
-    MUTATES templates/** in place - unlike every other function in this
+    MUTATES templates/** in place.
     module (and every other command in this CLI), which only ever writes to
     a destination outside templates/. Callers must treat this as a manual,
     reviewed maintainer action (review `git diff` before committing), never
@@ -301,35 +442,108 @@ def write_inline_dependencies(workspace: Workspace, catalog: Catalog | None = No
     Returns the number of files actually changed; re-running with an
     unchanged catalog changes zero files (see upsert_marked_block)."""
     catalog = catalog or discover(workspace)
-    graph = build_dependency_graph(workspace, catalog)
+    graph = build_dependency_graph(workspace, catalog, extra_scan_path=extra_scan_path)
 
     updated = 0
+    # Collect all paths to update.
+    # Map from Path to its EntityRef
+    to_update: dict[Path, EntityRef] = {}
+
     for cat, kinds in catalog.entries.items():
         for kind in KINDS:
             for name, path in kinds[kind].items():
                 ref = EntityRef(category=cat, kind=kind, name=name)
                 target_path = (path / "SKILL.md") if kind == "skills" else path
-                if not target_path.is_file():
-                    continue
+                if target_path.is_file():
+                    to_update[target_path] = ref
+
+    if extra_scan_path and extra_scan_path.is_dir():
+        for f in extra_scan_path.rglob("*"):
+            if f.is_file() and f.suffix in (".md", ".py") and f.name not in SKIP_NAMES:
                 try:
-                    original = target_path.read_text(encoding="utf-8")
-                except UnicodeDecodeError:
+                    rel_path = f.relative_to(extra_scan_path)
+                    ref = EntityRef(category="docs", kind="doc", name=str(rel_path))
+                    to_update[f] = ref
+                except ValueError:
                     continue
 
-                if target_path.suffix == ".py":
-                    block = render_dependency_block_python(ref, graph)
-                    insertion_point = python_insertion_point(original)
-                    begin_marker, end_marker = BEGIN_MARKER_PY, END_MARKER_PY
-                else:
-                    block = render_dependency_block_markdown(ref, graph)
-                    fm_end = markdown_frontmatter_end(original)
-                    insertion_point = fm_end if fm_end is not None else 0
-                    begin_marker, end_marker = BEGIN_MARKER_MD, END_MARKER_MD
+    if not force and not remove:
+        for target_path in to_update:
+            try:
+                original = target_path.read_text(encoding="utf-8")
+                marker = BEGIN_MARKER_PY if target_path.suffix == ".py" else BEGIN_MARKER_MD
+                if marker in original:
+                    raise RuntimeError(
+                        f"Dependencies already generated in {target_path}. Use --force to regenerate."
+                    )
+            except UnicodeDecodeError:
+                continue
 
-                new_text = upsert_marked_block(original, block, begin_marker, end_marker, insertion_point)
-                if new_text != original:
-                    target_path.write_text(new_text, encoding="utf-8")
-                    updated += 1
+    for target_path, ref in to_update.items():
+        try:
+            original = target_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        begin_marker, end_marker = (
+            (BEGIN_MARKER_PY, END_MARKER_PY)
+            if target_path.suffix == ".py"
+            else (BEGIN_MARKER_MD, END_MARKER_MD)
+        )
+
+        if remove:
+            new_text, was_removed = remove_marked_block(original, begin_marker, end_marker)
+            if verbose:
+                try:
+                    rel_path = target_path.relative_to(workspace.root)
+                except ValueError:
+                    rel_path = target_path
+                status = "removed block" if was_removed else "(no block found)"
+                print(f"  {rel_path}: {status}")
+
+            if was_removed:
+                target_path.write_text(new_text, encoding="utf-8")
+                updated += 1
+            continue
+
+        if verbose:
+            targets = _outgoing_targets(ref, graph)
+            n_entities = len([t for t in targets if t.kind not in ("doc", "file")])
+            n_docs = len([t for t in targets if t.kind == "doc"])
+            n_code = len([t for t in targets if t.kind == "file"])
+            try:
+                rel_path = target_path.relative_to(workspace.root)
+            except ValueError:
+                rel_path = target_path
+            print(f"  {rel_path}: {n_entities} entities, {n_code} code, {n_docs} docs")
+            for t in targets:
+                if t in graph.missing:
+                    if t.kind == "doc":
+                        print(f"    [!] missing doc: @docs/{t.name}")
+                    elif t.kind == "file":
+                        print(f"    [!] missing code: {t.name}")
+
+        try:
+            original = target_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        if target_path.suffix == ".py":
+            block = render_dependency_block_python(ref, graph)
+            insertion_point = python_insertion_point(original)
+            # markers already set above
+        else:
+            block = render_dependency_block_markdown(ref, graph)
+            fm_end = markdown_frontmatter_end(original)
+            insertion_point = fm_end if fm_end is not None else 0
+            # markers already set above
+
+        new_text = upsert_marked_block(
+            original, block, begin_marker, end_marker, insertion_point
+        )
+        if new_text != original:
+            target_path.write_text(new_text, encoding="utf-8")
+            updated += 1
     return updated
 
 
@@ -347,4 +561,5 @@ def to_json(graph: DependencyGraph) -> dict:
             }
             for e in graph.edges
         ],
+        "missing": [_ref(ref) for ref in sorted(graph.missing)],
     }

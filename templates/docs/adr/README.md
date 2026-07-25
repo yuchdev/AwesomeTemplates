@@ -8,20 +8,18 @@ are in `assets/`.
 
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
-| [0001](0001-new-ui-rich-based-design.md) | EXAMPLE - Live-updating terminal UI for CLI output | Implemented | 2026-01-12 |
-| [0002](0002-agent-weight-as-property.md) | EXAMPLE - Configuration values are owned by the component that uses them | Accepted | 2026-07-08 |
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted | 2025-01-01 |
 
 ## Template
 
 Use `template.md` when creating a new ADR. The recommended invocation is:
 
 ```bash
-/adr-write <short-title>
+uv run awesome-claude docs new adr "Short Title"
 ```
 
-The `/adr-write` skill scaffolds a MADR-formatted record pre-filled with context
-from recent git log and open GitHub issues, then saves it here as the next
-`000N-slug.md`.
+The `docs new adr` command scaffolds a MADR-formatted record pre-filled with context
+and saves it here as the next `000N-slug.md`.
 
 ## Naming conventions
 
