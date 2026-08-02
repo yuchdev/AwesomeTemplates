@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from awesome_claude.templating import (
     apply_subs,
-    copy_entity,
     slugify_package,
     slugify_upper,
     template_file,
@@ -45,31 +44,3 @@ def test_slugify_package():
 def test_slugify_upper():
     assert slugify_upper("Acme Sync") == "ACME_SYNC"
     assert slugify_upper("") == "PROJECT"
-
-
-def test_copy_entity_templates_a_single_file(tmp_path):
-    src = tmp_path / "src" / "widget.md"
-    src.parent.mkdir(parents=True)
-    src.write_text("Agent for {{PROJECT_NAME}}.")
-    dst = tmp_path / "out" / "agents" / "widget.md"
-    warnings: list[str] = []
-    copy_entity(src, dst, "agents", {"PROJECT_NAME": "Acme"}, warnings)
-    assert dst.read_text() == "Agent for Acme."
-    assert warnings == []
-
-
-def test_copy_entity_skill_directory_excludes_migration_report(tmp_path):
-    src = tmp_path / "src" / "my-skill"
-    src.mkdir(parents=True)
-    (src / "SKILL.md").write_text("{{PROJECT_NAME}} skill")
-    (src / "MIGRATION_REPORT.md").write_text("internal notes, never shipped")
-    (src / "references").mkdir()
-    (src / "references" / "guide.md").write_text("{{PROJECT_PACKAGE}} guide")
-
-    dst = tmp_path / "out" / "skills" / "my-skill"
-    warnings: list[str] = []
-    copy_entity(src, dst, "skills", {"PROJECT_NAME": "Acme", "PROJECT_PACKAGE": "acme"}, warnings)
-
-    assert (dst / "SKILL.md").read_text() == "Acme skill"
-    assert (dst / "references" / "guide.md").read_text() == "acme guide"
-    assert not (dst / "MIGRATION_REPORT.md").exists()

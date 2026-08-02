@@ -1,4 +1,12 @@
-"""Discovery of the categories/kinds/entities a Workspace's template tree offers."""
+"""Discovery of the presets/kinds/entities a Workspace's template tree offers.
+
+A preset is a complete, self-contained tree - an immediate subdirectory of
+the workspace root containing both `.claude/` and `docs/` (e.g.
+templates/python, templates/java). Generating a preset is a plain recursive
+copy (see presets.py) - never a runtime composition of pieces pulled from
+elsewhere - so adding a new preset is a matter of dropping a new
+templates/<name>/{.claude,docs} tree in, not a code change here.
+"""
 
 from __future__ import annotations
 
@@ -7,17 +15,9 @@ from pathlib import Path
 
 from awesome_claude.workspace import Workspace
 
-CATEGORIES = ["core", "helpers", "java", "orchestrators", "python"]
 KINDS = ["agents", "hooks", "loops", "skills"]
+KIND_ALIAS = {"agent": "agents", "hook": "hooks", "loop": "loops", "skill": "skills"}
 SKIP_NAMES = {"README.md", "MIGRATION_REPORT.md"}
-
-PRESETS: dict[str, list[str]] = {
-    "core-only": ["core"],
-    "python-minimal": ["core", "python"],
-    "python-full": ["core", "helpers", "orchestrators", "python"],
-    "java-minimal": ["core", "java"],
-    "java-full": ["core", "helpers", "orchestrators", "java"],
-}
 
 
 @dataclass
@@ -28,42 +28,56 @@ class Catalog:
         return sorted(self.entries.get(category, {}).get(kind, {}))
 
 
+def list_presets(workspace: Workspace) -> list[str]:
+    """Every immediate child directory of the workspace root that is a
+    complete preset (has both .claude/ and docs/)."""
+    if not workspace.root.is_dir():
+        return []
+    return sorted(
+        p.name
+        for p in workspace.root.iterdir()
+        if p.is_dir() and (p / ".claude").is_dir() and (p / "docs").is_dir()
+    )
+
+
 def discover(workspace: Workspace) -> Catalog:
-    """category -> kind -> {entity_name: source_path}."""
+    """kind -> {entity_name: source_path}, wrapped in one of three shapes
+    depending on what workspace.root points at:
+
+    - A generated project or a preset's `.claude/` dir has kind directories
+      directly at its root (`agents/`, `hooks/`, ...): returned under the
+      single category ".".
+    - A preset directory (e.g. templates/python) has them nested one level
+      under `.claude/`: also returned under ".", via the same fallback a
+      generated project's root would use.
+    - The templates/ root itself has no kind directories at any of the above
+      locations, but has one or more preset subdirectories: each preset's
+      entities are returned keyed by that preset's own name, so `graph` run
+      against the whole templates/ tree can show every preset's catalog at
+      once.
+    """
     catalog = _discover_from_root(workspace)
     if catalog.entries:
         return catalog
 
-    # If nothing found at root, try .claude/ subdirectory (common in generated projects)
     claude_dir = workspace.path(".claude")
     if claude_dir.is_dir():
         catalog = _discover_from_root(Workspace(root=claude_dir))
         if catalog.entries:
             return catalog
 
+    presets = list_presets(workspace)
+    if presets:
+        merged: dict[str, dict[str, dict[str, Path]]] = {}
+        for preset in presets:
+            preset_catalog = discover(Workspace(root=workspace.path(preset)))
+            merged[preset] = preset_catalog.entries.get(".", {kind: {} for kind in KINDS})
+        return Catalog(entries=merged)
+
     return Catalog(entries={})
 
 
 def _discover_from_root(workspace: Workspace) -> Catalog:
-    catalog: dict[str, dict[str, dict[str, Path]]] = {}
-
-    # Try standard layout first (category/kind/entity)
-    for cat in CATEGORIES:
-        found_any_kind = False
-        cat_catalog: dict[str, dict[str, Path]] = {}
-        for kind in KINDS:
-            kind_dir = workspace.path(cat, kind)
-            entries = _discover_kind(kind, kind_dir)
-            if entries:
-                found_any_kind = True
-            cat_catalog[kind] = entries
-        if found_any_kind:
-            catalog[cat] = cat_catalog
-
-    if catalog:
-        return Catalog(entries=catalog)
-
-    # Try flat layout (kind/entity) - common in generated .claude/ dirs
     flat_catalog: dict[str, dict[str, Path]] = {}
     found_any_kind = False
     for kind in KINDS:
@@ -74,7 +88,9 @@ def _discover_from_root(workspace: Workspace) -> Catalog:
         flat_catalog[kind] = entries
 
     if found_any_kind:
-        # We use "." as a special category name for flat layouts
+        # "." is a placeholder category name for a single self-contained tree
+        # (as opposed to the templates/ root, where each preset gets its own
+        # name as the category - see discover()).
         return Catalog(entries={".": flat_catalog})
 
     return Catalog(entries={})

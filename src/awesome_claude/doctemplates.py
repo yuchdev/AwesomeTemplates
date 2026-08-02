@@ -58,20 +58,23 @@ def next_sequence(out_dir: Path, seq_glob: str) -> int:
     return max(numbers, default=0) + 1
 
 
-def render_new_document(workspace: Workspace, doc_type_key: str, title: str, **extra: str) -> Path:
+def render_new_document(
+    workspace: Workspace, preset: str, doc_type_key: str, title: str, **extra: str
+) -> Path:
     """Render doc_type_key's template with {seq, title, date, status, **extra}
-    and write it to the doc-type's out_dir. Returns the new file's path."""
+    and write it to the doc-type's out_dir under templates/<preset>/docs/.
+    Returns the new file's path."""
     doc_type = DOC_TYPES.get(doc_type_key)
     if doc_type is None:
         raise DocTemplateError(
             f"unknown doc type '{doc_type_key}' (choices: {', '.join(sorted(DOC_TYPES))})"
         )
 
-    template_path = workspace.path("docs", *doc_type.template.split("/"))
+    template_path = workspace.path(preset, "docs", *doc_type.template.split("/"))
     if not template_path.is_file():
         raise DocTemplateError(f"template not found: {template_path}")
 
-    out_dir = workspace.path("docs", *doc_type.out_dir.split("/"))
+    out_dir = workspace.path(preset, "docs", *doc_type.out_dir.split("/"))
     out_dir.mkdir(parents=True, exist_ok=True)
     seq = next_sequence(out_dir, doc_type.seq_glob)
     slug = slugify_title(title)

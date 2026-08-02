@@ -21,32 +21,21 @@ def real_workspace() -> Workspace:
 
 @pytest.fixture
 def fixture_workspace(tmp_path: Path) -> Workspace:
-    """A tiny synthetic core/python/... tree, isolated from the real repo."""
+    """Two tiny synthetic presets ("demo" and "other"), each a self-contained
+    `.claude/` + `docs/` tree, isolated from the real repo."""
     root = tmp_path / "repo"
 
-    (root / "core" / "agents").mkdir(parents=True)
-    (root / "core" / "agents" / "widget-verifier.md").write_text(
+    demo = root / "demo"
+    (demo / ".claude" / "agents").mkdir(parents=True)
+    (demo / ".claude" / "agents" / "widget-verifier.md").write_text(
         "---\nname: widget-verifier\n---\n\nUse this agent for {{PROJECT_NAME}}.\n"
     )
-    (root / "core" / "hooks").mkdir(parents=True)
-    (root / "core" / "hooks" / "_common.py").write_text("# shared helpers for {{PROJECT_NAME}}\n")
-    (root / "core" / "hooks" / "guard.py").write_text("# guard hook\n")
-    (root / "core" / "skills" / "adr-write").mkdir(parents=True)
-    (root / "core" / "skills" / "adr-write" / "SKILL.md").write_text("# adr-write skill\n")
-    (root / "core" / "loops").mkdir(parents=True)
-
-    (root / "python" / "agents").mkdir(parents=True)
-    (root / "python" / "agents" / "python-expert.md").write_text(
-        "---\nname: python-expert\n---\n\n{{PROJECT_PACKAGE}} implementation agent.\n"
-    )
-    (root / "python" / "hooks").mkdir(parents=True)
-    (root / "python" / "hooks" / "_common.py").write_text("# shared helpers (python copy)\n")
-    (root / "python" / "loops").mkdir(parents=True)
-    (root / "python" / "skills").mkdir(parents=True)
-
-    for cat in ("helpers", "java", "orchestrators"):
-        for kind in ("agents", "hooks", "loops", "skills"):
-            (root / cat / kind).mkdir(parents=True)
+    (demo / ".claude" / "hooks").mkdir(parents=True)
+    (demo / ".claude" / "hooks" / "_common.py").write_text("# shared helpers for {{PROJECT_NAME}}\n")
+    (demo / ".claude" / "hooks" / "guard.py").write_text("# guard hook\n")
+    (demo / ".claude" / "skills" / "adr-write").mkdir(parents=True)
+    (demo / ".claude" / "skills" / "adr-write" / "SKILL.md").write_text("# adr-write skill\n")
+    (demo / ".claude" / "loops").mkdir(parents=True)
 
     settings = {
         "permissions": {
@@ -67,15 +56,25 @@ def fixture_workspace(tmp_path: Path) -> Workspace:
             ],
         },
     }
-    (root / "core" / "settings.json").write_text(json.dumps(settings))
+    (demo / ".claude" / "settings.json").write_text(json.dumps(settings))
 
-    (root / "docs" / "adr").mkdir(parents=True)
-    (root / "docs" / "adr" / "template.md").write_text(
+    (demo / "docs" / "adr").mkdir(parents=True)
+    (demo / "docs" / "adr" / "template.md").write_text(
         "# {{ seq }} - {{ title }}\n\n"
         "> **Status:** {{ status }}\n"
         "> **Date:** {{ date }}\n\n"
         "## Context\n"
     )
-    (root / "docs" / "adr" / "0001-existing.md").write_text("# 0001 - Existing\n")
+    (demo / "docs" / "adr" / "0001-existing.md").write_text("# 0001 - Existing\n")
+
+    other = root / "other"
+    (other / ".claude" / "agents").mkdir(parents=True)
+    (other / ".claude" / "agents" / "python-expert.md").write_text(
+        "---\nname: python-expert\n---\n\n{{PROJECT_PACKAGE}} implementation agent.\n"
+    )
+    (other / ".claude" / "hooks").mkdir(parents=True)
+    (other / ".claude" / "loops").mkdir(parents=True)
+    (other / ".claude" / "skills").mkdir(parents=True)
+    (other / "docs").mkdir(parents=True)
 
     return Workspace(root=root)

@@ -1,5 +1,5 @@
-"""Typer CLI for awesome-claude: generate project-specific Claude Code kits
-and starter documents from this repo's templates.
+"""Typer CLI for awesome-claude: generate a project-specific preset
+(`.claude/` kit + `docs/`) from this repo's templates.
 
 Command tree:
   awesome-claude list
@@ -11,34 +11,32 @@ Command tree:
 
 from __future__ import annotations
 
+import enum
 import json
-import tempfile
-import shutil
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-import typing
-from typing import List, Optional, Union
-
-from awesome_claude.catalog import CATEGORIES, KINDS, PRESETS, discover
+from awesome_claude.catalog import KINDS, discover, list_presets
 from awesome_claude.config import ConfigError, load_config
-from awesome_claude.dependencies import build_dependency_graph, render_doc, write_inline_dependencies
+from awesome_claude.dependencies import (
+    build_dependency_graph,
+    render_doc,
+    write_inline_dependencies,
+)
 from awesome_claude.dependencies import to_json as graph_to_json
-from awesome_claude.docs_scaffold import copy_docs_tree
 from awesome_claude.doctemplates import DOC_TYPES, DocTemplateError, render_new_document
-from awesome_claude.requirements import check_target_requirements
-from awesome_claude.selection import Selection, SelectionError
-from awesome_claude.settings import build_settings
-from awesome_claude.templating import copy_entity, slugify_package, slugify_upper
+from awesome_claude.presets import copy_preset, copy_preset_docs
+from awesome_claude.templating import slugify_package, slugify_upper
 from awesome_claude.workspace import Workspace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# The template tree (core/helpers/java/orchestrators/python/docs) lives under
-# templates/, kept separate from this package's own source/docs so the two
-# are never confused with each other.
+# The template tree (one self-contained {.claude,docs} tree per preset) lives
+# under templates/, kept separate from this package's own source/docs so the
+# two are never confused with each other.
 TEMPLATES_ROOT = REPO_ROOT / "templates"
 
 app = typer.Typer(add_completion=False, help=__doc__)
@@ -46,6 +44,23 @@ docs_app = typer.Typer(add_completion=False, help="Copy or scaffold docs/ conten
 app.add_typer(docs_app, name="docs")
 
 console = Console()
+
+
+class LogVerbosity(str, enum.Enum):
+    """Named levels for `graph --log-verbosity`. Absence of the flag is the
+    quiet default (level 0); `info` and `debug` map to 1 and 2 respectively."""
+
+    info = "info"
+    debug = "debug"
+
+
+# Ordering used by the `>= 1` / `>= 2` progress gates. The flag being unset
+# (None) is level 0 - summary output only.
+_LOG_LEVELS: dict[LogVerbosity | None, int] = {
+    None: 0,
+    LogVerbosity.info: 1,
+    LogVerbosity.debug: 2,
+}
 
 
 def _workspace() -> Workspace:
@@ -57,34 +72,45 @@ def _fail(message: str) -> None:
     raise typer.Exit(code=1)
 
 
+def _resolve_preset(workspace: Workspace, preset: Optional[str]) -> str:
+    presets = list_presets(workspace)
+    if not preset:
+        _fail(f"--preset is required (choices: {', '.join(presets)})")
+    if preset not in presets:
+        _fail(f"unknown preset '{preset}' (choices: {', '.join(presets)})")
+    return preset
+
+
 @app.command("list")
 def list_cmd(
     json_out: bool = typer.Option(False, "--json", help="emit machine-readable JSON"),
 ) -> None:
-    """List presets, categories, and the entities available in each."""
-    catalog = discover(_workspace())
+    """List presets and the entities each one contains."""
+    workspace = _workspace()
+    presets = list_presets(workspace)
 
     if json_out:
         payload = {
-            "presets": PRESETS,
-            "categories": {
-                cat: {kind: catalog.names(cat, kind) for kind in KINDS} for cat in CATEGORIES
-            },
+            preset: {
+                kind: discover(Workspace(root=workspace.path(preset))).names(".", kind)
+                for kind in KINDS
+            }
+            for preset in presets
         }
         typer.echo(json.dumps(payload, indent=2))
         return
 
     table = Table(title="Presets")
     table.add_column("Name", style="bold")
-    table.add_column("Categories")
-    for preset_name, cats in PRESETS.items():
-        table.add_row(preset_name, ", ".join(cats))
+    for preset in presets:
+        table.add_row(preset)
     console.print(table)
 
-    for cat in CATEGORIES:
-        console.print(f"\n[bold cyan]{cat}/[/bold cyan]")
+    for preset in presets:
+        catalog = discover(Workspace(root=workspace.path(preset)))
+        console.print(f"\n[bold cyan]{preset}/[/bold cyan]")
         for kind in KINDS:
-            names = catalog.names(cat, kind)
+            names = catalog.names(".", kind)
             if names:
                 console.print(f"  [bold]{kind}[/bold]: {', '.join(names)}")
 
@@ -120,141 +146,70 @@ def graph_cmd(
     force: bool = typer.Option(
         False, "--force", help="overwrite existing inline dependency blocks"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="print detailed progress during analysis"
-    ),
-    template_mode: bool = typer.Option(
-        False,
-        "--template-mode",
-        help="deploy templates to a temporary directory before graphing to verify deployed references",
-    ),
-    template_cleanup: bool = typer.Option(
-        True,
-        "--template-cleanup/--no-template-cleanup",
-        help="delete the temporary directory after building the graph",
-    ),
-    preset: Optional[str] = typer.Option(
-        None, "--preset", "-p", help="named bundle of categories to deploy in template-mode"
-    ),
-    include: List[str] = typer.Option(
-        [], "--include", "-i", help="add individual entity (type:name) in template-mode"
-    ),
-    exclude: List[str] = typer.Option(
-        [], "--exclude", "-e", help="remove individual entity (type:name) in template-mode"
+    log_verbosity: Optional[LogVerbosity] = typer.Option(
+        None,
+        "--log-verbosity",
+        "-v",
+        help="progress detail: omit for summary only, 'info' for phase progress + "
+        "warnings, 'debug' for per-file inline block details",
     ),
 ) -> None:
-    """Render a reference graph and analyze external dependencies."""
+    """Render a reference graph and analyze external dependencies.
+
+    Point it at a single preset (e.g. `templates/python`) or an already
+    generated project to see that tree's own graph, including its `.claude`
+    <-> `docs` connectivity; the default (`templates/`) shows every preset's
+    catalog side by side (see catalog.discover)."""
+    level = _LOG_LEVELS[log_verbosity]
     if json_out and inline:
         _fail("--inline is not supported together with --json")
         return
 
-    temp_dir_obj = None
-    try:
-        if template_mode:
-            # 1. Resolve source and selection
-            source_workspace = Workspace(root=target)
-            source_catalog = discover(source_workspace)
-
-            sel = Selection.empty()
-            if preset:
-                if preset not in PRESETS:
-                    _fail(
-                        f"unknown preset '{preset}' (choices: {', '.join(sorted(PRESETS))})"
-                    )
-                for cat in PRESETS[preset]:
-                    sel.add_category(source_catalog, cat)
-
-            if include:
-                sel.apply_tokens(source_catalog, include, adding=True)
-            if exclude:
-                sel.apply_tokens(source_catalog, exclude, adding=False)
-
-            # Default to all categories if nothing selected in template mode
-            if sel.is_empty():
-                for cat in CATEGORIES:
-                    if cat in source_catalog.entries:
-                        sel.add_category(source_catalog, cat)
-
-            # 2. Create temp dir
-            if template_cleanup:
-                temp_dir_obj = tempfile.TemporaryDirectory(prefix="awesome-claude-graph-")
-                target = Path(temp_dir_obj.name)
-            else:
-                target = Path(tempfile.mkdtemp(prefix="awesome-claude-graph-")).resolve()
-                # Use standard print to avoid Rich wrapping the path
-                print(f"Template mode: deploying to {target.as_posix()}")
-
-            # 3. Deploy
-            subs = {
-                "PROJECT_NAME": "Template Test",
-                "PROJECT_PACKAGE": "template_test",
-                "PROJECT_SLUG_UPPER": "TEMPLATE_TEST",
-                "PROJECT_PURPOSE": "Verification of template dependencies",
-            }
-            warnings: List[str] = []
-            claude_out = target / ".claude"
-
-            for cat, kinds in sel.entries.items():
-                for kind in KINDS:
-                    for entity_name in sorted(kinds[kind]):
-                        src = source_catalog.entries[cat][kind][entity_name]
-                        dst = (
-                            claude_out / kind / entity_name
-                            if kind == "skills"
-                            else claude_out / kind / src.name
-                        )
-                        copy_entity(src, dst, kind, subs, warnings)
-
-            copy_docs_tree(source_workspace, target / "docs", True, subs, warnings)
-
-            if warnings and verbose:
-                for w in warnings:
-                    console.print(f"[yellow]warning:[/yellow] {w}")
-
-        workspace = Workspace(root=target)
-        catalog = discover(workspace)
-        # If the target has a docs/ dir, scan it for references too
-        docs_dir = workspace.path("docs")
-        graph = build_dependency_graph(workspace, catalog, extra_scan_path=docs_dir)
-        if json_out:
-            typer.echo(json.dumps(graph_to_json(graph), indent=2))
+    workspace = Workspace(root=target)
+    catalog = discover(workspace)
+    # If the target has a docs/ dir, scan it for references too.
+    docs_dir = workspace.path("docs")
+    graph = build_dependency_graph(workspace, catalog, extra_scan_path=docs_dir)
+    if json_out:
+        typer.echo(json.dumps(graph_to_json(graph), indent=2))
+        return
+    out_path = Path(out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(render_doc(graph), encoding="utf-8")
+    console.print(
+        f"Wrote dependency graph for {target} to {out_path} "
+        f"({len(graph.nodes)} nodes, {len(graph.edges)} edges)"
+    )
+    if level >= 1 and graph.missing:
+        console.print(f"{len(graph.missing)} unresolved reference(s) in the graph:")
+        for ref in sorted(graph.missing, key=lambda r: (r.kind, r.name)):
+            console.print(f"  [!] missing {ref.kind}: {ref.name}")
+    if inline or remove:
+        if inline and remove:
+            _fail("--inline and --remove are mutually exclusive")
             return
-        out_path = Path(out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(render_doc(graph), encoding="utf-8")
-        console.print(
-            f"Wrote dependency graph for {target} to {out_path} "
-            f"({len(graph.nodes)} nodes, {len(graph.edges)} edges)"
-        )
-        if inline or remove:
-            if inline and remove:
-                _fail("--inline and --remove are mutually exclusive")
-                return
 
-            action_verb = "Removing" if remove else "Updating"
-            if verbose:
-                console.print(f"{action_verb} inline dependencies in {target}...")
-            try:
-                updated = write_inline_dependencies(
-                    workspace,
-                    catalog,
-                    verbose=verbose,
-                    extra_scan_path=docs_dir,
-                    force=force,
-                    remove=remove,
-                )
-            except RuntimeError as exc:
-                _fail(str(exc))
-                return
-
-            target_verb = "Removed" if remove else "Updated"
-            console.print(
-                f"{target_verb} inline Dependencies block in {updated} template file(s) "
-                "- review `git diff` before committing."
+        action_verb = "Removing" if remove else "Updating"
+        if level >= 1:
+            console.print(f"{action_verb} inline dependencies in {target}...")
+        try:
+            updated = write_inline_dependencies(
+                workspace,
+                catalog,
+                log_verbosity=level,
+                extra_scan_path=docs_dir,
+                force=force,
+                remove=remove,
             )
-    finally:
-        if temp_dir_obj:
-            temp_dir_obj.cleanup()
+        except RuntimeError as exc:
+            _fail(str(exc))
+            return
+
+        target_verb = "Removed" if remove else "Updated"
+        console.print(
+            f"{target_verb} inline Dependencies block in {updated} template file(s) "
+            "- review `git diff` before committing."
+        )
 
 
 @app.command()
@@ -263,16 +218,7 @@ def generate(
         None, "--config", help="JSON or TOML config file; CLI flags override it"
     ),
     preset: Optional[str] = typer.Option(
-        None, help=f"start from a predefined category set ({', '.join(sorted(PRESETS))})"
-    ),
-    categories: Optional[str] = typer.Option(
-        None, help="comma-separated category list, e.g. core,python"
-    ),
-    include: List[str] = typer.Option(
-        [], "--include", help="add one entity: agent|hook|loop|skill:NAME (repeatable)"
-    ),
-    exclude: List[str] = typer.Option(
-        [], "--exclude", help="remove one entity, same form (repeatable)"
+        None, help="which preset to generate (see `awesome-claude list`)"
     ),
     name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
     package: Optional[str] = typer.Option(
@@ -282,30 +228,20 @@ def generate(
     slug: Optional[str] = typer.Option(
         None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"
     ),
-    out: Optional[str] = typer.Option(None, help="output directory (default: .claude)"),
+    out: Optional[str] = typer.Option(
+        None, help="project directory to generate into (default: .); "
+        "gets a .claude/ and a docs/ subdirectory"
+    ),
     force: Optional[bool] = typer.Option(
-        None, "--force/--no-force", help="overwrite a non-empty --out/--docs-out"
-    ),
-    no_settings: Optional[bool] = typer.Option(
-        None, "--no-settings/--settings", help="skip writing settings.json"
-    ),
-    copy_docs: Optional[bool] = typer.Option(
-        None, "--copy-docs/--no-copy-docs", help="also copy docs/ (with {{PLACEHOLDER}} substitution)"
-    ),
-    docs_out: Optional[str] = typer.Option(None, help="where --copy-docs writes to (default: docs)"),
-    check_requirements: Optional[bool] = typer.Option(
-        None,
-        "--check-requirements/--no-check-requirements",
-        help="warn about files the selection assumes exist",
+        None, "--force/--no-force", help="overwrite existing .claude/ or docs/ content"
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="print the plan without writing anything"
     ),
     json_out: bool = typer.Option(False, "--json", help="emit dry-run/summary output as JSON"),
 ) -> None:
-    """Generate a project-specific .claude/ kit (and optionally docs/)."""
+    """Generate a project-specific preset (.claude/ kit + docs/)."""
     workspace = _workspace()
-    catalog = discover(workspace)
 
     try:
         cfg = load_config(config) if config else {}
@@ -314,51 +250,16 @@ def generate(
         return
 
     project_cfg = cfg.get("project", {})
-    docs_cfg = cfg.get("docs", {})
 
-    preset = preset or cfg.get("preset")
-    out_value = out if out is not None else cfg.get("out", ".claude")
+    preset_value = preset or cfg.get("preset")
+    out_value = out if out is not None else cfg.get("out", ".")
     force_value = force if force is not None else bool(cfg.get("force", False))
-    no_settings_value = (
-        no_settings if no_settings is not None else bool(cfg.get("no_settings", False))
-    )
-    copy_docs_value = copy_docs if copy_docs is not None else bool(docs_cfg.get("copy", False))
-    docs_out_value = docs_out if docs_out is not None else docs_cfg.get("out", "docs")
-    check_requirements_value = (
-        check_requirements
-        if check_requirements is not None
-        else bool(cfg.get("check_requirements", False))
-    )
     name_value = name or project_cfg.get("name")
     package_value = package or project_cfg.get("package")
     purpose_value = purpose or project_cfg.get("purpose")
     slug_value = slug or project_cfg.get("slug_upper")
-    include_tokens = list(cfg.get("include", [])) + include
-    exclude_tokens = list(cfg.get("exclude", [])) + exclude
 
-    selection = Selection.empty()
-    try:
-        if preset:
-            if preset not in PRESETS:
-                raise SelectionError(
-                    f"unknown preset '{preset}' (choices: {', '.join(sorted(PRESETS))})"
-                )
-            for cat in PRESETS[preset]:
-                selection.add_category(catalog, cat)
-        for cat in cfg.get("categories", []):
-            selection.add_category(catalog, cat)
-        if categories:
-            for cat in (c.strip() for c in categories.split(",") if c.strip()):
-                selection.add_category(catalog, cat)
-        selection.apply_tokens(catalog, include_tokens, adding=True)
-        selection.apply_tokens(catalog, exclude_tokens, adding=False)
-    except SelectionError as exc:
-        _fail(str(exc))
-        return
-
-    if selection.is_empty():
-        _fail("nothing selected - use --preset, --categories, and/or --include (flags or --config)")
-        return
+    preset_value = _resolve_preset(workspace, preset_value)
     if not name_value:
         _fail("--name (or config project.name) is required")
         return
@@ -370,97 +271,44 @@ def generate(
         "PROJECT_PURPOSE": purpose_value or "TODO: describe what this project does",
     }
 
-    plan = {
-        cat: {kind: sorted(names) for kind, names in kinds.items() if names}
-        for cat, kinds in selection.entries.items()
-        if any(kinds.values())
-    }
-
-    warnings: list[str] = []
-    if check_requirements_value:
-        check_target_requirements(selection, warnings)
+    out_dir = Path(out_value)
 
     if dry_run:
         payload = {
+            "preset": preset_value,
             "out": out_value,
             "substitutions": subs,
-            "plan": plan,
-            "copy_docs": copy_docs_value,
-            "docs_out": docs_out_value if copy_docs_value else None,
-            "warnings": warnings,
         }
         if json_out:
             typer.echo(json.dumps(payload, indent=2))
         else:
-            console.print(f"Would write to: {out_value}")
+            console.print(f"Would generate preset '{preset_value}' into: {out_dir}")
             console.print(f"Substitutions: {subs}")
-            console.print("Plan:")
-            for cat, kinds in plan.items():
-                console.print(f"  {cat}/")
-                for kind, names in kinds.items():
-                    console.print(f"    {kind}: {', '.join(names)}")
-            if not no_settings_value and workspace.path("core", "settings.json").exists():
-                console.print("  settings.json: yes")
-            if copy_docs_value:
-                console.print(f"  docs/ -> {docs_out_value} (templated with substitutions)")
-            if warnings:
-                console.print("\n[yellow]Warnings:[/yellow]")
-                for w in warnings:
-                    console.print(f"  - {w}")
         return
 
-    out_dir = Path(out_value)
-    if out_dir.exists() and any(out_dir.iterdir()) and not force_value:
-        _fail(f"'{out_dir}' is not empty - pass --force to overwrite")
+    existing = [
+        d for d in (".claude", "docs") if (out_dir / d).exists() and any((out_dir / d).iterdir())
+    ]
+    if existing and not force_value:
+        _fail(
+            f"{', '.join(str(out_dir / d) for d in existing)} already has content - "
+            "pass --force to overwrite"
+        )
         return
 
-    written: dict[str, dict[str, list[str]]] = {}
-    for cat, kinds in selection.entries.items():
-        for kind in KINDS:
-            for entity_name in sorted(kinds[kind]):
-                src = catalog.entries[cat][kind][entity_name]
-                dst = (
-                    out_dir / kind / entity_name if kind == "skills" else out_dir / kind / src.name
-                )
-                copy_entity(src, dst, kind, subs, warnings)
-                written.setdefault(kind, {}).setdefault(cat, []).append(entity_name)
-
-    settings_written = False
-    if not no_settings_value:
-        settings = build_settings(workspace, selection, subs, warnings)
-        if settings is not None:
-            (out_dir / "settings.json").write_text(
-                json.dumps(settings, indent=2) + "\n", encoding="utf-8"
-            )
-            settings_written = True
-
-    docs_written: int | None = None
-    if copy_docs_value:
-        docs_out_dir = Path(docs_out_value)
-        if docs_out_dir.exists() and any(docs_out_dir.iterdir()) and not force_value:
-            warnings.append(
-                f"docs copy skipped: '{docs_out_dir}' is not empty - pass --force to overwrite"
-            )
-        else:
-            docs_written = copy_docs_tree(workspace, docs_out_dir, force_value, subs, warnings)
+    warnings: list[str] = []
+    written = copy_preset(workspace, preset_value, out_dir, force_value, subs, warnings)
 
     summary = {
+        "preset": preset_value,
         "out": str(out_dir),
-        "written": written,
-        "settings.json": settings_written,
-        "docs_copied": docs_written,
+        "files_written": written,
         "warnings": warnings,
     }
     if json_out:
         typer.echo(json.dumps(summary, indent=2))
     else:
-        console.print(f"Wrote kit to {out_dir}")
-        for kind, by_cat in written.items():
-            for cat, names in by_cat.items():
-                console.print(f"  {kind}/ <- {cat}: {', '.join(names)}")
-        console.print(f"  settings.json: {'written' if settings_written else 'skipped'}")
-        if docs_written is not None:
-            console.print(f"  docs/: {docs_written} file(s) copied to {docs_out_value}")
+        console.print(f"Wrote preset '{preset_value}' to {out_dir} ({written} file(s))")
         if warnings:
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:
@@ -469,6 +317,9 @@ def generate(
 
 @docs_app.command("copy")
 def docs_copy(
+    preset: Optional[str] = typer.Option(
+        None, help="which preset's docs/ to copy (see `awesome-claude list`)"
+    ),
     name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
     package: Optional[str] = typer.Option(
         None, help="PROJECT_PACKAGE value (default: slugified --name)"
@@ -480,11 +331,13 @@ def docs_copy(
     out: str = typer.Option("docs", "--out", help="where to copy docs/ to"),
     force: bool = typer.Option(False, "--force", help="overwrite existing files"),
 ) -> None:
-    """Copy this repo's docs/ tree, applying {{PLACEHOLDER}} substitution (same engine as generate)."""
+    """Copy just a preset's docs/ tree (no .claude/ kit), applying the same
+    {{PLACEHOLDER}} substitution as `generate`."""
+    workspace = _workspace()
+    preset_value = _resolve_preset(workspace, preset)
     if not name:
         _fail("--name is required")
         return
-    workspace = _workspace()
     out_dir = Path(out)
     if out_dir.exists() and any(out_dir.iterdir()) and not force:
         _fail(f"'{out_dir}' is not empty - pass --force to overwrite")
@@ -496,7 +349,7 @@ def docs_copy(
         "PROJECT_PURPOSE": purpose or "TODO: describe what this project does",
     }
     warnings: list[str] = []
-    count = copy_docs_tree(workspace, out_dir, force, subs, warnings)
+    count = copy_preset_docs(workspace, preset_value, out_dir, force, subs, warnings)
     console.print(f"docs/: {count} file(s) copied to {out_dir}")
     if warnings:
         console.print("\n[yellow]Warnings:[/yellow]")
@@ -510,12 +363,16 @@ def docs_new(
         ..., help=f"doc type to scaffold ({', '.join(sorted(DOC_TYPES))})"
     ),
     title: str = typer.Argument(..., help="document title"),
+    preset: Optional[str] = typer.Option(
+        None, help="which preset's docs/ to scaffold into (see `awesome-claude list`)"
+    ),
     status: str = typer.Option("Proposed", help="initial status field"),
 ) -> None:
-    """Scaffold a new document from a real template (e.g. `docs new adr "My decision"`)."""
+    """Scaffold a new document from a real template (e.g. `docs new adr "My decision" --preset python`)."""
     workspace = _workspace()
+    preset_value = _resolve_preset(workspace, preset)
     try:
-        out_path = render_new_document(workspace, doc_type, title, status=status)
+        out_path = render_new_document(workspace, preset_value, doc_type, title, status=status)
     except DocTemplateError as exc:
         _fail(str(exc))
         return

@@ -13,8 +13,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from awesome_claude.catalog import KINDS, SKIP_NAMES, Catalog, discover
-from awesome_claude.selection import KIND_ALIAS
+from awesome_claude.catalog import KIND_ALIAS, KINDS, SKIP_NAMES, Catalog, discover
 from awesome_claude.workspace import Workspace
 
 KIND_SINGULAR = {plural: singular for singular, plural in KIND_ALIAS.items()}
@@ -425,7 +424,7 @@ def upsert_marked_block(
 def write_inline_dependencies(
     workspace: Workspace,
     catalog: Catalog | None = None,
-    verbose: bool = False,
+    log_verbosity: int = 0,
     extra_scan_path: Path | None = None,
     force: bool = False,
     remove: bool = False,
@@ -493,7 +492,7 @@ def write_inline_dependencies(
 
         if remove:
             new_text, was_removed = remove_marked_block(original, begin_marker, end_marker)
-            if verbose:
+            if log_verbosity >= 2:
                 try:
                     rel_path = target_path.relative_to(workspace.root)
                 except ValueError:
@@ -506,7 +505,7 @@ def write_inline_dependencies(
                 updated += 1
             continue
 
-        if verbose:
+        if log_verbosity >= 2:
             targets = _outgoing_targets(ref, graph)
             n_entities = len([t for t in targets if t.kind not in ("doc", "file")])
             n_docs = len([t for t in targets if t.kind == "doc"])

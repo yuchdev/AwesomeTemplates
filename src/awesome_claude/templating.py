@@ -10,10 +10,7 @@ Jinja2-based engine used for document generation, which is a different job
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
-
-from awesome_claude.catalog import SKIP_NAMES
 
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
@@ -32,25 +29,6 @@ def template_file(path: Path, subs: dict[str, str], warnings: list[str]) -> None
         warnings.append(f"unresolved placeholder {{{{{m.group(1)}}}}} left in {path}")
     if new_text != text:
         path.write_text(new_text, encoding="utf-8")
-
-
-def copy_entity(src: Path, dst: Path, kind: str, subs: dict[str, str], warnings: list[str]) -> None:
-    if kind == "skills":
-        shutil.copytree(
-            src,
-            dst,
-            dirs_exist_ok=True,
-            ignore=lambda _dir, names: [
-                n for n in names if n in SKIP_NAMES or n.endswith("MIGRATION_REPORT.md")
-            ],
-        )
-        for f in dst.rglob("*"):
-            if f.is_file():
-                template_file(f, subs, warnings)
-    else:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-        template_file(dst, subs, warnings)
 
 
 def slugify_package(name: str) -> str:

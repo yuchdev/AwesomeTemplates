@@ -10,76 +10,87 @@ from awesome_claude.cli import app
 runner = CliRunner()
 
 
-def test_list_json_runs():
+def test_list_json_runs(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(app, ["list", "--json"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert "presets" in payload
-    assert "categories" in payload
+    assert "demo" in payload
+    assert payload["demo"]["agents"] == ["widget-verifier"]
 
 
-def test_generate_dry_run_json():
+def test_generate_dry_run_json(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(
-        app, ["generate", "--preset", "core-only", "--name", "Test", "--dry-run", "--json"]
+        app, ["generate", "--preset", "demo", "--name", "Test", "--dry-run", "--json"]
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["out"] == ".claude"
-    assert "core" in payload["plan"]
+    assert payload["preset"] == "demo"
+    assert payload["out"] == "."
 
 
-def test_generate_requires_name():
-    result = runner.invoke(app, ["generate", "--preset", "core-only", "--dry-run"])
+def test_generate_requires_name(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["generate", "--preset", "demo", "--dry-run"])
     assert result.exit_code == 1
 
 
-def test_generate_rejects_unknown_preset():
+def test_generate_rejects_unknown_preset(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(app, ["generate", "--preset", "nope", "--name", "Test", "--dry-run"])
     assert result.exit_code == 1
 
 
-def test_docs_new_unknown_type():
-    result = runner.invoke(app, ["docs", "new", "bogus", "Title"])
+def test_docs_new_unknown_type(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["docs", "new", "bogus", "Title", "--preset", "demo"])
     assert result.exit_code == 1
 
 
 def test_generate_writes_a_real_kit(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    out_dir = tmp_path / ".claude"
+    out_dir = tmp_path / "proj"
     result = runner.invoke(
         app,
-        [
-            "generate",
-            "--preset",
-            "core-only",
-            "--name",
-            "Acme Sync",
-            "--out",
-            str(out_dir),
-            "--json",
-        ],
+        ["generate", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir), "--json"],
     )
     assert result.exit_code == 0, result.stdout
-    generated = (out_dir / "agents" / "widget-verifier.md").read_text()
+    generated = (out_dir / ".claude" / "agents" / "widget-verifier.md").read_text()
     assert generated == "---\nname: widget-verifier\n---\n\nUse this agent for Acme Sync.\n"
-    assert (out_dir / "settings.json").exists()
+    assert (out_dir / ".claude" / "settings.json").exists()
+    assert (out_dir / "docs" / "adr" / "template.md").exists()
 
 
-def test_generate_refuses_nonempty_out_without_force(fixture_workspace, tmp_path, monkeypatch):
+def test_generate_refuses_nonempty_claude_without_force(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    out_dir = tmp_path / ".claude"
-    out_dir.mkdir()
-    (out_dir / "existing.txt").write_text("pre-existing")
+    out_dir = tmp_path / "proj"
+    (out_dir / ".claude").mkdir(parents=True)
+    (out_dir / ".claude" / "existing.txt").write_text("pre-existing")
     result = runner.invoke(
-        app, ["generate", "--preset", "core-only", "--name", "Acme", "--out", str(out_dir)]
+        app, ["generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir)]
     )
     assert result.exit_code == 1
+
+
+def test_generate_force_overwrites(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    (out_dir / ".claude").mkdir(parents=True)
+    (out_dir / ".claude" / "existing.txt").write_text("pre-existing")
+    result = runner.invoke(
+        app, ["generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir), "--force"]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert (out_dir / ".claude" / "agents" / "widget-verifier.md").exists()
 
 
 def test_docs_copy_writes_files(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "docs-out"
-    result = runner.invoke(app, ["docs", "copy", "--name", "Acme Sync", "--out", str(out_dir)])
+    result = runner.invoke(
+        app, ["docs", "copy", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir)]
+    )
     assert result.exit_code == 0, result.stdout
     assert (out_dir / "adr" / "template.md").is_file()
 
@@ -87,65 +98,74 @@ def test_docs_copy_writes_files(fixture_workspace, tmp_path, monkeypatch):
 def test_docs_copy_requires_name(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "docs-out"
-    result = runner.invoke(app, ["docs", "copy", "--out", str(out_dir)])
+    result = runner.invoke(app, ["docs", "copy", "--preset", "demo", "--out", str(out_dir)])
     assert result.exit_code == 1
 
 
-def test_docs_copy_applies_substitution(tmp_path, monkeypatch):
-    root = tmp_path / "repo"
-    (root / "docs").mkdir(parents=True)
-    (root / "docs" / "foo.md").write_text("Hello {{PROJECT_NAME}}\n")
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", root)
+def test_docs_copy_rejects_unknown_preset(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "docs-out"
+    result = runner.invoke(
+        app, ["docs", "copy", "--preset", "nope", "--name", "Acme", "--out", str(out_dir)]
+    )
+    assert result.exit_code == 1
+
+
+def test_docs_copy_applies_substitution(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    (fixture_workspace.path("demo", "docs") / "foo.md").write_text("Hello {{PROJECT_NAME}}\n")
 
     out_dir = tmp_path / "docs-out"
-    result = runner.invoke(app, ["docs", "copy", "--name", "Acme Sync", "--out", str(out_dir)])
+    result = runner.invoke(
+        app, ["docs", "copy", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir)]
+    )
     assert result.exit_code == 0, result.stdout
     text = (out_dir / "foo.md").read_text()
     assert "Acme Sync" in text
     assert "{{PROJECT_NAME}}" not in text
 
 
-def test_docs_copy_reports_unresolved_placeholder_warning(tmp_path, monkeypatch):
-    root = tmp_path / "repo"
-    (root / "docs").mkdir(parents=True)
-    (root / "docs" / "foo.md").write_text("Value: {{NOT_A_REAL_KEY}}\n")
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", root)
+def test_docs_copy_reports_unresolved_placeholder_warning(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    (fixture_workspace.path("demo", "docs") / "foo.md").write_text("Value: {{NOT_A_REAL_KEY}}\n")
 
     out_dir = tmp_path / "docs-out"
-    result = runner.invoke(app, ["docs", "copy", "--name", "Acme Sync", "--out", str(out_dir)])
+    result = runner.invoke(
+        app, ["docs", "copy", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir)]
+    )
     assert result.exit_code == 0, result.stdout
     assert "Warnings:" in result.stdout
     assert "unresolved placeholder" in result.stdout
 
 
-def test_generate_copy_docs_applies_substitution(tmp_path, monkeypatch):
-    root = tmp_path / "repo"
-    (root / "core" / "agents").mkdir(parents=True)
-    (root / "core" / "agents" / "widget-verifier.md").write_text("An agent.\n")
-    (root / "docs").mkdir(parents=True)
-    (root / "docs" / "x.md").write_text("Project: {{PROJECT_NAME}}\n")
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", root)
+def test_generate_applies_substitution_to_both_halves(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    (fixture_workspace.path("demo", "docs") / "x.md").write_text("Project: {{PROJECT_NAME}}\n")
 
-    out_dir = tmp_path / ".claude"
-    docs_out_dir = tmp_path / "docs-out"
+    out_dir = tmp_path / "proj"
     result = runner.invoke(
-        app,
-        [
-            "generate",
-            "--categories",
-            "core",
-            "--name",
-            "Acme",
-            "--out",
-            str(out_dir),
-            "--copy-docs",
-            "--docs-out",
-            str(docs_out_dir),
-        ],
+        app, ["generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir)]
     )
     assert result.exit_code == 0, result.stdout
-    text = (docs_out_dir / "x.md").read_text()
+    text = (out_dir / "docs" / "x.md").read_text()
     assert text == "Project: Acme\n"
+
+
+def test_generate_produces_claude_and_docs_as_siblings(fixture_workspace, tmp_path, monkeypatch):
+    # Coupling is now structural (one preset tree, one copy) rather than a
+    # runtime check: .claude/ and docs/ always land together, from the same
+    # source tree, so they can never drift out of sync at generation time.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    proj = tmp_path / "proj"
+    result = runner.invoke(
+        app, ["generate", "--preset", "demo", "--name", "Big", "--out", str(proj), "--json"]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert (proj / ".claude").is_dir()
+    assert (proj / "docs").is_dir()
+
+
+# --- graph ---------------------------------------------------------------
 
 
 def test_graph_command_writes_mermaid_doc(fixture_workspace, tmp_path, monkeypatch):
@@ -171,13 +191,18 @@ def test_graph_inline_flag_upserts_and_is_idempotent(fixture_workspace, tmp_path
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_file = tmp_path / "dependency-graph.md"
 
-    result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--out", str(out_file), "--inline"])
+    result = runner.invoke(
+        app, ["graph", str(fixture_workspace.root), "--out", str(out_file), "--inline"]
+    )
     assert result.exit_code == 0, result.stdout
 
     root = fixture_workspace.root
     before = {f: f.read_bytes() for f in root.rglob("*") if f.is_file()}
 
-    result2 = runner.invoke(app, ["graph", str(fixture_workspace.root), "--out", str(out_file), "--inline", "--force"])
+    result2 = runner.invoke(
+        app,
+        ["graph", str(fixture_workspace.root), "--out", str(out_file), "--inline", "--force"],
+    )
     assert result2.exit_code == 0, result2.stdout
     assert "Updated inline Dependencies block in 0 template file(s)" in result2.stdout
 
@@ -194,11 +219,9 @@ def test_graph_inline_and_json_rejected_together(fixture_workspace, monkeypatch)
 def test_graph_inline_requires_force_if_already_present(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
 
-    # 1. Run once to generate dependencies
     result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline"])
     assert result.exit_code == 0
 
-    # 2. Run again without --force - should FAIL
     result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline"])
     assert result.exit_code == 1
     assert "already generated" in result.stdout
@@ -208,11 +231,9 @@ def test_graph_inline_requires_force_if_already_present(fixture_workspace, monke
 def test_graph_inline_succeeds_with_force_if_already_present(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
 
-    # 1. Run once to generate dependencies
     result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline"])
     assert result.exit_code == 0
 
-    # 2. Run again WITH --force - should SUCCEED
     result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline", "--force"])
     assert result.exit_code == 0
     assert "Updated inline Dependencies block" in result.stdout
@@ -220,9 +241,9 @@ def test_graph_inline_succeeds_with_force_if_already_present(fixture_workspace, 
 
 def test_docs_new_adr_writes_file(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(app, ["docs", "new", "adr", "A CLI-created decision"])
+    result = runner.invoke(app, ["docs", "new", "adr", "A CLI-created decision", "--preset", "demo"])
     assert result.exit_code == 0, result.stdout
-    new_file = fixture_workspace.path("docs", "adr", "0002-a-cli-created-decision.md")
+    new_file = fixture_workspace.path("demo", "docs", "adr", "0002-a-cli-created-decision.md")
     assert new_file.is_file()
     assert "A CLI-created decision" in new_file.read_text()
 
@@ -230,28 +251,28 @@ def test_docs_new_adr_writes_file(fixture_workspace, monkeypatch):
 def test_graph_remove_flag(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
 
-    agent_path = fixture_workspace.root / "core" / "agents" / "widget-verifier.md"
-    hook_path = fixture_workspace.root / "core" / "hooks" / "_common.py"
+    agent_path = fixture_workspace.root / "demo" / ".claude" / "agents" / "widget-verifier.md"
+    hook_path = fixture_workspace.root / "demo" / ".claude" / "hooks" / "_common.py"
 
-    # 1. Add some dependencies first
     result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline"])
     assert result.exit_code == 0
     assert "<!-- BEGIN AUTOGENERATED: dependencies -->" in agent_path.read_text()
     assert "# BEGIN AUTOGENERATED: dependencies" in hook_path.read_text()
 
-    # 2. Remove them
-    result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--remove", "--verbose"])
+    result = runner.invoke(
+        app, ["graph", str(fixture_workspace.root), "--remove", "--log-verbosity", "debug"]
+    )
     assert result.exit_code == 0
     assert "Removed inline Dependencies block" in result.stdout
     assert "widget-verifier.md: removed block" in result.stdout
     assert "_common.py: removed block" in result.stdout
 
-    # 3. Verify they are gone
     assert "<!-- BEGIN AUTOGENERATED: dependencies -->" not in agent_path.read_text()
     assert "# BEGIN AUTOGENERATED: dependencies" not in hook_path.read_text()
 
-    # 4. Run again - should say no block found in verbose mode and updated 0
-    result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--remove", "--verbose"])
+    result = runner.invoke(
+        app, ["graph", str(fixture_workspace.root), "--remove", "--log-verbosity", "debug"]
+    )
     assert result.exit_code == 0
     assert "Removed inline Dependencies block in 0 template file(s)" in result.stdout
     assert "widget-verifier.md: (no block found)" in result.stdout
@@ -266,15 +287,11 @@ def test_graph_inline_and_remove_mutually_exclusive(fixture_workspace, monkeypat
 
 def test_graph_remove_handles_spacing(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    agent_path = fixture_workspace.root / "core" / "agents" / "widget-verifier.md"
+    agent_path = fixture_workspace.root / "demo" / ".claude" / "agents" / "widget-verifier.md"
 
     original_content = agent_path.read_text()
 
-    # Generate
     runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline"])
-
-    # Remove
     runner.invoke(app, ["graph", str(fixture_workspace.root), "--remove"])
 
-    # Content should be equal to original (modulo some potential whitespace normalization at the end)
     assert agent_path.read_text().strip() == original_content.strip()

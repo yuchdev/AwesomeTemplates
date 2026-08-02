@@ -17,12 +17,12 @@ def test_slugify_title():
 
 
 def test_next_sequence_finds_max_plus_one(fixture_workspace):
-    out_dir = fixture_workspace.path("docs", "adr")
+    out_dir = fixture_workspace.path("demo", "docs", "adr")
     assert next_sequence(out_dir, "[0-9][0-9][0-9][0-9]-*.md") == 2  # only 0001-existing.md present
 
 
 def test_render_new_document_fills_header(fixture_workspace):
-    path = render_new_document(fixture_workspace, "adr", "A New Decision")
+    path = render_new_document(fixture_workspace, "demo", "adr", "A New Decision")
     text = path.read_text()
     assert "# 0002 - A New Decision" in text
     assert "**Status:** Proposed" in text
@@ -31,11 +31,11 @@ def test_render_new_document_fills_header(fixture_workspace):
 
 def test_render_new_document_unknown_type_raises(fixture_workspace):
     with pytest.raises(DocTemplateError, match="unknown doc type"):
-        render_new_document(fixture_workspace, "bogus", "Title")
+        render_new_document(fixture_workspace, "demo", "bogus", "Title")
 
 
 def test_render_new_document_refuses_overwrite(fixture_workspace, monkeypatch):
     monkeypatch.setattr(doctemplates, "next_sequence", lambda out_dir, glob: 5)
-    render_new_document(fixture_workspace, "adr", "Same Title")
+    render_new_document(fixture_workspace, "demo", "adr", "Same Title")
     with pytest.raises(DocTemplateError, match="refusing to overwrite"):
-        render_new_document(fixture_workspace, "adr", "Same Title")
+        render_new_document(fixture_workspace, "demo", "adr", "Same Title")
