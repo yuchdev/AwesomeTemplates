@@ -45,28 +45,28 @@ times.
 Yes: 
 
 ```python
-    bridgekeeper.answer(
-        name="Arthur", quest=questlib.find(owner="Arthur", perilous=True)
-    )
-    answer = (a_long_line().of_chained_methods()
-          .that_eventually_provides().an_answer())
+bridgekeeper.answer(
+    name="Arthur", quest=questlib.find(owner="Arthur", perilous=True)
+)
+answer = (a_long_line().of_chained_methods()
+      .that_eventually_provides().an_answer())
 
-    if (
-        config is None
-        or 'editor.language' not in config
-        or config['editor.language'].use_spaces is False
-    ):
-        use_tabs()
+if (
+    config is None
+    or 'editor.language' not in config
+    or config['editor.language'].use_spaces is False
+):
+    use_tabs()
 ```
 
 No:
 
 ```python
-    bridgekeeper.answer(name="Arthur", quest=questlib.find(owner="Arthur", 
-    perilous=True))
-    if (config is None or 'editor.language' not in config or config[
-      'editor.language'].use_spaces is False):
-      use_tabs()
+bridgekeeper.answer(name="Arthur", quest=questlib.find(owner="Arthur", 
+perilous=True))
+if (config is None or 'editor.language' not in config or config[
+  'editor.language'].use_spaces is False):
+  use_tabs()
 ```
 
 Within comments, put long URLs on one line
@@ -74,16 +74,16 @@ Within comments, put long URLs on one line
 Yes:  
 
 ```python
-  # See details at
-  # https://www.example.com/us/developer/documentation/api/content/v2.0/csv_file_name_extension_full_specification.html
+# See details at
+# https://www.example.com/us/developer/documentation/api/content/v2.0/csv_file_name_extension_full_specification.html
 ```
 
 No:  
 
 ```python
-  # See details at
-  # https://www.example.com/us/developer/documentation/api/content/\
-  # v2.0/csv_file_name_extension_full_specification.html
+# See details at
+# https://www.example.com/us/developer/documentation/api/content/\
+# v2.0/csv_file_name_extension_full_specification.html
 ```
 
 Make note regarding the indentation of the elements in the line continuation examples above; see the [indentation](#s3.4-indentation) section for explanation.
@@ -97,30 +97,31 @@ It is not required to use parentheses around tuples. Do not use them in return s
 Yes:
 
 ```python
-    if foo:
-         bar()
-     while x:
-         x = bar()
-     if x and y:
-         bar()
-     if not x:
-         bar()
-     # For a 1 item tuple the ()s are more visually obvious than the comma.
-     onesie = (foo,)
-     return foo
-     return spam, beans
-     dish = (spam, beans,)
-     for (x, y) in dict.items(): ...
+if foo:
+    bar()
+while x:
+    x = bar()
+if x and y:
+    bar()
+if not x:
+    bar()
+
+# For a 1 item tuple the ()s are more visually obvious than the comma.
+onesie = (foo,)
+return foo
+return spam, beans
+dish = (spam, beans,)
+for (x, y) in dict.items(): ...
 ```
 
 No:
 
 ```python
-    if (x):
-         bar()
-     if not(x):
-         bar()
-     return (foo)
+if (x):
+    bar()
+if not(x):
+    bar()
+return (foo)
 ```
 
 Parentheses are redundant for returning the tuple:
@@ -149,51 +150,51 @@ Yes:
 
 ```python
 # Aligned with opening delimiter.
-       foo = long_function_name(var_one, var_two, var_three, var_four)
-       meal = (spam, beans)
+foo = long_function_name(var_one, var_two, var_three, var_four)
+meal = (spam, beans)
 
-       # Aligned with opening delimiter in a dictionary.
-       foo = {
-           'long_dictionary_key': value1 + value2,
-           ...
-       }
+# Aligned with opening delimiter in a dictionary.
+foo = {
+    'long_dictionary_key': value1 + value2,
+    ...
+}
 
-       # 4-space hanging indent; nothing on first line.
-       foo = long_function_name(var_one, var_two, var_three, var_four)
-       meal = (spam, beans)
+# 4-space hanging indent; nothing on first line.
+foo = long_function_name(var_one, var_two, var_three, var_four)
+meal = (spam, beans)
 
-       # 4-space hanging indent; nothing on first line,
-       # closing parenthesis on a new line.
-       foo = long_function_name(var_one, var_two, var_three, var_four)
-       meal = (spam, beans,)
+# 4-space hanging indent; nothing on first line,
+# closing parenthesis on a new line.
+foo = long_function_name(var_one, var_two, var_three, var_four)
+meal = (spam, beans,)
 
-       # 4-space hanging indent in a dictionary.
-       foo = {
-           'long_dictionary_key': long_dictionary_value,
-           ...
-       }
+# 4-space hanging indent in a dictionary.
+foo = {
+    'long_dictionary_key': long_dictionary_value,
+    ...
+}
 ```
 
 No:
 
 ```python
-    # Stuff below forbidden.
-       foo = long_function_name(var_one, var_two,
-       var_three, var_four)
-       meal = (spam,
-       beans)
+# Stuff below forbidden.
+foo = long_function_name(var_one, var_two,
+var_three, var_four)
+meal = (spam,
+beans)
 
-       # 2-space hanging indent forbidden.
-       foo = long_function_name(
-         var_one, var_two, var_three,
-         var_four)
+# 2-space hanging indent forbidden.
+foo = long_function_name(
+  var_one, var_two, var_three,
+  var_four)
 
-       # No hanging indent in a dictionary.
-       foo = {
-           'long_dictionary_key':
-           long_dictionary_value,
-           ...
-       }
+# No hanging indent in a dictionary.
+foo = {
+    'long_dictionary_key':
+    long_dictionary_value,
+    ...
+}
 ```
 
 ### 4.1 Trailing commas in sequences of items?
@@ -240,17 +241,17 @@ after a comma, semicolon, or colon, except at the end of the line.
 Yes:
 
 ```python
-    if x == 4:
-         print(x, y)
-     x, y = y, x
+if x == 4:
+    print(x, y)
+x, y = y, x
 ```
 
 No:
 
 ```python
-    if x == 4 :
-         print(x , y)
-     x , y = y , x
+if x == 4 :
+    print(x , y)
+x , y = y , x
 ```
 
 No whitespace before the open paren/bracket that starts an argument list, indexing or slicing.
@@ -313,25 +314,25 @@ Don't use spaces to vertically align tokens on consecutive lines, since it becom
 Yes:
 
 ```python
-  foo = 1000  # comment
-  long_name = 2  # comment that should not be aligned
+foo = 1000  # comment
+long_name = 2  # comment that should not be aligned
 
-  dictionary = {
-      'foo': 1,
-      'long_name': 2,
-  }
+dictionary = {
+    'foo': 1,
+    'long_name': 2,
+}
 ```
 
 No:
 
 ```python
-  foo       = 1000  # comment
-  long_name = 2     # comment that should not be aligned
+foo       = 1000  # comment
+long_name = 2     # comment that should not be aligned
 
-  dictionary = {
-      'foo'      : 1,
-      'long_name': 2,
-  }
+dictionary = {
+    'foo'      : 1,
+    'long_name': 2,
+}
 ```
 
 ## 7. Shebang Line
@@ -474,6 +475,7 @@ def fetch_smalltable_rows(
       table (and require_all_keys must have been False).
     @raises IOError: An error occurred accessing the smalltable.
     """
+    pass
 ```
 
 #### 8.3.4 Colon-based Sphinx Notation

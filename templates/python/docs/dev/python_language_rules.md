@@ -4,26 +4,26 @@ This style guide is a list of *dos and don'ts* for Python programs.
 
 **Table of Contents**
 
-  - [1. Lint](#s1-lint)
-  - [2. Imports](#s2-imports)
-  - [3. Packages](#s3-packages)
-  - [4. Exceptions](#s4-exceptions)
-  - [5. Mutable Global State](#s5-mutable-global-state)
-  - [6. Nested/Local/Inner Classes and Functions](#s6-nested-local-inner-classes-and-functions)
-  - [7. Comprehensions & Generator Expressions](#s7-comprehensions-generator-expressions)
-  - [8. Default Iterators and Operators](#s8-default-iterators-and-operators)
-  - [9. Generators](#s9-generators)
-  - [10. Lambda Functions](#s10-lambda-functions)
-  - [11. Conditional Expressions](#s11-conditional-expressions)
-  - [12. Default Argument Values](#s12-default-argument-values)
-  - [13. Properties](#s13-properties)
-  - [14. True/False Evaluations](#s14-true-false-evaluations)
-  - [16. Lexical Scoping](#s16-lexical-scoping)
-  - [17. Function and Method Decorators](#s17-function-and-method-decorators)
-  - [18. Threading](#s18-threading)
-  - [19. Power Features](#s19-power-features)
-  - [20. Modern Python: from \_\_future\_\_ imports](#s20-modern-python-from-future-imports)
-  - [21. Type Annotated Code](#s21-type-annotated-code)
+- [1. Lint](#s1-lint)
+- [2. Imports](#s2-imports)
+- [3. Packages](#s3-packages)
+- [4. Exceptions](#s4-exceptions)
+- [5. Mutable Global State](#s5-mutable-global-state)
+- [6. Nested/Local/Inner Classes and Functions](#s6-nested-local-inner-classes-and-functions)
+- [7. Comprehensions & Generator Expressions](#s7-comprehensions-generator-expressions)
+- [8. Default Iterators and Operators](#s8-default-iterators-and-operators)
+- [9. Generators](#s9-generators)
+- [10. Lambda Functions](#s10-lambda-functions)
+- [11. Conditional Expressions](#s11-conditional-expressions)
+- [12. Default Argument Values](#s12-default-argument-values)
+- [13. Properties](#s13-properties)
+- [14. True/False Evaluations](#s14-true-false-evaluations)
+- [16. Lexical Scoping](#s16-lexical-scoping)
+- [17. Function and Method Decorators](#s17-function-and-method-decorators)
+- [18. Threading](#s18-threading)
+- [19. Power Features](#s19-power-features)
+- [20. Modern Python: from \_\_future\_\_ imports](#s20-modern-python-from-future-imports)
+- [21. Type Annotated Code](#s21-type-annotated-code)
 
 
 <a id="s1-lint"></a>
@@ -78,9 +78,9 @@ Exemptions from this rule:
 
 Symbols from the following modules are used to support static analysis and type checking:
 
-  - `typing`
-  - `collections.abc`
-  - `typing_extensions`
+- `typing`
+- `collections.abc`
+- `typing_extensions`
 
 <a id="s3-packages"></a>
 ### 3. Packages
@@ -106,21 +106,21 @@ Imports should be as follows:
 Yes:
 
 ```python
-  # Reference absl.flags in code with the complete name (verbose).
-  import absl.flags
-  from doctor.who import jodie
+# Reference absl.flags in code with the complete name (verbose).
+import absl.flags
+from doctor.who import jodie
 
-  _FOO = absl.flags.DEFINE_string(...)
+_FOO = absl.flags.DEFINE_string(...)
 ```
 
 Yes:
 
 ```python
-  # Reference flags in code with just the module name (common).
-  from absl import flags
-  from doctor.who import jodie
+# Reference flags in code with just the module name (common).
+from absl import flags
+from doctor.who import jodie
 
-  _FOO = flags.DEFINE_string(...)
+_FOO = flags.DEFINE_string(...)
 ```
 
 *(assume this file lives in `doctor/who/` where `jodie.py` also exists)*
@@ -128,10 +128,10 @@ Yes:
 No:
 
 ```python
-  # Unclear what module the author wanted and what will be imported.  The actual
-  # import behavior depends on external factors controlling sys.path.
-  # Which possible jodie module did the author intend to import?
-  import jodie
+# Unclear what module the author wanted and what will be imported.  The actual
+# import behavior depends on external factors controlling sys.path.
+# Which possible jodie module did the author intend to import?
+import jodie
 ```
 
 The directory the main binary is located in should not be assumed to be in `sys.path` despite that happening in some environments. 
@@ -164,46 +164,46 @@ Exceptions must follow certain conditions:
 
 Yes:
 
-  ```python
-    def connect_to_next_port(self, minimum: int) -> int:
-      """Connects to the next available port.
-
-      :param minimum: A port value greater or equal to 1024.
-      :returns: The new minimum port.
-      :raises ConnectionError: If no available port is found.
-      """
-      if minimum < 1024:
+```python
+def connect_to_next_port(self, minimum: int) -> int:
+    """Connects to the next available port.
+  
+    :param minimum: A port value greater or equal to 1024.
+    :returns: The new minimum port.
+    :raises ConnectionError: If no available port is found.
+    """
+    if minimum < 1024:
         # Note that this raising of ValueError is not mentioned in the doc
         # string's "Raises:" section because it is not appropriate to
         # guarantee this specific behavioral reaction to API misuse.
         raise ValueError(f'Min. port must be at least 1024, not {minimum}.')
-      port = self._find_next_open_port(minimum)
-      if port is None:
+    port = self._find_next_open_port(minimum)
+    if port is None:
         raise ConnectionError(
             f'Could not connect to service on port {minimum} or higher.')
-      # The code does not depend on the result of this assert.
-      assert port >= minimum, (
-          f'Unexpected port {port} when minimum was {minimum}.')
-      return port
-  ```
+    # The code does not depend on the result of this assert.
+    assert port >= minimum, (f'Unexpected port {port} when minimum was {minimum}.')
+    return port
+```
 
 No:
   
-  ```python
-    def connect_to_next_port(self, minimum: int) -> int:
-      """Connects to the next available port.
+```python
+def connect_to_next_port(self, minimum: int) -> int:
+    """Connects to the next available port.
 
-      :param minimum: A port value greater or equal to 1024.
+    :param minimum: A port value greater or equal to 1024.
 
-      :returns: the minimum port
-      """
-      assert minimum >= 1024, 'Minimum port must be at least 1024.'
-      # The following code depends on the previous assert.
-      port = self._find_next_open_port(minimum)
-      assert port is not None
-      # The type checking of the return statement relies on the assert.
-      return port
-  ```
+    :returns: the minimum port
+    """
+    assert minimum >= 1024, 'Minimum port must be at least 1024.'
+
+    # The following code depends on the previous assert.
+    port = self._find_next_open_port(minimum)
+    assert port is not None
+    # The type checking of the return statement relies on the assert.
+    return port
+```
   
 
 - Libraries or packages may define their own exceptions. When doing so they must inherit from an existing exception class. Exception names should end in `Error` and should not introduce repetition (`foo.FooError`).
@@ -319,40 +319,40 @@ Optimize for readability, not conciseness.
 Yes:
 
 ```python
-  result = [mapping_expr for value in iterable if filter_expr]
+result = [mapping_expr for value in iterable if filter_expr]
 
-  result = [
-      is_valid(metric={'key': value})
-      for value in interesting_iterable
-      if a_longer_filter_expression(value)
-  ]
+result = [
+    is_valid(metric={'key': value})
+    for value in interesting_iterable
+    if a_longer_filter_expression(value)
+]
 
-  descriptive_name = [
-      transform({'key': key, 'value': value}, color='black')
-      for key, value in generate_iterable(some_input)
-      if complicated_condition_is_met(key, value)
-  ]
+descriptive_name = [
+    transform({'key': key, 'value': value}, color='black')
+    for key, value in generate_iterable(some_input)
+    if complicated_condition_is_met(key, value)
+]
 
-  result = 
+result = 
 
-  return (x**2 for x in range(10))
+return (x**2 for x in range(10))
 
-  unique_names = {user.name for user in users if user is not None}
+unique_names = {user.name for user in users if user is not None}
 ```
 
 No:
 
 ```python
-  result = [(x, y) for x in range(10) for y in range(5) if x * y > 10]
+result = [(x, y) for x in range(10) for y in range(5) if x * y > 10]
 
-  return (
-      (x, y, z)
-      for x in range(5)
-      for y in range(5)
-      if x != y
-      for z in range(5)
-      if y != z
-  )
+return (
+    (x, y, z)
+    for x in range(5)
+    for y in range(5)
+    if x != y
+    for z in range(5)
+    if y != z
+)
 ```
 
 <a id="s8-default-iterators-and-operators"></a>
@@ -381,11 +381,13 @@ Use default iterators and operators for types that support them, like lists, dic
 The built-in types define iterator methods, too. 
 Prefer these methods to methods that return lists, except that you should not mutate a container while iterating over it.
 
+Yes:
+
 ```python
-Yes:  for key in adict: ...
-      if obj in alist: ...
-      for line in afile: ...
-      for k, v in adict.items(): ...
+for key in adict: ...
+if obj in alist: ...
+for line in afile: ...
+for k, v in adict.items(): ...
 ```
 
 <a id="s9-generators"></a>
@@ -470,28 +472,28 @@ Use a complete `if` statement when things get more complicated.
 Yes:
 
 ```python
-    one_line = 'yes' if predicate(value) else 'no'
+one_line = 'yes' if predicate(value) else 'no'
 
-    slightly_split = (
-      'yes' if predicate(value) else 'no, nein, nyet'
-    )
-    
-    the_longest_ternary_style_that_can_be_done = (
-        'yes, true, affirmative, confirmed, correct'
-        if predicate(value)
-        else 'no, false, negative, nay'
-    )
+slightly_split = (
+  'yes' if predicate(value) else 'no, nein, nyet'
+)
+
+the_longest_ternary_style_that_can_be_done = (
+    'yes, true, affirmative, confirmed, correct'
+    if predicate(value)
+    else 'no, false, negative, nay'
+)
 ```
 
 No:
 
 ```python
-    bad_line_breaking = ('yes' if predicate(value) else
-                         'no')
-    portion_too_long = ('yes'
-                        if some_long_module.some_long_predicate_function(
-                            really_long_variable_name)
-                        else 'no, false, negative, nay')
+bad_line_breaking = ('yes' if predicate(value) else
+                     'no')
+portion_too_long = ('yes'
+                    if some_long_module.some_long_predicate_function(
+                        really_long_variable_name)
+                    else 'no, false, negative, nay')
 ```
 
 <a id="s12-default-argument-values"></a>
