@@ -1,5 +1,13 @@
 # {{PROJECT_NAME}} Python Style Rules
 
+## 0. To review later
+
+- Annotation and typing, Union, Optional
+- Exceptions
+- Test documentation
+- Sphinx notation (@ :)
+- ruff, mypy, Flake8
+
 ## 1. Semicolons
 
 Do not terminate your lines with semicolons, and do not use semicolons to put two statements on the same line.
@@ -395,30 +403,18 @@ Docstrings that do not provide any new information should not be used.
 
 In this section, "function" means a method, function, generator, or property.
 
-A docstring is mandatory for every function that has one or more of the following properties:
+A docstring is mandatory for every function except:
 
-- being part of the public API
-- nontrivial size
-- non-obvious logic
+- lambda
+- nested function
 
-A docstring should give enough information to write a call to the
-function without reading the function's code. The docstring should
-describe the function's calling syntax and its semantics, but generally
-not its implementation details, unless those details are relevant to how
-the function is to be used. For example, a function that mutates one of
-its arguments as a side effect should note that in its docstring.
-Otherwise, subtle but important details of a function's implementation
-that are not relevant to the caller are better expressed as comments
-alongside the code than within the function's docstring.
+A docstring should give enough information to write a call to the function without reading the function's code. 
+The docstring should describe the function's calling syntax and its semantics, but generally not its implementation details, unless those details are relevant to how the function is to be used. 
+For example, a function that mutates one of its arguments as a side effect should note that in its docstring.
+Otherwise, subtle but important details of a function's implementation that are not relevant to the caller are better expressed as comments alongside the code than within the function's docstring.
 
-The docstring may be descriptive-style
-(`"""Fetches rows from a Bigtable."""`) or imperative-style
-(`"""Fetch rows from a Bigtable."""`), but the style should be consistent within a file.
-The docstring for a `@property`
-data descriptor should use the same style as the docstring for an
-attribute or a [function argument](#doc-function-args)
-(`"""The Bigtable path."""`,
-rather than `"""Returns the Bigtable path."""`).
+The docstring may be descriptive-style (`"""Fetches rows from a Bigtable."""`) or imperative-style (`"""Fetch rows from a Bigtable."""`), but the style should be consistent within a file.
+The docstring for a `@property` data descriptor should use the same style as the docstring for an attribute or a [function argument](#doc-function-args) (`"""The Bigtable path."""`, rather than `"""Returns the Bigtable path."""`).
 
 Certain aspects of a function should be documented using Sphinx notation, using the tags `@param`, `@type`, `@returns`, `@yields`, and `@raises` (or alternatively `:param`, `:type`, `:returns`, `:yields`, `:raises`). The tags must be aligned with the text of the docstring.
 
@@ -426,23 +422,31 @@ Certain aspects of a function should be documented using Sphinx notation, using 
 
 <a id="doc-function-args"></a>
 [*@param* and *@type:*](#doc-function-args)
-: `@param name: description` lists a parameter by name and describes it.
-  `@type name: type` defines the type of the parameter, if not present in the type annotations.
-  If the description is too long to fit on a single 120-character line, use a hanging indent of 2 or 4 spaces (be consistent with the rest of the docstrings in the file).
-  If a function accepts `*foo` (variable length argument lists) and/or `**bar` (arbitrary keyword arguments), they should be listed as `@param *foo:` and `@param **bar:`.
+
+`@param name: description` lists a parameter by name and describes it.
+
+`@type name: type` defines the type of the parameter, if not present in the type annotations.
+
+If the description is too long to fit on a single 120-character line, use a hanging indent of 2 or 4 spaces (be consistent with the rest of the docstrings in the file).
+If a function accepts `*foo` (variable length argument lists) and/or `**bar` (arbitrary keyword arguments), they should be listed as `@param *foo:` and `@param **bar:`.
 
 #### 8.3.2 Raises Tag
 
 <a id="doc-function-returns"></a>
 [*@returns* (or *@yields* for generators):](#doc-function-returns)
-: `@returns: description` describes the semantics of the return value, including any type information that the type annotation does not provide. If the function only returns None, this tag is not required.
-  If the function uses `yield` (is a generator), the `@yields` tag should document the object returned by `next()`, instead of the generator object itself.
+
+`@returns: description` describes the semantics of the return value, including any type information that the type annotation does not provide. If the function only returns `None`, this tag is not required.
+
+`@rtype: type` 
+
+If the function uses `yield` (is a generator), the `@yields` tag should document the object returned by `next()`, instead of the generator object itself.
 
 #### 8.3.3 Raises Tag
 
 <a id="doc-function-raises"></a>
 [*@raises:*](#doc-function-raises)
-: `@raises ExceptionType: description` lists exceptions that are relevant to the interface followed by a description.
+
+`@raises ExceptionType: description` lists exceptions that are relevant to the interface followed by a description.
 
 ```python
 def fetch_smalltable_rows(
@@ -458,8 +462,8 @@ def fetch_smalltable_rows(
     @param table_handle: An open smalltable.Table instance.
     @param keys: A sequence of strings representing the key of each table row to fetch.  String keys will be UTF-8 encoded.
     @param require_all_keys: If True only rows with values set for all keys will be returned.
-    @returns: A dict mapping keys to the corresponding table row data fetched. Each row is represented as a tuple of strings. For
-      example:
+    @returns: A dict mapping keys to the corresponding table row data fetched. Each row is represented as a tuple of strings. 
+    For example:
 
       {b'Serak': ('Rigel VII', 'Preparer'),
        b'Zim': ('Irk', 'Invader'),
@@ -479,7 +483,7 @@ Similarly, this variation using colon-based Sphinx notation is also allowed:
 ```python
 def fetch_smalltable_rows(
     table_handle: smalltable.Table,
-    keys: Sequence[bytes | str],
+    keys: Sequence[Union[bytes, str]],
     require_all_keys: bool = False,
 ) -> Mapping[bytes, tuple[str, ...]]:
     """Fetches rows from a Smalltable.
@@ -508,13 +512,7 @@ def fetch_smalltable_rows(
 
 A method that overrides a method from a base class does not need a
 docstring if it is explicitly decorated with
-[`@override`](https://typing-extensions.readthedocs.io/en/latest/#override)
-(from `typing_extensions` or
-`typing` modules), unless the
-overriding method's behavior materially refines the base method's
-contract, or details need to be provided (e.g., documenting additional
-side effects), in which case a docstring with at least those differences
-is required on the overriding method.
+[`@override`](https://typing-extensions.readthedocs.io/en/latest/#override) (from `typing_extensions` or `typing` modules), unless the overriding method's behavior materially refines the base method's contract, or details need to be provided (e.g., documenting additional side effects), in which case a docstring with at least those differences is required on the overriding method.
 
 ```python
 from typing_extensions import override
