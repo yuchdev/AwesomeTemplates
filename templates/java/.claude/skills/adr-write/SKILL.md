@@ -22,8 +22,9 @@ Scaffold a new ADR for the decision titled `$ARGUMENTS`.
    date (from session context), and the seeded Context. Leave **Status:
    Proposed**. See the section spec in [references/template-guide.md](references/template-guide.md)
    for what each section must contain and how the seeded git/issue context maps
-   onto it, and [docs/adr/0001-new-ui-rich-based-design.md](../../../docs/adr/0001-new-ui-rich-based-design.md)
-   as a filled exemplar.
+   onto it. If this project already has accepted ADRs, read the most recent one
+   as a filled exemplar of the house style; on a fresh project there is none yet,
+   so follow the template and the section spec.
 4. Add an index line to `docs/README.md`.
 
 ## Template

@@ -1,6 +1,6 @@
 # ADR template guide (section-by-section)
 
-The canonical structure lives in [`docs/adr/template.md`](../../../../docs/adr/template.md).
+The canonical structure lives in [`docs/adr/template.md`](/docs/adr/template.md).
 This guide explains what each section must contain and how the git/issue context
 the skill gathers in Step 2 maps onto it. Read `template.md` for the exact
 headings; read this for how to fill them.
@@ -36,7 +36,7 @@ undecided. Every rejected row needs a concrete *Reason rejected*, not just "wors
 
 ## Consequences
 
-Split **Positive** and **Negative** (the template's two sub-headings). Negative is
+Split **Positive** and **Negative** (the template's two subheadings). Negative is
 the honest part: migration cost, new failure modes, lock-in. Call out anything
 touching this project's core safety/compliance invariants or security explicitly —
 those are the consequences a reviewer will look for first.
@@ -53,7 +53,7 @@ doc/runbook updates → `docs-updater`. This is where downstream tasks get route
 - **Supporting specs / diagrams:** anything under `docs/specs/` or `assets/`.
 - **Supersedes / Superseded by:** prior ADRs in the same decision lineage.
 
-## Anti-patterns to avoid
+## Antipatterns to avoid
 
 - Pasting a divergent copy of the template into the ADR — always mirror
   `docs/adr/template.md` so the corpus stays uniform.

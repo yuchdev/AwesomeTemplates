@@ -1,12 +1,12 @@
 # Reviews
 
 Asynchronous review outputs from the `background-reviewer` agent: dependency
-audits, secret scans, performance-regression findings, and licence checks.
+audits, secret scans, performance-regression findings, and license checks.
 
 ## Naming convention
 
 `<type>-<scope>-<YYYY-MM-DD>.md` - e.g. `dep-audit-2025-09-01.md`,
-`licence-check-2025-10-15.md`.
+`license-check-2025-10-15.md`.
 
 ## Contents
 

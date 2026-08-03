@@ -46,7 +46,7 @@ matching task folder is `docs/roadmap/{NNNN}-{milestone-slug}/{TT.t}-{task-slug}
 
 This loop re-fires into the **same growing conversation**, so anything the main loop reads
 directly stays in context for *every* subsequent iteration. The milestone path, task folder,
-and subtask queue do **not** change within a run - re-parsing the ~500-line `plan.md` and
+and subtask queue do **not** change within a run - reparsing the ~500-line `plan.md` and
 ~150-line `status.md` each wakeup would add ~10k tokens of pure rediscovery per iteration.
 Instead, resolve once and persist a small cursor:
 
@@ -127,24 +127,29 @@ Delegate the subtask spec to the appropriate fleet agent. Independent units with
 subtask may run concurrently; units with stated ordering dependencies run sequentially:
 
 | Spec role keyword  | Fleet agent                             | Agentic action               |
-|---------------------|--------------------------------------------|---------------------------------|
-| `Architect`        | `app-architect`                         | evaluate design               |
-| `Python Expert`    | `python-expert`                         | subtask implementation        |
-| `Testing Expert`   | `testing-expert` then `python-expert`   | QA then fix regressions       |
-| `Security Auditor` | `security-auditor` then `python-expert` | advisory then implementation  |
-| `Docs Writer`      | `docs-writer` or `docs-updater`         | write or update docs           |
+|--------------------|-----------------------------------------|------------------------------|
+| `Architect`        | `app-architect`                         | evaluate design              |
+| `Python Expert`    | `python-expert`                         | subtask implementation       |
+| `Testing Expert`   | `testing-expert` then `python-expert`   | QA then fix regressions      |
+| `Security Auditor` | `security-auditor` then `python-expert` | advisory then implementation |
+| `Docs Writer`      | `docs-writer` or `docs-updater`         | write or update docs         |
 
 Brief each coder/QA agent with **paths and section references, not pasted file bodies** -
 pasting a spec bills it twice (once in your context, once in theirs):
 
-- The subtask spec **path** (`{task_folder}/{NN}-{subtask-slug}.md`) - the agent reads it
-  itself. Add a one-line scope note, not the spec text.
-- The cross-cutting rules in **[.claude/CLAUDE.md](/.claude/CLAUDE.md)** §2 (conventions),
-  §3 (security), §4 (testing) - `Optional[T]` not `T | None`, full annotations, ruff, RAII,
-  `SensitiveFilter`, no bare `except:`, unit + mocked-integration tests. If the milestone's
-  `plan.md` carries its own cross-cutting guidelines section, name it for the agent to read.
-- The specific **anchor** in **[/docs/specs/implementation_spec.md](/docs/specs/implementation_spec.md)**
-  the subtask references (e.g. a backend ABC or §9 endpoint spec) - the section, not the whole spec.
+- The subtask spec **path** (`{task_folder}/{NN}-{subtask-slug}.md`) - the agent reads it itself. Add a one-line scope note, not the spec text.
+- The cross-cutting rules in `@docs/dev/python_coding_standard.md` - full annotations, ruff,
+  RAII, this project's log-redaction mechanism (if it has one), no bare `except:`, unit +
+  mocked-integration tests.
+  <!-- TEMPLATE-INIT: if this project's own CLAUDE.md/AGENTS.md documents additional
+  cross-cutting conventions beyond the shipped coding standard (a stricter testing bar, a
+  different security policy, a named logging/redaction utility), name the file and the
+  specific section here. --> If the milestone's `plan.md` carries its own cross-cutting
+  guidelines section, name it for the agent to read.
+- <!-- TEMPLATE-INIT: if this project keeps a detailed design/spec document beyond the ADRs in
+  docs/adr/ (e.g. under docs/specs/), name its actual path and section-numbering convention
+  here, so this bullet reads "the specific anchor in <path> the subtask references - the
+  section, not the whole doc." If there is no such document, delete this bullet entirely. -->
 
 **Return discipline (keeps the parent context lean):** instruct every spawned agent to return
 a **compact structured summary** - files changed, symbols added, pass/fail, coverage delta -
@@ -152,18 +157,18 @@ and to **never echo diffs, file contents, or full test logs**. A subagent's inte
 reasoning are discarded with its context; only its final message persists in the loop, so that
 message is the only thing you pay to carry forward.
 
-**Security-sensitive subtasks** (auth middleware, the sandbox, any incident-payload
-ingestion): spawn `security-auditor` **before** coding begins. It reads the spec and writes
-a threat model to `docs/security/<date>-<topic>.md`; the coder picks that up as an
-additional input. Per [.claude/CLAUDE.md](/.claude/CLAUDE.md) §5, a CRITICAL finding blocks
-merge - stop the loop and require human sign-off.
+**Security-sensitive subtasks** (auth middleware, anything parsing untrusted or
+attacker-influenced input, external-service credentials or tokens): spawn `security-auditor`
+**before** coding begins. It reads the spec and writes a threat model to
+`docs/security/<date>-<topic>.md`; the coder picks that up as an additional input. A CRITICAL
+finding blocks merge - stop the loop and require human sign-off.
 
 ### Step 4 - stop-and-ask when implementation needs a decision
 
 During implementation the loop **may pause to ask the user** whenever the spec is ambiguous,
 a design choice materially shapes the final implementation, or a deviation from the spec
 looks warranted. Use `AskUserQuestion` with concrete options, apply the answer, and
-continue the same iteration. Prefer asking over guessing for anything that is expensive to
+continue the same iteration. Prefer asking to guessing for anything that is expensive to
 reverse. (Routine, unambiguous implementation does **not** pause - only genuine forks.)
 
 ### Step 5 - verification gate
@@ -196,12 +201,12 @@ spec path from Step 2 (relative to `docs/roadmap/`, without the `.md` extension)
 Then run the applicable quality-gate skills. **Skip any gate whose trigger condition is false -
 do not spawn an agent that can only find nothing.** Each gate is module-scoped, never tree-wide:
 
-| Condition                                                | Skill                                                                                                            |
-|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| Condition                                                | Skill                                                                                                                                |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | Always                                                   | `/test-gap src/{{PROJECT_PACKAGE}}/<subtask-module>/` - report coverage delta; if < 85 % delegate missing tests to `testing-expert`. |
-| `pyproject.toml` or any `requirements*.txt` changed      | `/dep-audit`                                                                                                     |
-| Any file under `api/`, `sandbox/`, or middleware changed | `/secret-scan src/{{PROJECT_PACKAGE}}/<changed-module>/`                                                                   |
-| Subtask touches docs / public API                        | `/link-check docs/` - inbound references still resolve.                                                          |
+| `pyproject.toml` or any `requirements*.txt` changed      | `/dep-audit`                                                                                                                         |
+| Any file under an API route, auth, or middleware path changed, or anywhere handling credentials/tokens | `/secret-scan src/{{PROJECT_PACKAGE}}/<changed-module>/` |
+| Subtask touches docs / public API                        | `/link-check docs/` - inbound references still resolve.                                                                              |
 
 ### Step 7 - record the subtask, then check the task
 
@@ -218,7 +223,7 @@ do not spawn an agent that can only find nothing.** Each gate is module-scoped, 
 
 > The task is **✅ Complete** when the feature is overall created and working - even if 1-2
 > **minor** subtasks are explicitly deferred. Do not block completion on optional or
-> enhancement subtasks (e.g. a caching optimisation) once the core feature is delivered and
+> enhancement subtasks (e.g. a caching optimization) once the core feature is delivered and
 > green. A *major* subtask still `⬜`/`🔶` means the task is **🔶 In progress**, not complete.
 
 - **Task not yet complete** → go to Step 8 (reschedule for the next subtask).
@@ -254,29 +259,14 @@ Call `ScheduleWakeup` with:
 
 ## Task-specific notes
 
-### Task 8 - REST API Layer
-
-Run `security-auditor` first on the auth-middleware spec (§9 auth section); `python-expert`
-reads the threat model before implementing `api/middleware/auth.py`. After the API subtask,
-verify `aegis server --help` exits 0 (the Task 7 stub must be wired to the real
-`uvicorn.run`). Integration tests (`test_api.py`) need `httpx` - add it to the `[test]`
-extras in `pyproject.toml` if absent and trigger `/dep-audit`.
-
-### Task 9 - Secure Code Sandbox
-
-Run `security-auditor` first on **[/docs/specs/implementation_spec.md](/docs/specs/implementation_spec.md)** §10.
-Key invariant: **path traversal must be blocked at the temp-dir boundary** before the
-Docker command is constructed - the auditor must confirm this in the threat model before
-coding starts. The sandbox Dockerfiles (`sandbox/Dockerfile.cpp`, `sandbox/Dockerfile.python`)
-are implementation artifacts, not product code - `python-expert` writes them but they do not
-need ruff and typing-convention passes.
-
-### Task 10 - Testing & Hardening
-
-Instruct `python-expert` to **not** invoke real AI backends - expected outputs are pre-computed
-ground truth, not live inference. The `shell=True` audit is a code-review task: delegate to
-`feature-reviewer`, which greps `backends/` and `sandbox/` for `shell=True` and reports any
-hit as blocking. After docs updates, run `/link-check docs/`.
+Most tasks need nothing here - Steps 3-6 already cover the general case. Add a
+`### Task {TT.t} - <Name>` subsection only when a specific task carries a real gotcha future
+iterations must not rediscover from scratch: a non-obvious ordering dependency between its
+subtasks, a security-sensitive subsystem that always needs `security-auditor` before coding
+starts, an artifact category (generated code, vendored fixtures, build output) that should
+skip the usual lint/typing gate, or a dependency that must land before a subtask can pass.
+Keep each note to what the next iteration needs to act correctly on - not a running
+commentary on the task.
 
 ---
 
@@ -319,5 +309,5 @@ Because the loop re-fires into one growing conversation, the cost that compounds
 This loop is the **sentence**; the skills are its **vocabulary**. It calls `/verify-subtask`
 (spec compliance), `/test-gap` (coverage), `/dep-audit`, `/secret-scan`, `/link-check`, and
 `/pr-review` at the right checkpoints, and delegates implementation to the dev-fleet agents
-in [.claude/CLAUDE.md](/.claude/CLAUDE.md) §7. It complements the read-only
-`verify-subtasks` loop: this one *builds* a task; that one *audits* an already-built one.
+listed in `agent-orchestrator.md`'s roster. It complements the read-only `verify-subtasks`
+loop: this one *builds* a task; that one *audits* an already-built one.

@@ -33,6 +33,7 @@ LOG_DIR = REPO_ROOT / ".claude" / "logs"
 
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+_HTML_ANCHOR_RE = re.compile(r'<a\s+[^>]*?(?:id|name)=["\']([^"\']+)["\']', re.I)
 
 
 def slugify(text: str) -> str:
@@ -46,8 +47,11 @@ def slugify(text: str) -> str:
 
 
 def heading_slugs(md_path: Path) -> set[str]:
-    """Every heading slug in a Markdown file, with GitHub's -1/-2/... suffix
-    applied to duplicate headings in document order."""
+    """Every anchor target in a Markdown file: heading slugs (with GitHub's
+    -1/-2/... suffix applied to duplicates in document order) plus explicit
+    ``<a id="...">`` / ``<a name="...">`` anchors, which a renderer honours
+    too. Kept in step with ``heading_anchors`` in
+    ``scripts/check_doc_links.py`` - see this module's tier note above."""
     slugs: set[str] = set()
     try:
         lines = md_path.read_text(encoding="utf-8").splitlines()
@@ -61,6 +65,7 @@ def heading_slugs(md_path: Path) -> set[str]:
             continue
         if in_code_block:
             continue
+        slugs.update(_HTML_ANCHOR_RE.findall(line))
         m = _HEADING_RE.match(line)
         if not m:
             continue

@@ -67,6 +67,9 @@ _HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 
+_HTML_ANCHOR_RE = re.compile(r'<a\s+[^>]*?(?:id|name)=["\']([^"\']+)["\']', re.I)
+
+
 def slugify(heading_text: str) -> str:
     """Return the GitHub-style anchor slug for a heading's text.
 
@@ -84,11 +87,17 @@ def slugify(heading_text: str) -> str:
 
 
 def heading_anchors(path: Path) -> set[str]:
-    """Return the set of anchor slugs for all headings in *path*.
+    """Return the set of anchor targets in *path*.
 
-    Duplicate slugs get the ``-1``, ``-2`` ... suffixes a renderer would assign,
-    so a link to the second identical heading still validates. Headings inside
-    fenced code blocks are ignored.
+    Two kinds count, because a Markdown renderer honours both:
+
+    * **Heading slugs** - duplicate slugs get the ``-1``, ``-2`` ... suffixes a
+      renderer would assign, so a link to the second identical heading still
+      validates. Headings inside fenced code blocks are ignored.
+    * **Explicit HTML anchors** - ``<a id="foo">`` / ``<a name="foo">``. Docs
+      adapted from sources with stable hand-written anchors (e.g. the Google
+      Python style guide's ``#s1-lint``) rely on these, and treating them as
+      absent produces a wall of false "missing anchor" reports.
     """
     anchors: set[str] = set()
     seen: dict[str, int] = {}
@@ -106,6 +115,7 @@ def heading_anchors(path: Path) -> set[str]:
             continue
         if in_fence:
             continue
+        anchors.update(_HTML_ANCHOR_RE.findall(line))
         heading = _HEADING_RE.match(line)
         if not heading:
             continue

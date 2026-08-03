@@ -17,7 +17,7 @@ This is the standing Python-stack dev fleet - every one of these agents is prese
 | Agent                 | Use for                                  | Model  |
 |-----------------------|------------------------------------------|--------|
 | `app-architect`       | design, ADRs, contracts, tech-debt       | opus   |
-| `background-reviewer` | async dep/secret/perf/licence audits     | sonnet |
+| `background-reviewer` | async dep/secret/perf/license audits     | sonnet |
 | `docs-updater`        | docs, runbooks, OpenAPI, docstrings      | sonnet |
 | `docs-writer`         | docs, runbooks, OpenAPI, docstrings      | sonnet |
 | `feature-reviewer`    | correctness/security/domain PR review    | sonnet |

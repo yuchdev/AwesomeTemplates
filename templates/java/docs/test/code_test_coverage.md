@@ -56,8 +56,6 @@ pytest
 
 Coverage settings are in `pyproject.toml` and `.coveragerc`
 
-Full documentation: [docs/test/coverage.md](coverage.md)
-
 ### Tips
 
 - Run specific tests: `pytest tests/test_module.py --cov`

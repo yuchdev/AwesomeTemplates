@@ -15,20 +15,21 @@ Scaffold a new ADR for the decision titled `$ARGUMENTS`.
    `NNNN-` prefix, increment (zero-padded to 4 digits). If none exist, start at
    `0001`. Filename: `docs/adr/NNNN-<kebab-title>.md`.
 2. Seed **Context** from the repo: run `git log --oneline -10` and, if `gh` is
-   authenticated, `gh issue list --state open --limit 10`. Summarise what is
+   authenticated, `gh issue list --state open --limit 10`. Summarize what is
    prompting this decision.
 3. **Read the canonical template `docs/adr/template.md` and copy its structure
    verbatim** — do not invent your own headings. Fill `NNNN`, the title, today's
    date (from session context), and the seeded Context. Leave **Status:
    Proposed**. See the section spec in [references/template-guide.md](references/template-guide.md)
    for what each section must contain and how the seeded git/issue context maps
-   onto it, and [docs/adr/0001-new-ui-rich-based-design.md](../../../docs/adr/0001-new-ui-rich-based-design.md)
-   as a filled exemplar.
+   onto it. If this project already has accepted ADRs, read the most recent one
+   as a filled exemplar of the house style; on a fresh project there is none yet,
+   so follow the template and the section spec.
 4. Add an index line to `docs/README.md`.
 
 ## Template
 
-The single source of truth is **[`docs/adr/template.md`](../../../docs/adr/template.md)**
+The single source of truth is **[`docs/adr/template.md`](/docs/adr/template.md)**
 (read it at generation time — do not paste a copy here that can drift). It uses
 the sections: `Context`, `Decision`, `Alternatives Considered` (a table),
 `Consequences` (Positive / Negative), `Validation / Rollout`, and `Links`.

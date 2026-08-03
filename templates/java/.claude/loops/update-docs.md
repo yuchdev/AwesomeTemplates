@@ -39,7 +39,7 @@ Before scanning for missing files, convert all bare `*.md` prose mentions to
 links so they are visible to the registry scanner:
 
 ```bash
-python .claude/hooks/linkify_doc_mentions.py
+python scripts/linkify_doc_mentions.py
 ```
 
 Unresolvable mentions (ambiguous basenames, paths not yet created) are written
@@ -49,7 +49,7 @@ end of the scan if it is non-empty.
 ### A1 — Run the registry scanner
 
 ```bash
-python .claude/hooks/doc_registry.py --json --cursor .claude/state/update-docs-scan.json
+python scripts/doc_registry.py --json --cursor .claude/state/update-docs-scan.json
 ```
 
 Read `.claude/state/update-docs-scan.json`. The schema is:
@@ -154,7 +154,7 @@ immediately without reading the file.
 If Step A4 made any changes, re-run the scanner to confirm fixes landed:
 
 ```bash
-python .claude/hooks/doc_registry.py
+python scripts/doc_registry.py
 ```
 
 If `missing_count == 0`: print a one-line summary (N references fixed, files
@@ -285,15 +285,16 @@ Delegate to the **`docs-updater` agent** in a single call, passing:
 
 Classify each hit:
 - **Docstring reference** (`"""…See docs/…"""`, `:seealso:`, `References:` block):
-  delegate to the **`python-expert` agent**.
+  delegate to the **`java-expert` agent**.
 - **Inline comment** (`# See §X.Y`, `# docs/…#anchor`): delegate to the
-  **`python-expert` agent**.
+  **`java-expert` agent**.
 
-Brief the `python-expert` agent with:
+Brief the `java-expert` agent with:
 - The list of files and line numbers to fix.
 - The old anchor/text and its replacement.
 - The instruction: "Update the reference text only. Do not change logic,
-  signatures, or surrounding comments. Keep `ruff` and `.claude/hooks/style_fixes.py --check` clean after edits."
+  signatures, or surrounding comments. Keep the project's lint/static-check task
+  (`./gradlew lint`, or the narrower module task the repo uses) clean after edits."
 
 Both buckets may be delegated **in parallel** when the file sets do not overlap.
 
@@ -333,8 +334,8 @@ Otherwise call ScheduleWakeup with:
 | Broken anchor in a Markdown link | `docs/`, repo `*.md`, `.claude/` | `docs-updater` |
 | Stale prose mention of old heading text | `docs/`, repo `*.md` | `docs-updater` |
 | `docs/README.md` registry line (file renamed/moved) | `docs/README.md` | `docs-updater` |
-| Docstring `See X §Y` or `:seealso:` reference | `src/`, `tests/` | `python-expert` |
-| Inline comment pointing to old anchor | `src/`, `tests/` | `python-expert` |
+| Docstring `See X §Y` or `:seealso:` reference | `src/`, `tests/` | `java-expert` |
+| Inline comment pointing to old anchor | `src/`, `tests/` | `java-expert` |
 | Broken outbound link inside TARGET itself | TARGET | `docs-updater` |
 
 Never delegate `.claude/CLAUDE.md` edits to an agent — surface those to the
@@ -346,7 +347,7 @@ user; they require deliberate human review.
 
 | Point in loop | Skill / command | Purpose |
 |---------------|-----------------|---------|
-| Scan A1 | `.claude/hooks/doc_registry.py` | Build file registry + detect missing-file refs |
+| Scan A1 | `scripts/doc_registry.py` | Build file registry + detect missing-file refs |
 | Path 3b | `/link-check <TARGET>` | Validates TARGET's outbound links |
 | Path 6 | `/link-check` (whole repo) | Final gate; loop continues until exit 0 |
 | Optional, before path loop | `/doc-xref <TARGET>` | Broader reference audit including prose mentions |
@@ -365,7 +366,7 @@ user; they require deliberate human review.
 
 | Condition | Action |
 |-----------|--------|
-| `.claude/hooks/doc_registry.py` exits 0 | Print "clean", stop |
+| `scripts/doc_registry.py` exits 0 | Print "clean", stop |
 | All remaining items are in `review` bucket | Write report, stop |
 | Same `missing` list two iterations in a row | Write report, stop |
 | New `high_confidence` items after A4 fixes | Reschedule at 270 s |
@@ -377,4 +378,4 @@ user; they require deliberate human review.
 | Step 6 exits 0 AND Step 3a found 0 stale refs | Print summary, stop |
 | Identical stale refs after two consecutive passes | Surface to user, stop |
 | No heading changes AND Step 3b finds 0 broken links | Print "Nothing to update", stop immediately |
-| `docs-updater` or `python-expert` returns edit conflict | Surface file:line to user, continue with rest |
+| `docs-updater` or `java-expert` returns edit conflict | Surface file:line to user, continue with rest |

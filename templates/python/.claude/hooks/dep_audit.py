@@ -2,7 +2,7 @@
 """PostToolUse / Write|Edit on dependency manifests - dependency audit trigger.
 
 When pyproject.toml / uv.lock / requirements*.txt is edited, this hook runs
-a best-effort vulnerability + licence audit and records the result to
+a best-effort vulnerability + license audit and records the result to
 .claude/logs/dep-audit.log. It is advisory (never blocks): the authoritative,
 deeper audit is the /dep-audit skill which delegates to the background-reviewer.
 
@@ -42,7 +42,7 @@ def main() -> None:
         append_log("dep-audit.log", f"pip-audit findings / unavailable:\n{tail}")
     append_log(
         "dep-audit.log",
-        "Advisory only. Run /dep-audit for the full CVE + licence review.",
+        "Advisory only. Run /dep-audit for the full CVE + license review.",
     )
     allow()
 

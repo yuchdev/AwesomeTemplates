@@ -8,6 +8,10 @@ match what the code assumes" - only running against the real tree can.
 
 from __future__ import annotations
 
+import re
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -64,6 +68,83 @@ def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
     graph = build_dependency_graph(workspace, catalog, extra_scan_path=workspace.path("docs"))
     broken_docs = [r for r in graph.missing if r.kind == "doc"]
     assert broken_docs == []
+
+
+@pytest.mark.parametrize("preset", ["python", "java"])
+def test_generated_preset_passes_its_own_link_checker(preset):
+    """Generate the preset, then run the generated project's own
+    `scripts/check_doc_links.py` inside it.
+
+    Much stronger than the `@docs/`-only graph check above: this validates every
+    relative `[text](path)` link *and* every `#anchor` across `docs/` and
+    `.claude/`. It has caught a skill pointing at a reference file whose name
+    differed only by British/American spelling, an ADR inventory row for an ADR
+    that was never written, a "full documentation" link to a doc only the
+    upstream reference project had, and ~20 `#anchor` refs whose explicit
+    `<a id="...">` targets were stripped when a style guide was adapted.
+
+    Checking the *generated* tree rather than `templates/<preset>/` is deliberate
+    and load-bearing: a link like `../../../python/docs/dev/foo.md` resolves fine
+    inside `templates/` (where the other preset is a sibling) while being broken
+    in every real generated project. Only running the checker post-generation
+    catches that class.
+    """
+    checker_in_template = REAL_REPO_ROOT / "templates" / preset / "scripts" / "check_doc_links.py"
+    if not checker_in_template.is_file():
+        pytest.skip(f"{preset} ships no scripts/check_doc_links.py")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        proj = Path(tmp) / "proj"
+        result = runner.invoke(
+            app,
+            ["generate", "--preset", preset, "--name", "Link Check", "--package", "link_check",
+             "--out", str(proj)],
+        )
+        assert result.exit_code == 0, result.stdout
+        # `cwd=proj` is required, not cosmetic: the checker's default path list is
+        # ["."], so running it from anywhere else silently scans that other tree
+        # and reports a cheerful zero.
+        proc = subprocess.run(
+            [sys.executable, str(proj / "scripts" / "check_doc_links.py"), "docs", ".claude"],
+            cwd=str(proj),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert proc.returncode == 0, (
+            f"generated {preset} project has broken doc links/anchors:\n"
+            f"{proc.stdout}\n{proc.stderr}"
+        )
+        # Guard the guard: if the scan ever silently covers nothing, fail loudly.
+        assert "0 file(s) scanned" not in proc.stdout, f"checker scanned nothing:\n{proc.stdout}"
+
+
+@pytest.mark.parametrize("preset", ["python", "java"])
+def test_preset_never_links_outside_its_own_tree(preset):
+    """A preset must be self-contained: no relative link may escape its own root.
+
+    `templates/java/docs/dev/java_android_coding_standard.md` once pointed at
+    `../../../python/docs/dev/python_coding_standard.md` - valid within
+    `templates/`, meaningless once generated, since a real project has no sibling
+    preset. Catching it by path shape reports the actual mistake ("escapes the
+    preset") instead of a confusing "file not found" against a temp directory.
+    """
+    preset_root = (REAL_REPO_ROOT / "templates" / preset).resolve()
+    link_re = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+    escapes: list[str] = []
+    for md in preset_root.rglob("*.md"):
+        for lineno, line in enumerate(md.read_text(encoding="utf-8").splitlines(), start=1):
+            for target in link_re.findall(line):
+                target = target.split()[0].split("#")[0]
+                if not target or target.startswith(("http://", "https://", "mailto:", "/")):
+                    continue
+                resolved = (md.parent / target).resolve()
+                if preset_root not in resolved.parents and resolved != preset_root:
+                    escapes.append(f"{md.relative_to(preset_root)}:{lineno} -> {target}")
+    assert escapes == [], (
+        f"links escaping templates/{preset}/ (they break once generated):\n" + "\n".join(escapes)
+    )
 
 
 def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_path):

@@ -94,16 +94,48 @@ differ between presets — `python/.claude/hooks/_common.py` and `java/.claude/h
 required to be identical — so don't "deduplicate" them back into a shared location without checking
 whether they've actually diverged.
 
-A preset can also ship a top-level `scripts/` directory (a sibling of `.claude/` and `docs/`, copied
-along with them - `presets.py` copies the whole preset tree, not just those two names). This is a
-deliberate second tier, distinct from `.claude/hooks/`: hooks are fast, auto-triggered gates wired into
-`settings.json` (they run on every matching tool call, so they must stay cheap and self-contained -
-`doc_link_check.py` never imports from `scripts/`); `scripts/` holds heavier, on-demand tools that a
-skill's documented workflow invokes explicitly (e.g. `/link-check` runs `scripts/check_doc_links.py`, a
-slower corpus-wide checker, as a deeper complement to the `doc_link_check` hook's cheap per-edit pass).
-Don't add a `scripts/*.py` file unless some shipped agent/skill/hook actually documents invoking it, and
-don't add a `.claude/hooks/*.py` file with the same name as a `scripts/` tool expecting them to share an
-implementation - they don't (confirm with an import check before assuming otherwise).
+#### Executable tooling: `.claude/hooks/` vs `scripts/` (two tiers, one rule each)
+
+A preset ships executables in exactly two places, and which one a file belongs in is decided by
+**what triggers it**, not by what it does. `presets.py` copies the whole preset tree, so a top-level
+`scripts/` directory lands in the generated project as a sibling of `.claude/` and `docs/`.
+
+| | `.claude/hooks/` | `scripts/` |
+|---|---|---|
+| **Trigger** | Wired in `settings.json` - the harness runs it automatically on a matching tool call / session event | Invoked by explicit path from an agent, skill, or loop's prose |
+| **Contract** | Hook protocol: event JSON on stdin, exit `0` allow / `2` block | Ordinary CLI: argv in, exit code out (must support `--help`) |
+| **Cost budget** | Must stay cheap - it runs on *every* matching call | May be slow; it runs when someone asks for it |
+| **Dependencies** | Stdlib + `_common.py` only. **Never** imports from `scripts/` | Stdlib only; independent of `_common.py` |
+
+Two consequences that are easy to get wrong:
+
+1. **A hook may also expose a CLI escape hatch** (`doc_link_check.py --check`, `style_fixes.py
+   --check`, `secret_scan.py <paths>`) so a skill can re-run the same gate on demand. That does *not*
+   make it a `scripts/` tool - `settings.json` still owns its trigger, so it stays a hook.
+2. **A fast hook and a thorough `scripts/` tool may deliberately overlap** - `doc_link_check.py`
+   (per-edit, inline) and `scripts/check_doc_links.py` (whole-corpus, on-demand) are complementary,
+   not duplicates. Because the hook can't import from `scripts/`, the shared logic is genuinely
+   duplicated, so **`_common.slugify` and `check_doc_links.slugify` must stay behaviourally
+   identical** - otherwise the auto-gate and `/link-check` return contradictory verdicts for the same
+   anchor. `tests/test_integration_tooling_tiers.py` pins that parity.
+
+What is *not* allowed, and why each rule exists (every one of these has shipped as a bug here):
+
+- A `.claude/hooks/*.py` and a `scripts/*.py` implementing the *same job* under different names with no
+  documented split. The deleted `hooks/doc_registry.py` / `hooks/linkify_doc_mentions.py` were dead
+  duplicates of the `scripts/` tools every skill actually invoked - unwired, unreferenced, and
+  divergent (the hook `linkify_doc_mentions.py` was a needle-search tool; the `scripts/` one is a
+  corpus rewriter - same name, different behaviour).
+- Prose naming a tool the preset doesn't ship. `update-docs.md` invoked
+  `.claude/hooks/doc_registry.py` for five iterations after that file was deleted, and the `java`
+  preset's loop invoked `style_fixes.py`, which only exists in `python`.
+- A hook importing a name `_common.py` doesn't define. `python`'s `doc_link_check.py` was wired for two
+  events while importing four helpers its `_common.py` lacked - an `ImportError` on every edit.
+
+Before adding or moving anything in either tier, run `uv run pytest
+tests/test_integration_tooling_tiers.py`: it checks every `hooks/`/`scripts/` mention in every preset's
+Markdown resolves, that `settings.json` wires only hooks that exist (and never a `scripts/` tool), that
+every hook imports cleanly, that every script's `--help` works, and that the slug implementations agree.
 
 ### Generator pipeline (`src/awesome_claude`)
 

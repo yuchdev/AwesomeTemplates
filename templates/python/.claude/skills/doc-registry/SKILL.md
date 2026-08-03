@@ -76,12 +76,12 @@ A human-readable report with three sections:
 
 ## Complement
 
-| Tool | Checks |
-|------|--------|
-| `/doc-registry` | Missing *.md files referenced by links |
-| `/link-check` | Broken anchors and non-.md file links |
-| `/doc-xref <target>` | Inbound references from other docs and code |
-| `/loop update-docs` | Iterative auto-fix + human review for the full corpus |
+| Tool                 | Checks                                                |
+|----------------------|-------------------------------------------------------|
+| `/doc-registry`      | Missing *.md files referenced by links                |
+| `/link-check`        | Broken anchors and non-.md file links                 |
+| `/doc-xref <target>` | Inbound references from other docs and code           |
+| `/loop update-docs`  | Iterative auto-fix + human review for the full corpus |
 
 Run `/link-check` after `/doc-registry` for full coverage — they check
 orthogonal things.

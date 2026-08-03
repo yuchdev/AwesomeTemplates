@@ -39,7 +39,7 @@ Before scanning for missing files, convert all bare `*.md` prose mentions to
 links so they are visible to the registry scanner:
 
 ```bash
-python .claude/hooks/linkify_doc_mentions.py
+python scripts/linkify_doc_mentions.py
 ```
 
 Unresolvable mentions (ambiguous basenames, paths not yet created) are written
@@ -49,7 +49,7 @@ end of the scan if it is non-empty.
 ### A1 — Run the registry scanner
 
 ```bash
-python .claude/hooks/doc_registry.py --json --cursor .claude/state/update-docs-scan.json
+python scripts/doc_registry.py --json --cursor .claude/state/update-docs-scan.json
 ```
 
 Read `.claude/state/update-docs-scan.json`. The schema is:
@@ -91,10 +91,10 @@ report (Step A5) and **stop** — no further automatic progress is possible.
 
 Split `missing` into two buckets:
 
-| Bucket | Criterion | Action |
-|--------|-----------|--------|
-| `auto_fix` | `candidates[0].confidence == "high"` | delegate to `docs-updater` |
-| `review` | no candidates, or top candidate is `"medium"` | write report, user decides |
+| Bucket     | Criterion                                     | Action                     |
+|------------|-----------------------------------------------|----------------------------|
+| `auto_fix` | `candidates[0].confidence == "high"`          | delegate to `docs-updater` |
+| `review`   | no candidates, or top candidate is `"medium"` | write report, user decides |
 
 ### A4 — Auto-fix high-confidence targets
 
@@ -154,7 +154,7 @@ immediately without reading the file.
 If Step A4 made any changes, re-run the scanner to confirm fixes landed:
 
 ```bash
-python .claude/hooks/doc_registry.py
+python scripts/doc_registry.py
 ```
 
 If `missing_count == 0`: print a one-line summary (N references fixed, files
@@ -327,15 +327,15 @@ Otherwise call ScheduleWakeup with:
 
 ## Agent delegation quick-reference
 
-| Finding type | File location | Agent |
-|--------------|---------------|-------|
-| Broken .md link target (high-confidence rename) | `docs/`, `.claude/` | `docs-updater` |
-| Broken anchor in a Markdown link | `docs/`, repo `*.md`, `.claude/` | `docs-updater` |
-| Stale prose mention of old heading text | `docs/`, repo `*.md` | `docs-updater` |
-| `docs/README.md` registry line (file renamed/moved) | `docs/README.md` | `docs-updater` |
-| Docstring `See X §Y` or `:seealso:` reference | `src/`, `tests/` | `python-expert` |
-| Inline comment pointing to old anchor | `src/`, `tests/` | `python-expert` |
-| Broken outbound link inside TARGET itself | TARGET | `docs-updater` |
+| Finding type                                        | File location                    | Agent           |
+|-----------------------------------------------------|----------------------------------|-----------------|
+| Broken .md link target (high-confidence rename)     | `docs/`, `.claude/`              | `docs-updater`  |
+| Broken anchor in a Markdown link                    | `docs/`, repo `*.md`, `.claude/` | `docs-updater`  |
+| Stale prose mention of old heading text             | `docs/`, repo `*.md`             | `docs-updater`  |
+| `docs/README.md` registry line (file renamed/moved) | `docs/README.md`                 | `docs-updater`  |
+| Docstring `See X §Y` or `:seealso:` reference       | `src/`, `tests/`                 | `python-expert` |
+| Inline comment pointing to old anchor               | `src/`, `tests/`                 | `python-expert` |
+| Broken outbound link inside TARGET itself           | TARGET                           | `docs-updater`  |
 
 Never delegate `.claude/CLAUDE.md` edits to an agent — surface those to the
 user; they require deliberate human review.
@@ -344,13 +344,13 @@ user; they require deliberate human review.
 
 ## Skill integration
 
-| Point in loop | Skill / command | Purpose |
-|---------------|-----------------|---------|
-| Scan A1 | `.claude/hooks/doc_registry.py` | Build file registry + detect missing-file refs |
-| Path 3b | `/link-check <TARGET>` | Validates TARGET's outbound links |
-| Path 6 | `/link-check` (whole repo) | Final gate; loop continues until exit 0 |
-| Optional, before path loop | `/doc-xref <TARGET>` | Broader reference audit including prose mentions |
-| One-shot registry audit | `/doc-registry` | Non-looping version of scan mode |
+| Point in loop              | Skill / command                 | Purpose                                          |
+|----------------------------|---------------------------------|--------------------------------------------------|
+| Scan A1                    | `scripts/doc_registry.py` | Build file registry + detect missing-file refs   |
+| Path 3b                    | `/link-check <TARGET>`          | Validates TARGET's outbound links                |
+| Path 6                     | `/link-check` (whole repo)      | Final gate; loop continues until exit 0          |
+| Optional, before path loop | `/doc-xref <TARGET>`            | Broader reference audit including prose mentions |
+| One-shot registry audit    | `/doc-registry`                 | Non-looping version of scan mode                 |
 
 > `/link-check` catches broken *outbound* links from a file.
 > `/doc-xref` finds *inbound* references from elsewhere.
@@ -363,18 +363,18 @@ user; they require deliberate human review.
 
 ### Scan mode
 
-| Condition | Action |
-|-----------|--------|
-| `.claude/hooks/doc_registry.py` exits 0 | Print "clean", stop |
-| All remaining items are in `review` bucket | Write report, stop |
-| Same `missing` list two iterations in a row | Write report, stop |
-| New `high_confidence` items after A4 fixes | Reschedule at 270 s |
+| Condition                                   | Action              |
+|---------------------------------------------|---------------------|
+| `scripts/doc_registry.py` exits 0     | Print "clean", stop |
+| All remaining items are in `review` bucket  | Write report, stop  |
+| Same `missing` list two iterations in a row | Write report, stop  |
+| New `high_confidence` items after A4 fixes  | Reschedule at 270 s |
 
 ### Path mode
 
-| Condition | Action |
-|-----------|--------|
-| Step 6 exits 0 AND Step 3a found 0 stale refs | Print summary, stop |
-| Identical stale refs after two consecutive passes | Surface to user, stop |
-| No heading changes AND Step 3b finds 0 broken links | Print "Nothing to update", stop immediately |
+| Condition                                               | Action                                        |
+|---------------------------------------------------------|-----------------------------------------------|
+| Step 6 exits 0 AND Step 3a found 0 stale refs           | Print summary, stop                           |
+| Identical stale refs after two consecutive passes       | Surface to user, stop                         |
+| No heading changes AND Step 3b finds 0 broken links     | Print "Nothing to update", stop immediately   |
 | `docs-updater` or `python-expert` returns edit conflict | Surface file:line to user, continue with rest |

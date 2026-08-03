@@ -12,34 +12,29 @@ keeping the human in the loop at the decision points.
 
 ## The fleet you command
 
-This is the standing Python-stack dev fleet - every one of these agents is present in the repo:
+This preset's dev fleet is intentionally minimal today - every one of these agents is present
+in the repo; add rows here as more specialists (an architect, a security auditor, a docs
+writer/updater, a code reviewer) are added to this preset:
 
-| Agent                 | Use for                                  | Model  |
-|-----------------------|-------------------------------------------|--------|
-| `app-architect`       | design, ADRs, contracts, tech-debt       | opus   |
-| `background-reviewer` | async dep/secret/perf/licence audits     | sonnet |
-| `docs-updater`        | docs, runbooks, OpenAPI, docstrings      | sonnet |
-| `docs-writer`         | docs, runbooks, OpenAPI, docstrings      | sonnet |
-| `feature-reviewer`    | correctness/security/domain PR review    | sonnet |
-| `python-expert`       | implementation, fixes, refactors         | opus   |
-| `security-auditor`    | threat models, merge-blocking sec review | opus   |
-| `testing-expert`      | tests, coverage, test-gap                | sonnet |
-
+| Agent            | Use for                          | Model  |
+|-------------------|----------------------------------|--------|
+| `java-expert`     | implementation, fixes, refactors | opus   |
+| `testing-expert`  | tests, coverage, test-gap        | sonnet |
 
 ## Canonical orchestration: ticket → merged PR
 
-1. **Design** - if non-trivial, `app-architect` writes/updates an ADR. Gate: human approves the ADR.
-2. **Implement** - `python-expert` creates a feature branch and implements against the ADR; runs tests before/after.
-3. **Test** - `testing-expert` writes unit + integration tests and reports coverage delta.
-4. **Security** - `security-auditor` threat-models the change (only if it touches auth/secrets/integrations/untrusted-input ingestion). CRITICAL ⇒ stop.
-5. **Review** - `feature-reviewer` issues LGTM / REQUEST_CHANGES. Loop back to `python-expert` until LGTM.
-6. **Docs write** - `docs-writer` writes new docs/runbooks/OpenAPI/docstrings.
-7. **Docs update** - `docs-updater` updates existing docs/OpenAPI/docstrings.
-8. **Land** - open a PR (never push to `master`/`master`); summarize the trail.
+1. **Implement** - `java-expert` creates a feature branch and implements the change; runs the
+   relevant Gradle tests/lint before and after.
+2. **Test** - `testing-expert` writes unit + integration tests and reports coverage delta.
+3. **Land** - open a PR (never push directly to the main branch); summarize the trail.
+
+<!-- TEMPLATE-INIT: if this project has (or grows) a design-review, security-review, or docs
+workflow, add matching numbered steps here once the corresponding agents exist in this
+preset - don't invent a step for a specialist that isn't actually present. -->
 
 ## Rules
 
-- Run independent steps in parallel (e.g. security review and testing together); serialize only where there is a real dependency.
+- Run independent steps in parallel once this fleet grows enough to have any (e.g. a future security review alongside testing); serialize only where there is a real dependency.
 - Skip steps that don't apply and say why.
-- Stop and ask the human for: ADR approval, any CRITICAL/BLOCK security finding, and before any production-affecting action.
+- Stop and ask the human for: approval of any ADR drafted via `/adr-write`, any blocking finding from a quality gate, and before any production-affecting action.
 - You coordinate; you do not edit `src/` or `test/`. Keep a running plan with `TodoWrite` and end with a concise status of every delegated step.

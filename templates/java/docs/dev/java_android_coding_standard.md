@@ -19,7 +19,7 @@ fill in the project-specific rules below before relying on it.
 
 ## Project-specific overrides
 
-Add this project's mandatory rules here, in the same style as
-[python_coding_standard.md](../../../python/docs/dev/python_coding_standard.md)'s
-"Project-specific overrides" section for the Python preset - concrete,
-enforced-by-a-hook-or-CI-gate rules, not general advice.
+Add this project's mandatory rules here: concrete, enforced-by-a-hook-or-CI-gate
+rules, not general advice. Each entry should name what enforces it (a Gradle
+task, a lint rule, a CI gate, a review checklist item) so the rule is auditable
+rather than aspirational.

@@ -1,10 +1,12 @@
-## 3 Python Style Rules
+# {{PROJECT_NAME}} Python Style Rules
 
-### 3.1 Semicolons
+## 1. Semicolons
 
 Do not terminate your lines with semicolons, and do not use semicolons to put two statements on the same line.
 
-### 3.2 Line length
+<a id="line-length"></a>
+<a id="s3.2-line-length"></a>
+## 2. Line length
 
 The maximum line length is *120 characters*.
 
@@ -13,7 +15,7 @@ Explicit exceptions to the 120-character limit:
 - Long import statements.
 - URLs, pathnames, or long flags in comments of docstrings
 - Long string module-level constants do not contain whitespace that would be inconvenient to split across lines such as URLs or pathnames.
-- Pylint disables comments. (e.g., `# pylint: disable=invalid-name`)
+- Pylint disables comments. (e.g. `# pylint: disable=invalid-name`)
 
 Do not use a backslash for [explicit line continuation](https://docs.python.org/3/reference/lexical_analysis.html#explicit-line-joining).
 
@@ -23,7 +25,7 @@ If necessary, you can add an extra pair of parentheses around an expression.
 When a literal string doesn't fit on a single line, use parentheses for
 implicit line joining.
 
-``` highlight
+```python
 x = ('This will build a very long long '
     'long long long long long long string')
 ```
@@ -32,39 +34,45 @@ Prefer to break lines at the highest possible syntactic level. If you
 must break a line twice, break it at the same syntactic level both
 times.
 
-``` highlight
-Yes: bridgekeeper.answer(
+Yes: 
+
+```python
+    bridgekeeper.answer(
         name="Arthur", quest=questlib.find(owner="Arthur", perilous=True)
     )
-     answer = (a_long_line().of_chained_methods()
-        .that_eventually_provides().an_answer())
+    answer = (a_long_line().of_chained_methods()
+          .that_eventually_provides().an_answer())
 
-     if (
-         config is None
-         or 'editor.language' not in config
-         or config['editor.language'].use_spaces is False
-     ):
-       use_tabs()
+    if (
+        config is None
+        or 'editor.language' not in config
+        or config['editor.language'].use_spaces is False
+    ):
+        use_tabs()
 ```
 
-``` highlight
-No: bridgekeeper.answer(name="Arthur", quest=questlib.find(owner="Arthur", 
+No:
+
+```python
+    bridgekeeper.answer(name="Arthur", quest=questlib.find(owner="Arthur", 
     perilous=True))
     if (config is None or 'editor.language' not in config or config[
       'editor.language'].use_spaces is False):
       use_tabs()
 ```
 
-Within comments, put long URLs on one line if necessary.
+Within comments, put long URLs on one line
 
-``` highlight
 Yes:  
+
+```python
   # See details at
   # https://www.example.com/us/developer/documentation/api/content/v2.0/csv_file_name_extension_full_specification.html
 ```
 
-``` highlight
 No:  
+
+```python
   # See details at
   # https://www.example.com/us/developer/documentation/api/content/\
   # v2.0/csv_file_name_extension_full_specification.html
@@ -72,14 +80,16 @@ No:
 
 Make note regarding the indentation of the elements in the line continuation examples above; see the [indentation](#s3.4-indentation) section for explanation.
 
-### 3.3 Parentheses
+## 3. Parentheses
 
 Use parentheses sparingly.
 
-It is fine, though not required, to use parentheses around tuples. Do not use them in return statements or conditional statements unless using parentheses for implied line continuation or to indicate a tuple.
+It is not required to use parentheses around tuples. Do not use them in return statements or conditional statements unless using parentheses for implied line continuation or to indicate a tuple.
 
-``` highlight
-Yes: if foo:
+Yes:
+
+```python
+    if foo:
          bar()
      while x:
          x = bar()
@@ -95,8 +105,10 @@ Yes: if foo:
      for (x, y) in dict.items(): ...
 ```
 
-``` highlight
-No:  if (x):
+No:
+
+```python
+    if (x):
          bar()
      if not(x):
          bar()
@@ -105,22 +117,30 @@ No:  if (x):
 
 Parentheses are redundant for returning the tuple:
 
-``` highlight
 Yes:
-    return foo, bar
-    
-No:
-    return (foo, bar)
+
+```python
+return foo, bar
 ```
 
-### 3.4 Indentation
+No:
+
+```python
+return (foo, bar)
+```
+
+<a id="indentation"></a>
+<a id="s3.4-indentation"></a>
+## 4. Indentation
 
 Indent your code blocks with *4 spaces*.
 
-Never use tabs. Implied line continuation should align wrapped elements vertically (see [line length examples](#s3.2-line-length)), or use a hanging 4-space indent. Closing (round, square or curly) brackets can be placed at the end of the expression, or on separate lines, but then should be indented the same as the line with the corresponding opening bracket.
+Implied line continuation should align wrapped elements vertically (see [line length examples](#s3.2-line-length)), or use a hanging 4-space indent. Closing (round, square or curly) brackets can be placed at the end of the expression, or on separate lines, but then should be indented the same as the line with the corresponding opening bracket.
 
-``` highlight
-Yes:   # Aligned with opening delimiter.
+Yes:
+
+```python
+# Aligned with opening delimiter.
        foo = long_function_name(var_one, var_two, var_three, var_four)
        meal = (spam, beans)
 
@@ -146,8 +166,10 @@ Yes:   # Aligned with opening delimiter.
        }
 ```
 
-``` highlight
-No:    # Stuff below forbidden.
+No:
+
+```python
+    # Stuff below forbidden.
        foo = long_function_name(var_one, var_two,
        var_three, var_four)
        meal = (spam,
@@ -166,102 +188,123 @@ No:    # Stuff below forbidden.
        }
 ```
 
-#### 3.4.1 Trailing commas in sequences of items?
+### 4.1 Trailing commas in sequences of items?
 
-Trailing commas in sequences of items are recommended only when the closing container token `)`.
+Trailing commas in sequences of items are recommended only when the closing container token `)`
 
-``` highlight
-Yes:   golomb3 = (0, 1, 3,)
+Yes:
+
+```python
+golomb3 = (0, 1, 3,)
 ```
 
-``` highlight
-No:    golomb4 = [0, 1, 4, 6,]
+No:
+
+```python
+golomb4 = [0, 1, 4, 6,]
 ```
 
-### 3.5 Blank Lines
+## 5. Blank Lines
 
-Two blank lines between top-level definitions, be they function or class definitions. One blank line between method definitions and between the docstring of a `class` and the first method. No blank line following a `def` line. Use single blank lines as you judge appropriate within functions or methods.
+Two blank lines between top-level definitions, be they function or class definitions. 
+One blank line between method definitions and between the docstring of a `class` and the first method. 
+No blank line following a `def` line. Use single blank lines as you judge appropriate within functions or methods.
 
-Blank lines need not be anchored to the definition. For example, related comments immediately preceding function, class, and method definitions can make sense. Consider if your comment might be more useful as part of the docstring.
+Blank lines need not be anchored to the definition. 
+For example, related comments immediately preceding function, class, and method definitions can make sense. 
+Strongly prefer your comment to be the part of the docstring.
 
-### 3.6 Whitespace
+## 6. Whitespace
 
-Follow standard typographic rules for the use of spaces around
-punctuation.
+Follow standard typographic rules for the use of spaces around punctuation.
 
 No whitespace inside parentheses, brackets or braces.
 
-``` highlight
-Yes: spam(ham[1], {'eggs': 2}, , [ ] )
+Yes:
+
+```python
+spam(ham[1], {'eggs': 2}, , [ ] )
 ```
 
 No whitespace before a comma, semicolon, or colon. Do use whitespace
 after a comma, semicolon, or colon, except at the end of the line.
 
-``` highlight
-Yes: if x == 4:
+Yes:
+
+```python
+    if x == 4:
          print(x, y)
      x, y = y, x
 ```
 
-``` highlight
-No:  if x == 4 :
+No:
+
+```python
+    if x == 4 :
          print(x , y)
      x , y = y , x
 ```
 
-No whitespace before the open paren/bracket that starts an argument
-list, indexing or slicing.
+No whitespace before the open paren/bracket that starts an argument list, indexing or slicing.
 
-``` highlight
-Yes: spam(1)
+Yes:
+
+```python
+spam(1)
 ```
 
-``` highlight
-No:  spam (1)
+```python
+dict['key'] = list[index]
 ```
 
-``` highlight
-Yes: dict['key'] = list[index]
+No:
+
+```python
+spam (1)
 ```
 
-``` highlight
-No:  dict ['key'] = list [index]
+```python
+dict ['key'] = list [index]
 ```
 
 No trailing whitespace.
 
-Surround binary operators with a single space on either side for
-assignment (`=`), comparisons
-(`==, <, >, !=, <>, <=, >=, in, not in, is, is not`), and Booleans (`and, or, not`). Use your better judgment for the insertion of
-spaces around arithmetic operators (`+`, `-`,
-`*`, `/`, `//`,
-`%`, `**`, `@`).
+Surround binary operators with a single space on either side for assignment (`=`), comparisons (`==, <, >, !=, <>, <=, >=, in, not in, is, is not`), and Booleans (`and, or, not`). 
+Use your better judgment for the insertion of spaces around arithmetic operators (`+`, `-`, `*`, `/`, `//`, `%`, `**`, `@`).
 
-``` highlight
-Yes: x == 1
+Yes:
+
+```python
+x == 1
 ```
 
-``` highlight
-No:  x<1
+No:
+
+```python
+x<1
 ```
 
 Never use spaces around `=` when passing keyword arguments or defining a default parameter value, with one exception: [when a type annotation is present](#typing-default-values), *do* use spaces around the `=` for the default parameter value.
 
-``` highlight
-Yes: def complex(real, imag=0.0): return Magic(r=real, i=imag)
-Yes: def complex(real, imag: float = 0.0): return Magic(r=real, i=imag)
+Yes:
+
+```python
+def complex(real, imag=0.0): return Magic(r=real, i=imag)
+def complex(real, imag: float = 0.0): return Magic(r=real, i=imag)
 ```
 
-``` highlight
-No:  def complex(real, imag = 0.0): return Magic(r = real, i = imag)
-No:  def complex(real, imag: float=0.0): return Magic(r = real, i = imag)
+No:
+
+```python
+def complex(real, imag = 0.0): return Magic(r = real, i = imag)
+def complex(real, imag: float=0.0): return Magic(r = real, i = imag)
 ```
 
 Don't use spaces to vertically align tokens on consecutive lines, since it becomes a maintenance burden (applies to `:`, `#`, `=`, etc.):
 
-``` highlight
 Yes:
+
+```python
   foo = 1000  # comment
   long_name = 2  # comment that should not be aligned
 
@@ -271,8 +314,9 @@ Yes:
   }
 ```
 
-``` highlight
 No:
+
+```python
   foo       = 1000  # comment
   long_name = 2     # comment that should not be aligned
 
@@ -282,46 +326,34 @@ No:
   }
 ```
 
-### 3.7 Shebang Line
+## 7. Shebang Line
 
-Most `.py` files do not need to start with a `#!` line. Start the main file of a program with `#!/usr/bin/env python3` (to support virtualenvs) or `#!/usr/bin/python3` per [PEP-394](https://peps.python.org/pep-0394/).
+Most `.py` files do not need to start with a `#!` line. 
+Start the main file of a program with `#!/usr/bin/env python3` (to support virtualenvs) or `#!/usr/bin/python3` per [PEP-394](https://peps.python.org/pep-0394/).
 
-This line is used by the kernel to find the Python interpreter, but is ignored by Python when importing modules. It is only necessary on a file intended to be executed directly.
+This line is used by the kernel to find the Python interpreter, but is ignored by Python when importing modules. 
+It is only necessary on a file intended to be executed directly.
 
-### 3.8 Comments and Docstrings
+## 8. Comments and Docstrings
 
 Be sure to use the right style for module, function, method docstrings and inline comments.
 
-#### 3.8.1 Docstrings
+### 8.1 Docstrings
 
-Python uses *docstrings* to document code. A docstring is a string that
-is the first statement in a package, module, class or function. These
-strings can be extracted automatically through the
-`__doc__` member of the object
-and are used by `pydoc`. (Try
-running `pydoc` on your module
-to see how it looks.) Always use the three-double-quote
-`"""` format for docstrings (per
-[PEP 257](https://peps.python.org/pep-0257/)). A docstring should be
-organized as a summary line (one physical line not exceeding 120
-characters) terminated by a period, question mark, or exclamation point.
-When writing more (encouraged), this must be followed by a blank line,
-followed by the rest of the docstring starting at the same cursor
-position as the first quote of the first line.
+Python uses *docstrings* to document code. A docstring is a string that is the first statement in a package, module, class or function. 
+These strings can be extracted automatically through the `__doc__` member of the object and are used by `pydoc` 
+(Try running `pydoc` on your module to see how it looks.) 
+Always use the three-double-quote `"""` format for docstrings (per [PEP 257](https://peps.python.org/pep-0257/)). A docstring should be organized as a summary line (one physical line not exceeding 120 characters) terminated by a period, question mark, or exclamation point.
+When writing more (encouraged), this must be followed by a blank line, followed by the rest of the docstring starting at the same cursor position as the first quote of the first line.
 
 **Note: Sphinx notation (`@param`, `@type`, `@returns`, `@raises`, `@ivar`, etc.) is required for documenting functions, classes, and methods instead of Google style (`Args:`, `Raises:`).**
 There are more formatting guidelines for docstrings below.
 
-#### 3.8.2 Modules
+### 8.2 Modules
 
-Every file should contain license boilerplate. Choose the appropriate
-boilerplate for the license used by the project (for example, Apache
-2.0, BSD, LGPL, GPL).
+Files should start with a docstring describing the contents and usage of the module.
 
-Files should start with a docstring describing the contents and usage of
-the module.
-
-``` highlight
+```python
 """A one-line summary of the module or program, terminated by a period.
 
 Leave one blank line.  The rest of this docstring should contain an
@@ -336,37 +368,34 @@ Typical usage example:
 """
 ```
 
-##### 3.8.2.1 Test modules
+#### 8.2.1 Test modules
 
-Module-level docstrings for test files are not required. They should be
-included only when there is additional information that can be provided.
+Module-level docstrings for test files are not required. 
+They should be included only when there is additional information that can be provided.
 
 Examples include some specifics on how the test should be run, an
 explanation of an unusual setup pattern, dependency on the external
 environment, and so on.
 
-``` highlight
+```python
 """This blaze test uses golden files.
 
 You can update those files by running
-`blaze run //foo/bar:foo_test -- --update_golden_files` from the `google3`
-directory.
+`blaze run //foo/bar:foo_test -- --update_golden_files` from the `google3` directory.
 """
 ```
 
 Docstrings that do not provide any new information should not be used.
 
-``` highlight
+```python
 """Tests for foo.bar."""
 ```
 
-#### 3.8.3 Functions and Methods
+### 8.3 Functions and Methods
 
-In this section, "function" means a method, function, generator, or
-property.
+In this section, "function" means a method, function, generator, or property.
 
-A docstring is mandatory for every function that has one or more of the
-following properties:
+A docstring is mandatory for every function that has one or more of the following properties:
 
 - being part of the public API
 - nontrivial size
@@ -393,26 +422,29 @@ rather than `"""Returns the Bigtable path."""`).
 
 Certain aspects of a function should be documented using Sphinx notation, using the tags `@param`, `@type`, `@returns`, `@yields`, and `@raises` (or alternatively `:param`, `:type`, `:returns`, `:yields`, `:raises`). The tags must be aligned with the text of the docstring.
 
-##### 3.8.3.1 Param and Return Tags
+#### 8.3.1 Param and Return Tags
 
+<a id="doc-function-args"></a>
 [*@param* and *@type:*](#doc-function-args)
 : `@param name: description` lists a parameter by name and describes it.
   `@type name: type` defines the type of the parameter, if not present in the type annotations.
   If the description is too long to fit on a single 120-character line, use a hanging indent of 2 or 4 spaces (be consistent with the rest of the docstrings in the file).
   If a function accepts `*foo` (variable length argument lists) and/or `**bar` (arbitrary keyword arguments), they should be listed as `@param *foo:` and `@param **bar:`.
 
-##### 3.8.3.2 Raises Tag
+#### 8.3.2 Raises Tag
 
+<a id="doc-function-returns"></a>
 [*@returns* (or *@yields* for generators):](#doc-function-returns)
 : `@returns: description` describes the semantics of the return value, including any type information that the type annotation does not provide. If the function only returns None, this tag is not required.
   If the function uses `yield` (is a generator), the `@yields` tag should document the object returned by `next()`, instead of the generator object itself.
 
-##### 3.8.3.3 Raises Tag
+#### 8.3.3 Raises Tag
 
+<a id="doc-function-raises"></a>
 [*@raises:*](#doc-function-raises)
 : `@raises ExceptionType: description` lists exceptions that are relevant to the interface followed by a description.
 
-``` highlight
+```python
 def fetch_smalltable_rows(
     table_handle: smalltable.Table,
     keys: Sequence[bytes | str],
@@ -440,11 +472,11 @@ def fetch_smalltable_rows(
     """
 ```
 
-##### 3.8.3.4 Colon-based Sphinx Notation
+#### 8.3.4 Colon-based Sphinx Notation
 
 Similarly, this variation using colon-based Sphinx notation is also allowed:
 
-``` highlight
+```python
 def fetch_smalltable_rows(
     table_handle: smalltable.Table,
     keys: Sequence[bytes | str],
@@ -472,7 +504,7 @@ def fetch_smalltable_rows(
     """
 ```
 
-##### 3.8.3.5 Overridden Methods
+#### 8.3.5 Overridden Methods
 
 A method that overrides a method from a base class does not need a
 docstring if it is explicitly decorated with
@@ -484,7 +516,7 @@ contract, or details need to be provided (e.g., documenting additional
 side effects), in which case a docstring with at least those differences
 is required on the overriding method.
 
-``` highlight
+```python
 from typing_extensions import override
 
 class Parent:
@@ -498,7 +530,7 @@ class Child(Parent):
     pass
 ```
 
-``` highlight
+```python
 # Child class, but without @override decorator, a docstring is required.
 class Child(Parent):
   def do_something(self):
@@ -512,14 +544,14 @@ class Child(Parent):
     """See base class."""
 ```
 
-#### 3.8.4 Classes
+### 8.4 Classes
 
 Classes should have a docstring below the class definition describing
-the class. Public attributes, excluding [properties](#properties),
+the class. Public attributes, excluding [properties](python_language_rules.md#s13-properties),
 should be documented here using `@ivar` (instance variable) or `@type` tags and follow the same formatting as a
 [function's parameters](#doc-function-args).
 
-``` highlight
+```python
 class SampleClass:
     """Summary of class here.
 
@@ -550,7 +582,7 @@ what the exception represents, and not the context in which it might
 occur. The class docstring should not repeat unnecessary information,
 such as that the class is a class.
 
-``` highlight
+```python
 # Yes:
 class CheeseShopAddress:
   """The address of a cheese shop.
@@ -562,7 +594,7 @@ class OutOfCheeseError(Exception):
   """No more cheese is available."""
 ```
 
-``` highlight
+```python
 # No:
 class CheeseShopAddress:
   """Class that describes the address of a cheese shop.
@@ -574,7 +606,7 @@ class OutOfCheeseError(Exception):
   """Raised when no more cheese is available."""
 ```
 
-#### 3.8.5 Block and Inline Comments
+### 8.5 Block and Inline Comments
 
 The final place to have comments is in tricky parts of the code. If
 you're going to have to explain it at the next [code
@@ -583,7 +615,7 @@ now. Complicated operations get a few lines of comments before the
 operations commence. Non-obvious ones get comments at the end of the
 line.
 
-``` highlight
+```python
 # We use a weighted dictionary search to find out where i is in
 # the array.  We extrapolate position based on the largest num
 # in the array and the array size and then do binary search to
@@ -600,12 +632,12 @@ On the other hand, never describe the code. Assume the person reading
 the code knows Python (though not what you're trying to do) better than
 you do.
 
-``` highlight
+```python
 # BAD COMMENT: Now go through the b array and make sure whenever i occurs
 # the next element is i+1
 ```
 
-#### 3.8.6 Punctuation, Spelling, and Grammar
+### 8.6 Punctuation, Spelling, and Grammar
 
 Pay attention to punctuation, spelling, and grammar; it is easier to
 read well-written comments than badly written ones.
@@ -622,7 +654,7 @@ important that source code maintain a high level of clarity and
 readability. Proper punctuation, spelling, and grammar help with that
 goal.
 
-### 3.10 Strings
+## 10. Strings
 
 Use an
 [f-string](https://docs.python.org/3/reference/lexical_analysis.html#f-strings),
@@ -633,7 +665,7 @@ judgment to decide between string formatting options. A single join with
 `+` is okay but do not format
 with `+`.
 
-``` highlight
+```python
 Yes: x = f'name: {name}; score: {n}'
      x = '%s, %s!' % (imperative, expletive)
      x = '{}, {}'.format(first, second)
@@ -643,7 +675,7 @@ Yes: x = f'name: {name}; score: {n}'
      x = a + b
 ```
 
-``` highlight
+```python
 No: x = first + ', ' + second
     x = 'name: ' + name + '; score: ' + str(n)
 ```
@@ -660,7 +692,7 @@ substring to an `io.StringIO`
 buffer. These techniques consistently have amortized-linear run-time
 complexity.
 
-``` highlight
+```python
 Yes: items = ['<table>']
      for last_name, first_name in employee_list:
          items.append('<tr><td>%s, %s</td></tr>' % (last_name, first_name))
@@ -668,7 +700,7 @@ Yes: items = ['<table>']
      employee_table = ''.join(items)
 ```
 
-``` highlight
+```python
 No: employee_table = '<table>'
     for last_name, first_name in employee_list:
         employee_table += '<tr><td>%s, %s</td></tr>' % (last_name, first_name)
@@ -681,14 +713,14 @@ Pick `'` or
 okay to use the other quote character on a string to avoid the need to
 backslash-escape quote characters within the string.
 
-``` highlight
+```python
 Yes:
   Python('Why are you hiding your eyes?')
   Gollum("I'm scared of lint errors.")
   Narrator('"Good!" thought a happy Python reviewer.')
 ```
 
-``` highlight
+```python
 No:
   Python("Why are you hiding your eyes?")
   Gollum('The lint. It burns. It burns us.')
@@ -709,32 +741,32 @@ either concatenated single-line strings or a multi-line string with
 [`textwrap.dedent()`](https://docs.python.org/3/library/textwrap.html#textwrap.dedent)
 to remove the initial space on each line:
 
-``` highlight
+```python
   No:
   long_string = """This is pretty ugly.
 Don't do this.
 """
 ```
 
-``` highlight
+```python
   Yes:
   long_string = """This is fine if your use case can accept
       extraneous leading spaces."""
 ```
 
-``` highlight
+```python
   Yes:
   long_string = ("And this is fine if you cannot accept\n" +
                  "extraneous leading spaces.")
 ```
 
-``` highlight
+```python
   Yes:
   long_string = ("And this too is fine if you cannot accept\n"
                  "extraneous leading spaces.")
 ```
 
-``` highlight
+```python
   Yes:
   import textwrap
 
@@ -749,7 +781,7 @@ backslash is [escaping a
 newline](https://docs.python.org/3/reference/lexical_analysis.html#string-and-bytes-literals)
 in a string literal.
 
-#### 3.10.1 Logging
+### 10.1 Logging
 
 For logging functions that expect a pattern-string (with %-placeholders)
 as their first argument: Always call them with a string literal (not an
@@ -758,14 +790,14 @@ arguments. Some logging implementations collect the unexpanded
 pattern-string as a queryable field. It also prevents spending time
 rendering a message that no logger is configured to output.
 
-``` highlight
+```python
   Yes:
   import tensorflow as tf
   logger = tf.get_logger()
   logger.info('TensorFlow Version is: %s', tf.__version__)
 ```
 
-``` highlight
+```python
   Yes:
   import os
   from absl import logging
@@ -777,7 +809,7 @@ rendering a message that no logger is configured to output.
     logging.error('Cannot write to home directory, $HOME=%r', homedir)
 ```
 
-``` highlight
+```python
   No:
   import os
   from absl import logging
@@ -790,7 +822,7 @@ rendering a message that no logger is configured to output.
     logging.error(f'Cannot write to home directory, $HOME={homedir!r}')
 ```
 
-#### 3.10.2 Error Messages
+### 10.2 Error Messages
 
 Error messages (such as: message strings on exceptions like
 `ValueError`, or messages shown
@@ -802,7 +834,7 @@ to the user) should follow three guidelines:
 
 3.  They should allow simple automated processing (e.g. grepping).
 
-``` highlight
+```python
   Yes:
   if not 0 <= p <= 1:
     raise ValueError(f'Not a probability: {p=}')
@@ -814,7 +846,7 @@ to the user) should follow three guidelines:
                     error, workdir)
 ```
 
-``` highlight
+```python
   No:
   if p < 0 or p > 1:  # PROBLEM: also false for float('nan')!
     raise ValueError(f'Not a probability: {p=}')
@@ -838,7 +870,7 @@ to the user) should follow three guidelines:
     logging.warning('The %s directory could not be deleted.', workdir)
 ```
 
-### 3.11 Files, Sockets, and similar Stateful Resources
+## 11. Files, Sockets, and similar Stateful Resources
 
 Explicitly close files and sockets when done with them. This rule
 naturally extends to closeable resources that internally use sockets,
@@ -886,7 +918,7 @@ The preferred way to manage files and similar resources is using the
 [`with`
 statement](http://docs.python.org/reference/compound_stmts.html#the-with-statement):
 
-``` highlight
+```python
 with open("hello.txt") as hello_file:
     for line in hello_file:
         print(line)
@@ -895,7 +927,7 @@ with open("hello.txt") as hello_file:
 For file-like objects that do not support the `with` statement, use
 `contextlib.closing()`:
 
-``` highlight
+```python
 import contextlib
 
 with contextlib.closing(urllib.urlopen("http://www.python.org/")) as front_page:
@@ -907,7 +939,7 @@ In rare cases where context-based resource management is infeasible,
 code documentation must explain clearly how resource lifetime is
 managed.
 
-### 3.12 TODO Comments
+## 12. TODO Comments
 
 Use `TODO` comments for code
 that is temporary, a short-term solution, or good-enough but not
@@ -922,20 +954,20 @@ an explanatory string introduced with a hyphen `-`. The purpose is to have a con
 `TODO` format that can be
 searched to find out how to get more details.
 
-``` highlight
+```python
 # TODO: crbug.com/192795 - Investigate cpufreq optimizations.
 ```
 
 Old style, formerly recommended, but discouraged for use in new code:
 
-``` highlight
+```python
 # TODO(crbug.com/192795): Investigate cpufreq optimizations.
 # TODO(yourusername): Use a "\*" here for concatenation operator.
 ```
 
 Avoid adding TODOs that refer to an individual or team as the context:
 
-``` highlight
+```python
 # TODO: @yourusername - File an issue and use a '*' for repetition.
 ```
 
@@ -945,7 +977,7 @@ specific date ("Fix by November 2009") or a very specific event ("Remove
 this code when all clients can handle XML responses.") that future code
 maintainers will comprehend. Issues are ideal for tracking this.
 
-### 3.13 Imports formatting
+## 13. Imports formatting
 
 Imports should be on separate lines; there are [exceptions for
 `typing` and
@@ -954,14 +986,14 @@ imports](#typing-imports).
 
 E.g.:
 
-``` highlight
+```python
 Yes: from collections.abc import Mapping, Sequence
      import os
      import sys
      from typing import Any, NewType
 ```
 
-``` highlight
+```python
 No:  import os, sys
 ```
 
@@ -971,35 +1003,35 @@ should be grouped from most generic to least generic:
 
 1.  Python future import statements. For example:
 
-    ``` highlight
+    ```python
     from __future__ import annotations
     ```
 
-    See [above](#from-future-imports) for more information about those.
+    See [above](python_language_rules.md#s20-modern-python-from-future-imports) for more information about those.
 
 2.  Python standard library imports. For example:
 
-    ``` highlight
+    ```python
     import sys
     ```
 
 3.  [third-party](https://pypi.org/) module or package imports. For
     example:
 
-    ``` highlight
+    ```python
     import tensorflow as tf
     ```
 
 4.  Code repository sub-package imports. For example:
 
-    ``` highlight
+    ```python
     from otherproject.ai import mind
     ```
 
 5.  **Deprecated:** application-specific imports that are part of the
     same top-level sub-package as this file. For example:
 
-    ``` highlight
+    ```python
     from myproject.backend.hgwells import time_machine
     ```
 
@@ -1014,7 +1046,7 @@ ignoring case, according to each module's full package path (the
 `from path import ...`). Code
 may optionally place a blank line between import sections.
 
-``` highlight
+```python
 import collections
 import queue
 import sys
@@ -1038,7 +1070,7 @@ from otherproject.ai import soul
 #from myproject.backend.state_machine import main_loop
 ```
 
-### 3.14 Statements
+## 14. Statements
 
 Generally only one statement per line.
 
@@ -1049,13 +1081,13 @@ since the `try` and
 `except` can't both fit on the
 same line, and you can only do so with an `if` if there is no `else`.
 
-``` highlight
+```python
 Yes:
 
   if foo: bar(foo)
 ```
 
-``` highlight
+```python
 No:
 
   if foo: bar(foo)
@@ -1069,7 +1101,7 @@ No:
   except ValueError: baz(foo)
 ```
 
-### 3.15 Getters and Setters
+## 15. Getters and Setters
 
 Getter and setter functions (also called accessors and mutators) should
 be used when they provide a meaningful role or behavior for getting or
@@ -1084,7 +1116,7 @@ internal attribute, the internal attribute should be made public
 instead. By comparison, if setting a variable means some state is
 invalidated or rebuilt, it should be a setter function. The function
 invocation hints that a potentially non-trivial operation is occurring.
-Alternatively, [properties](#properties) may be an option when simple
+Alternatively, [properties](python_language_rules.md#s13-properties) may be an option when simple
 logic is needed, or refactoring to no longer need getters and setters.
 
 Getters and setters should follow the [Naming](#s3.16-naming)
@@ -1096,7 +1128,8 @@ new getter/setter functions to the property. Any code still attempting
 to access the variable by the old method should break visibly so they
 are made aware of the change in complexity.
 
-### 3.16 Naming
+<a id="s3.16-naming"></a>
+## 16. Naming
 
 `module_name`,
 `package_name`,
@@ -1122,7 +1155,7 @@ abbreviate by deleting letters within a word.
 Always use a `.py` filename
 extension. Never use dashes.
 
-#### 3.16.1 Names to Avoid
+### 16.1 Names to Avoid
 
 - single character names, except for specifically allowed cases:
 
@@ -1154,7 +1187,7 @@ extension. Never use dashes.
 - names that needlessly include the type of the variable (for example:
   `id_to_name_dict`)
 
-#### 3.16.2 Naming Conventions
+### 16.2 Naming Conventions
 
 - "Internal" means internal to a module, or protected or private within
   a class.
@@ -1188,7 +1221,7 @@ extension. Never use dashes.
   separate logical components of the name. One possible pattern is
   `test<MethodUnderTest>_<state>`.
 
-#### 3.16.3 File Naming
+### 16.3 File Naming
 
 Python filenames must have a `.py` extension and must not contain dashes
 (`-`). This allows them to be
@@ -1196,7 +1229,7 @@ imported and unittested. If you want an executable to be accessible
 without the extension, use a symbolic link or a simple bash wrapper
 containing `exec "$0.py" "$@"`.
 
-#### 3.16.4 Guidelines derived from [Guido](https://en.wikipedia.org/wiki/Guido_van_Rossum)'s Recommendations
+### 16.4 Guidelines derived from [Guido](https://en.wikipedia.org/wiki/Guido_van_Rossum)'s Recommendations
 
   ---------------------------- ---------------------- -----------------------------------
   Type                         Public                 Internal
@@ -1213,7 +1246,8 @@ containing `exec "$0.py" "$@"`.
   Local Variables              `lower_with_under`     
   ---------------------------- ---------------------- -----------------------------------
 
-#### 3.16.5 Mathematical Notation
+<a id="math-notation"></a>
+### 16.5 Mathematical Notation
 
 For mathematically-heavy code, short variable names that would otherwise
 violate the style guide are preferred when they match established
@@ -1232,7 +1266,7 @@ When using names based on established notation:
     variables, use the directive as an endline comment for each one; for
     more, apply the directive at the beginning of a block.
 
-### 3.17 Main
+## 17. Main
 
 In Python, `pydoc` as well as
 unit tests require modules to be importable. If a file is meant to be
@@ -1244,7 +1278,7 @@ not executed when the module is imported.
 When using [absl](https://github.com/abseil/abseil-py), use
 `app.run`:
 
-``` highlight
+```python
 from absl import app
 ...
 
@@ -1258,7 +1292,7 @@ if __name__ == '__main__':
 
 Otherwise, use:
 
-``` highlight
+```python
 def main():
     ...
 
@@ -1271,7 +1305,7 @@ Be careful not to call functions, create objects, or perform other
 operations that should not be executed when the file is being
 `pydoc`ed.
 
-### 3.18 Function length
+## 18. Function length
 
 Prefer small and focused functions.
 
@@ -1292,9 +1326,9 @@ debug, or you want to use a piece of it in several different contexts,
 consider breaking up the function into smaller and more manageable
 pieces.
 
-### 3.19 Type Annotations
+## 19. Type Annotations
 
-#### 3.19.1 General Rules
+### 19.1 General Rules
 
 - Familiarize yourself with [type
   hints](https://docs.python.org/3/library/typing.html).
@@ -1304,7 +1338,7 @@ pieces.
   necessary. [`Self`](https://docs.python.org/3/library/typing.html#typing.Self)
   can be used if it is necessary for proper type information, e.g.
 
-  ``` highlight
+  ```python
   from typing import Self
 
   class BaseClass:
@@ -1336,7 +1370,7 @@ pieces.
     cases, you can annotate all the functions in mature code without
     losing too much flexibility.
 
-#### 3.19.2 Line Breaking
+### 19.2 Line Breaking
 
 Try to follow the existing [indentation](#indentation) rules.
 
@@ -1344,7 +1378,7 @@ After annotating, many function signatures will become "one parameter
 per line". To ensure the return type is also given its own line, a comma
 can be placed after the last parameter.
 
-``` highlight
+```python
 def my_method(
     self,
     first_var: int,
@@ -1358,7 +1392,7 @@ Always prefer breaking between variables, and not, for example, between
 variable names and type annotations. However, if everything fits on the
 same line, go for it.
 
-``` highlight
+```python
 def my_method(self, first_var: int) -> int:
   ...
 ```
@@ -1369,7 +1403,7 @@ breaks, prefer putting each parameter and the return type on their own
 lines and aligning the closing parenthesis with the
 `def`:
 
-``` highlight
+```python
 Yes:
 def my_method(
     self,
@@ -1381,7 +1415,7 @@ def my_method(
 Optionally, the return type may be put on the same line as the last
 parameter:
 
-``` highlight
+```python
 Okay:
 def my_method(
     self,
@@ -1394,7 +1428,7 @@ def my_method(
 closing parenthesis to a new line and align with the opening one, but
 this is less readable.
 
-``` highlight
+```python
 No:
 def my_method(self,
               other_arg: MyLongType | None,
@@ -1406,7 +1440,7 @@ As in the examples above, prefer not to break types. However, sometimes
 they are too long to be on a single line (try to keep sub-types
 unbroken).
 
-``` highlight
+```python
 def my_method(
     self,
     first_var: tuple[list[MyLongType1],
@@ -1421,7 +1455,7 @@ If a single name and type is too long, consider using an
 [alias](#typing-aliases) for the type. The last resort is to break after
 the colon and indent by 4.
 
-``` highlight
+```python
 Yes:
 def my_function(
     long_variable_name:
@@ -1430,7 +1464,7 @@ def my_function(
   ...
 ```
 
-``` highlight
+```python
 No:
 def my_function(
     long_variable_name: long_module_name.
@@ -1439,7 +1473,7 @@ def my_function(
   ...
 ```
 
-#### 3.19.3 Forward Declarations
+### 19.3 Forward Declarations
 
 If you need to use a class name (from the same module) that is not yet
 defined -- for example, if you need the class name inside the
@@ -1447,7 +1481,7 @@ declaration of that class, or if you use a class that is defined later
 in the code -- either use
 `from __future__ import annotations` or use a string for the class name.
 
-``` highlight
+```python
 Yes:
 from __future__ import annotations
 
@@ -1458,7 +1492,7 @@ class OtherClass:
   ...
 ```
 
-``` highlight
+```python
 Yes:
 class MyClass:
   def __init__(self, stack: Sequence['MyClass'], item: 'OtherClass'):
@@ -1467,26 +1501,27 @@ class OtherClass:
   ...
 ```
 
-#### 3.19.4 Default Values
+<a id="typing-default-values"></a>
+### 19.4 Default Values
 
 As per
 [PEP-008](https://peps.python.org/pep-0008/#other-recommendations), use
 spaces around the `=` *only* for
 arguments that have both a type annotation and a default value.
 
-``` highlight
+```python
 Yes:
 def func(a: int = 0) -> int:
   ...
 ```
 
-``` highlight
+```python
 No:
 def func(a:int=0) -> int:
   ...
 ```
 
-#### 3.19.5 NoneType
+### 19.5 NoneType
 
 In the Python type system, `NoneType` is a "first class" type, and for typing purposes,
 `None` is an alias for
@@ -1502,7 +1537,7 @@ of implicit. Earlier versions of type checkers allowed
 `a: str = None` to be
 interpreted as `a: str | None = None`, but that is no longer the preferred behavior.
 
-``` highlight
+```python
 Yes:
 def modern_or_union(a: str | int | None, b: str | None = None) -> str:
   ...
@@ -1510,7 +1545,7 @@ def union_optional(a: Union[str, int, None], b: Optional[str] = None) -> str:
   ...
 ```
 
-``` highlight
+```python
 No:
 def nullable_union(a: Union[None, str]) -> str:
   ...
@@ -1518,7 +1553,8 @@ def implicit_optional(a: str = None) -> str:
   ...
 ```
 
-#### 3.19.6 Type Aliases
+<a id="typing-aliases"></a>
+### 19.6 Type Aliases
 
 You can declare aliases of complex types. The name of an alias should be
 CapWorded. If the alias is used only in this module, it should be
@@ -1527,14 +1563,14 @@ CapWorded. If the alias is used only in this module, it should be
 Note that the `: TypeAlias`
 annotation is only supported in versions 3.10+.
 
-``` highlight
+```python
 from typing import TypeAlias
 
 _LossAndGradient: TypeAlias = tuple[tf.Tensor, tf.Tensor]
 ComplexTFMap: TypeAlias = Mapping[str, _LossAndGradient]
 ```
 
-#### 3.19.7 Ignoring Types
+### 19.7 Ignoring Types
 
 You can disable type checking on a line with the special comment
 `# type: ignore`.
@@ -1542,46 +1578,49 @@ You can disable type checking on a line with the special comment
 `pytype` has a disable option
 for specific errors (similar to lint):
 
-``` highlight
+```python
 # pytype: disable=attribute-error
 ```
 
-#### 3.19.8 Typing Variables
+### 19.8 Typing Variables
 
 \
+<a id="annotated-assignments"></a>
 [*Annotated Assignments*](#annotated-assignments)
 : If an internal variable has a type that is hard or impossible to
   infer, specify its type with an annotated assignment - use a colon and
   type between the variable name and value (the same as is done with
   function arguments that have a default value):
-  ``` highlight
+  ```python
   a: Foo = SomeUndecoratedFunction()
   ```
 
 \
+<a id="type-comments"></a>
 [*Type Comments*](#type-comments)
 : Though you may see them remaining in the codebase (they were necessary
   before Python 3.6), do not add any more uses of a
   `# type: <type name>` comment
   on the end of the line:
-  ``` highlight
+  ```python
   a = SomeUndecoratedFunction()  # type: Foo
   ```
 
-#### 3.19.9 Tuples vs Lists
+### 19.9 Tuples vs Lists
 
 Typed lists can only contain objects of a single type. Typed tuples can
 either have a single repeated type or a set number of elements with
 different types. The latter is commonly used as the return type from a
 function.
 
-``` highlight
+```python
 a: list[int] = [1, 2, 3]
 b: tuple[int, ...] = (1, 2, 3)
 c: tuple[int, str, float] = (1, "2", 3.5)
 ```
 
-#### 3.19.10 Type variables
+<a id="typing-type-var"></a>
+### 19.10 Type variables
 
 The Python type system has
 [generics](https://docs.python.org/3/library/typing.html#generics). A
@@ -1591,7 +1630,7 @@ to use them.
 
 Example:
 
-``` highlight
+```python
 from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 _P = ParamSpec("_P")
@@ -1609,7 +1648,7 @@ def print_when_called(f: Callable[_P, _T]) -> Callable[_P, _T]:
 
 A `TypeVar` can be constrained:
 
-``` highlight
+```python
 AddableType = TypeVar("AddableType", int, float, str)
 def add(a: AddableType, b: AddableType) -> AddableType:
   return a + b
@@ -1620,7 +1659,7 @@ A common predefined type variable in the `typing` module is `AnyStr`. Use it for
 `str` and must all be the same
 type.
 
-``` highlight
+```python
 from typing import AnyStr
 def check_length(x: AnyStr) -> AnyStr:
   if len(x) <= 42:
@@ -1634,7 +1673,7 @@ following criteria:
 - not externally visible
 - not constrained
 
-``` highlight
+```python
 Yes:
   _T = TypeVar("_T")
   _P = ParamSpec("_P")
@@ -1642,7 +1681,7 @@ Yes:
   AnyFunction = TypeVar("AnyFunction", bound=Callable)
 ```
 
-``` highlight
+```python
 No:
   T = TypeVar("T")
   P = ParamSpec("P")
@@ -1650,7 +1689,7 @@ No:
   _F = TypeVar("_F", bound=Callable)
 ```
 
-#### 3.19.11 String types
+### 19.11 String types
 
 > Do not use `typing.Text` in
 > new code. It's only for Python 2/3 compatibility.
@@ -1658,7 +1697,7 @@ No:
 Use `str` for string/text data.
 For code that deals with binary data, use `bytes`.
 
-``` highlight
+```python
 def deals_with_text_data(x: str) -> str:
   ...
 def deals_with_binary_data(x: bytes) -> bytes:
@@ -1669,7 +1708,8 @@ If all the string types of a function are always the same, for example
 if the return type is the same as the argument type in the code above,
 use [AnyStr](#typing-type-var).
 
-#### 3.19.12 Imports For Typing
+<a id="typing-imports"></a>
+### 19.12 Imports For Typing
 
 For symbols (including types, functions, and constants) from the
 `typing` or
@@ -1682,7 +1722,7 @@ multiple specific symbols on one line from the
 `collections.abc` modules. For
 example:
 
-``` highlight
+```python
 from collections.abc import Mapping, Sequence
 from typing import Any, Generic, cast, TYPE_CHECKING
 ```
@@ -1694,7 +1734,7 @@ treated similarly to keywords, and not be defined in your Python code,
 typed or not. If there is a collision between a type and an existing
 name in a module, import it using `import x as y`.
 
-``` highlight
+```python
 from typing import Any as AnyType
 ```
 
@@ -1707,7 +1747,7 @@ prefer built-in types like `tuple` over the parametric type aliases from the
 `typing` module (e.g.,
 `typing.Tuple`).
 
-``` highlight
+```python
 from typing import List, Tuple
 
 def transform_coordinates(original: list[tuple[float, float]]) ->
@@ -1715,7 +1755,7 @@ def transform_coordinates(original: list[tuple[float, float]]) ->
   ...
 ```
 
-``` highlight
+```python
 from collections.abc import Sequence
 
 def transform_coordinates(original: Sequence[tuple[float, float]]) ->
@@ -1723,7 +1763,7 @@ def transform_coordinates(original: Sequence[tuple[float, float]]) ->
   ...
 ```
 
-#### 3.19.13 Conditional Imports
+### 19.13 Conditional Imports
 
 Use conditional imports only in exceptional cases where the additional
 imports needed for type checking must be avoided at runtime. This
@@ -1743,14 +1783,14 @@ an `if TYPE_CHECKING:` block.
 - There should be no empty lines in the typing imports list.
 - Sort this list as if it were a regular imports list.
 
-  ``` highlight
+  ```python
   import typing
   if typing.TYPE_CHECKING:
     import sketch
   def f(x: "sketch.Sketch"): ...
   ```
 
-#### 3.19.14 Circular Dependencies
+### 19.14 Circular Dependencies
 
 Circular dependencies that are caused by typing are code smells. Such
 code is a good candidate for refactoring. Although technically it is
@@ -1763,7 +1803,7 @@ Replace modules that create circular dependency imports with
 name from this module (any attribute of `Any` is `Any`).
 Alias definitions should be separated from the last import by one line.
 
-``` highlight
+```python
 from typing import Any
 
 some_mod = Any  # some_mod.py imports this module.
@@ -1773,20 +1813,20 @@ def my_method(self, var: "some_mod.SomeType"):
   ...
 ```
 
-#### 3.19.15 Generics
+### 19.15 Generics
 
 When annotating, prefer to specify type parameters for
 [generic](https://docs.python.org/3/library/typing.html#generics) types
 in a parameter list; otherwise, the generics' parameters will be assumed
 to be [`Any`](https://docs.python.org/3/library/typing.html#the-any-type).
 
-``` highlight
+```python
 # Yes:
 def get_names(employee_ids: Sequence[int]) -> Mapping[int, str]:
   ...
 ```
 
-``` highlight
+```python
 # No:
 # This is interpreted as get_names(employee_ids: Sequence[Any]) -> Mapping[Any, Any]
 def get_names(employee_ids: Sequence) -> Mapping:
@@ -1797,41 +1837,23 @@ If the best type parameter for a generic is `Any`, make it explicit, but remembe
 [`TypeVar`](#typing-type-var)
 might be more appropriate:
 
-``` highlight
+```python
 # No:
 def get_names(employee_ids: Sequence[Any]) -> Mapping[Any, str]:
   """Returns a mapping from employee ID to employee name for given IDs."""
 ```
 
-``` highlight
+```python
 # Yes:
 _T = TypeVar('_T')
 def get_names(employee_ids: Sequence[_T]) -> Mapping[_T, str]:
   """Returns a mapping from employee ID to employee name for given IDs."""
 ```
 
-## 4 Parting Words
+## 20. Be Consistent
 
-*BE CONSISTENT*.
+If you're editing code, take a few minutes to look at the code around you and determine its style. If they use `_idx` suffixes in index variable names, you should too. If their comments have little boxes of hash marks around them, make your comments have little boxes of hash marks around them too.
 
-If you're editing code, take a few minutes to look at the code around
-you and determine its style. If they use `_idx` suffixes in index variable names, you should too. If
-their comments have little boxes of hash marks around them, make your
-comments have little boxes of hash marks around them too.
+The point of having style guidelines is to have a common vocabulary of coding so people can concentrate on what you're saying rather than on how you're saying it. We present global style rules here so people know the vocabulary, but local style is also important. If code you add to a file looks drastically different from the existing code around it, it throws readers out of their rhythm when they go to read it.
 
-The point of having style guidelines is to have a common vocabulary of
-coding so people can concentrate on what you're saying rather than on
-how you're saying it. We present global style rules here so people know
-the vocabulary, but local style is also important. If code you add to a
-file looks drastically different from the existing code around it, it
-throws readers out of their rhythm when they go to read it.
-
-However, there are limits to consistency. It applies more heavily
-locally and on choices unspecified by the global style. Consistency
-should not generally be used as a justification to do things in an old
-style without considering the benefits of the new style, or the tendency
-of the codebase to converge on newer styles over time.
-
-This site is open source. [Improve this
-page](https://github.com/google/styleguide/edit/gh-pages/pyguide.md).
-
+However, there are limits to consistency. It applies more heavily locally and on choices unspecified by the global style. Consistency should not generally be used as a justification to do things in an old style without considering the benefits of the new style, or the tendency of the codebase to converge on newer styles over time.

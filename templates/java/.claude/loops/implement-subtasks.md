@@ -124,27 +124,31 @@ a *different* file each iteration, so it is necessary cost, not repeated cost.
 ### Step 3 - implement via the dev-fleet agents
 
 Delegate the subtask spec to the appropriate fleet agent. Independent units within one
-subtask may run concurrently; units with stated ordering dependencies run sequentially:
+subtask may run concurrently; units with stated ordering dependencies run sequentially. This
+preset's fleet is intentionally minimal today (see `agent-orchestrator.md`'s roster) - add
+rows here only once a matching agent actually exists in this preset:
 
-| Spec role keyword  | Fleet agent                             | Agentic action               |
-|---------------------|--------------------------------------------|---------------------------------|
-| `Architect`        | `app-architect`                         | evaluate design               |
-| `Python Expert`    | `python-expert`                         | subtask implementation        |
-| `Testing Expert`   | `testing-expert` then `python-expert`   | QA then fix regressions       |
-| `Security Auditor` | `security-auditor` then `python-expert` | advisory then implementation  |
-| `Docs Writer`      | `docs-writer` or `docs-updater`         | write or update docs           |
+| Spec role keyword  | Fleet agent                          | Agentic action          |
+|---------------------|------------------------------------------|------------------------------|
+| `Java Expert`      | `java-expert`                          | subtask implementation      |
+| `Testing Expert`   | `testing-expert` then `java-expert`    | QA then fix regressions     |
 
 Brief each coder/QA agent with **paths and section references, not pasted file bodies** -
 pasting a spec bills it twice (once in your context, once in theirs):
 
 - The subtask spec **path** (`{task_folder}/{NN}-{subtask-slug}.md`) - the agent reads it
   itself. Add a one-line scope note, not the spec text.
-- The cross-cutting rules in **[.claude/CLAUDE.md](/.claude/CLAUDE.md)** §2 (conventions),
-  §3 (security), §4 (testing) - `Optional[T]` not `T | None`, full annotations, ruff, RAII,
-  `SensitiveFilter`, no bare `except:`, unit + mocked-integration tests. If the milestone's
-  `plan.md` carries its own cross-cutting guidelines section, name it for the agent to read.
-- The specific **anchor** in **[/docs/specs/implementation_spec.md](/docs/specs/implementation_spec.md)**
-  the subtask references (e.g. a backend ABC or §9 endpoint spec) - the section, not the whole spec.
+- The cross-cutting rules in `@docs/dev/java_android_coding_standard.md` - Javadoc coverage,
+  null-handling convention, no bare `catch (Exception e) {}`, unit + mocked-integration tests.
+  <!-- TEMPLATE-INIT: if this project's own CLAUDE.md/AGENTS.md documents additional
+  cross-cutting conventions beyond the shipped coding standard (a stricter testing bar, a
+  different security policy, a named logging/redaction utility), name the file and the
+  specific section here. --> If the milestone's `plan.md` carries its own cross-cutting
+  guidelines section, name it for the agent to read.
+- <!-- TEMPLATE-INIT: if this project keeps a detailed design/spec document beyond the ADRs in
+  docs/adr/ (e.g. under docs/specs/), name its actual path and section-numbering convention
+  here, so this bullet reads "the specific anchor in <path> the subtask references - the
+  section, not the whole doc." If there is no such document, delete this bullet entirely. -->
 
 **Return discipline (keeps the parent context lean):** instruct every spawned agent to return
 a **compact structured summary** - files changed, symbols added, pass/fail, coverage delta -
@@ -152,11 +156,10 @@ and to **never echo diffs, file contents, or full test logs**. A subagent's inte
 reasoning are discarded with its context; only its final message persists in the loop, so that
 message is the only thing you pay to carry forward.
 
-**Security-sensitive subtasks** (auth middleware, the sandbox, any incident-payload
-ingestion): spawn `security-auditor` **before** coding begins. It reads the spec and writes
-a threat model to `docs/security/<date>-<topic>.md`; the coder picks that up as an
-additional input. Per [.claude/CLAUDE.md](/.claude/CLAUDE.md) §5, a CRITICAL finding blocks
-merge - stop the loop and require human sign-off.
+<!-- TEMPLATE-INIT: once this preset (or this project) has a security-review agent or process,
+add back a "security-sensitive subtasks" paragraph here naming what triggers it (e.g. auth
+middleware, anything parsing untrusted input, external-service credentials) and where it
+writes its findings. Until then, don't invent a security-review step nothing performs. -->
 
 ### Step 4 - stop-and-ask when implementation needs a decision
 
@@ -168,15 +171,16 @@ reverse. (Routine, unambiguous implementation does **not** pause - only genuine 
 
 ### Step 5 - verification gate
 
-Run **only this subtask's** verification, not the whole suite: scope `pytest` to the
-subtask's own test file(s) and use `-q` (capture the summary line, not per-test `-v` output),
-plus `python .claude/hooks/style_fixes.py --check <path>`. Do **not** pipe full pytest output into context -
-a green run is one summary line; on failure, tail only the failing assertions. The full suite
-runs once at task completion (Step 7), and the Stop hook gates the session end regardless.
+Run **only this subtask's** verification, not the whole suite: scope the test run to the
+subtask's own test class(es) (e.g. `./gradlew test --tests "*SubtaskFooTest"`), plus the
+project's lint/static-check task (`./gradlew lint`, or the narrower module task the repo
+actually uses - see `java-expert.md`). Do **not** pipe full test output into context - a green
+run is one summary line; on failure, tail only the failing assertions. The full suite runs
+once at task completion (Step 7), and the Stop hook gates the session end regardless.
 
 On failure:
 
-- Diagnose, delegate the fix to `python-expert`, re-run. Repeat until green or until the
+- Diagnose, delegate the fix to `java-expert`, re-run. Repeat until green or until the
   failure is clearly a spec ambiguity needing human input - in that case stop the loop and
   surface the blocker.
 
@@ -190,18 +194,22 @@ spec path from Step 2 (relative to `docs/roadmap/`, without the `.md` extension)
   matrix only earns its tokens when there is something to act on. Continue to Step 7.
 - **PARTIAL** → log the deviation list (this is worth carrying); continue, and feed those
   deviations into the `/pr-review` context so the reviewer sees them.
-- **FAIL** → delegate the blocking gaps back to `python-expert` (max 1 retry), re-run
+- **FAIL** → delegate the blocking gaps back to `java-expert` (max 1 retry), re-run
   Step 5 then this step. If still FAIL after one retry, surface the gaps and stop the loop.
 
 Then run the applicable quality-gate skills. **Skip any gate whose trigger condition is false -
 do not spawn an agent that can only find nothing.** Each gate is module-scoped, never tree-wide:
 
-| Condition                                                | Skill                                                                                                            |
-|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| Always                                                   | `/test-gap src/{{PROJECT_PACKAGE}}/<subtask-module>/` - report coverage delta; if < 85 % delegate missing tests to `testing-expert`. |
-| `pyproject.toml` or any `requirements*.txt` changed      | `/dep-audit`                                                                                                     |
-| Any file under `api/`, `sandbox/`, or middleware changed | `/secret-scan src/{{PROJECT_PACKAGE}}/<changed-module>/`                                                                   |
-| Subtask touches docs / public API                        | `/link-check docs/` - inbound references still resolve.                                                          |
+| Condition                                                                    | Skill                                                              |
+|-------------------------------------------------------------------------------|---------------------------------------------------------------------|
+| Any file under an API route, auth, or middleware path changed, or anywhere handling credentials/tokens | `/secret-scan <changed-module>/` |
+| Subtask touches docs / public API                                           | `/link-check docs/` - inbound references still resolve.           |
+
+<!-- TEMPLATE-INIT: this preset has no coverage-reporting or dependency-audit skill yet
+(compare templates/python's /test-gap and /dep-audit). If this project adds equivalents, add
+matching gate rows here - trigger condition, skill, and threshold - rather than assuming
+testing-expert's own per-subtask coverage note (Step 3) is a substitute for a repo-wide
+dependency audit. -->
 
 ### Step 7 - record the subtask, then check the task
 
@@ -223,8 +231,8 @@ do not spawn an agent that can only find nothing.** Each gate is module-scoped, 
 
 - **Task not yet complete** → go to Step 8 (reschedule for the next subtask).
 - **Task complete** → this is the **one** place the whole suite runs: execute
-  `uv run pytest tests/unit/ -q --cov={{PROJECT_PACKAGE}}` once (summary line only), then run
-  `/pr-review` (must reach LGTM or have REQUEST_CHANGES resolved). Then update
+  `./gradlew test` (plus the project's coverage task, if it has one) once (summary line
+  only), then run `/pr-review` (must reach LGTM or have REQUEST_CHANGES resolved). Then update
   `{milestone_path}/status.md` `## Current status` with a **targeted row edit**:
   - Set the task row's Status cell to `✅ Complete` (note any deferred subtasks inline,
     e.g. "✅ Complete (subtask 11 deferred)").
@@ -246,7 +254,7 @@ Call `ScheduleWakeup` with:
 - `reason`: "advancing to next pending subtask of task {TT.t} <Name> after completing
   subtask {NN}".
 
-> Cache caveat: a heavy `python-expert` step that runs longer than ~5 min blows the TTL
+> Cache caveat: a heavy `java-expert` step that runs longer than ~5 min blows the TTL
 > regardless, so the warm cache mainly benefits the fast gate/verify iterations. The cursor
 > (not the cache) is what guarantees cheap rediscovery; the cache is a bonus on top.
 
@@ -254,29 +262,14 @@ Call `ScheduleWakeup` with:
 
 ## Task-specific notes
 
-### Task 8 - REST API Layer
-
-Run `security-auditor` first on the auth-middleware spec (§9 auth section); `python-expert`
-reads the threat model before implementing `api/middleware/auth.py`. After the API subtask,
-verify `aegis server --help` exits 0 (the Task 7 stub must be wired to the real
-`uvicorn.run`). Integration tests (`test_api.py`) need `httpx` - add it to the `[test]`
-extras in `pyproject.toml` if absent and trigger `/dep-audit`.
-
-### Task 9 - Secure Code Sandbox
-
-Run `security-auditor` first on **[/docs/specs/implementation_spec.md](/docs/specs/implementation_spec.md)** §10.
-Key invariant: **path traversal must be blocked at the temp-dir boundary** before the
-Docker command is constructed - the auditor must confirm this in the threat model before
-coding starts. The sandbox Dockerfiles (`sandbox/Dockerfile.cpp`, `sandbox/Dockerfile.python`)
-are implementation artifacts, not product code - `python-expert` writes them but they do not
-need ruff and typing-convention passes.
-
-### Task 10 - Testing & Hardening
-
-Instruct `python-expert` to **not** invoke real AI backends - expected outputs are pre-computed
-ground truth, not live inference. The `shell=True` audit is a code-review task: delegate to
-`feature-reviewer`, which greps `backends/` and `sandbox/` for `shell=True` and reports any
-hit as blocking. After docs updates, run `/link-check docs/`.
+Most tasks need nothing here - Steps 3-6 already cover the general case. Add a
+`### Task {TT.t} - <Name>` subsection only when a specific task carries a real gotcha future
+iterations must not rediscover from scratch: a non-obvious ordering dependency between its
+subtasks, a security-sensitive subsystem that needs extra review before coding starts, an
+artifact category (generated code, vendored fixtures, build output) that should skip the
+usual lint/style gate, or a dependency that must land before a subtask can pass. Keep each
+note to what the next iteration needs to act correctly on - not a running commentary on the
+task.
 
 ---
 
@@ -309,7 +302,6 @@ Because the loop re-fires into one growing conversation, the cost that compounds
 | Argument matches zero or >1 task                    | Stop, ask the user to disambiguate           |
 | Verification fails after the fix retries (Step 5)   | Surface the blocker, stop the loop           |
 | `subtask-verifier` FAIL after one retry (Step 6)    | Surface blocking gaps, stop the loop         |
-| `security-auditor` issues a CRITICAL finding        | Stop the loop, require human sign-off        |
 | `/pr-review` returns REQUEST_CHANGES after 2 rounds | Stop the loop, surface the diff              |
 
 ---
@@ -317,7 +309,7 @@ Because the loop re-fires into one growing conversation, the cost that compounds
 ## Loop ↔ skill relationship
 
 This loop is the **sentence**; the skills are its **vocabulary**. It calls `/verify-subtask`
-(spec compliance), `/test-gap` (coverage), `/dep-audit`, `/secret-scan`, `/link-check`, and
-`/pr-review` at the right checkpoints, and delegates implementation to the dev-fleet agents
-in [.claude/CLAUDE.md](/.claude/CLAUDE.md) §7. It complements the read-only
-`verify-subtasks` loop: this one *builds* a task; that one *audits* an already-built one.
+(spec compliance), `/secret-scan`, `/link-check`, and `/pr-review` at the right checkpoints,
+and delegates implementation to the dev-fleet agents listed in `agent-orchestrator.md`'s
+roster. It complements the read-only `verify-subtasks` loop: this one *builds* a task; that
+one *audits* an already-built one.

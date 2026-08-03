@@ -9,7 +9,7 @@ of commits).
 |----------|---------|----------|
 | MEDIUM | `parse_batch()` re-reads the same file on every call inside a loop | `ingest/parser.py:42` - no caching across iterations |
 | LOW | Unbounded list growth in `_buffer` under high throughput | `ingest/parser.py:88` |
-| INFO | No licence conflicts found in current dependency set | `pyproject.toml` |
+| INFO | No license conflicts found in current dependency set | `pyproject.toml` |
 
 ## Verdict
 
