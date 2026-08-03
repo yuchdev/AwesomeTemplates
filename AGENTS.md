@@ -27,6 +27,17 @@ by construction).
 Keep `src/awesome_claude` (the generator's own code) and `templates/` (the content it distributes)
 mentally separate — most bugs are in one or the other, rarely both.
 
+This repo also has its own `.claude/` at the root — that's this repo's *own* maintainer tooling, a
+third thing distinct from both of the above. `.claude/agents/create-from-template.md` is the one agent
+in it so far: some agents inside `templates/<preset>/.claude/agents/*.md` carry a
+`<!-- TEMPLATE-INIT: ... -->` marker — a fact that's project-specific in a way no `{{PLACEHOLDER}}`
+substitution could ever fill in (see `reference/aegis/` for a real, lived-in example of what those
+facts look like once filled). `create-from-template` is what closes that gap: given a target project's
+path (one `awesome-claude generate` already ran against), it deeply analyzes that target and edits
+*its* agent files in place. It is deliberately not shipped inside `templates/<preset>/` — it isn't a
+capability the generated project needs standing presence of; it's a one-time bootstrap step run from
+outside the target, not part of the target's own dev fleet.
+
 ## Commands
 
 ```bash
@@ -82,6 +93,17 @@ wiring, since those hooks are Python-only) and its own copy of anything both pre
 differ between presets — `python/.claude/hooks/_common.py` and `java/.claude/hooks/_common.py` are not
 required to be identical — so don't "deduplicate" them back into a shared location without checking
 whether they've actually diverged.
+
+A preset can also ship a top-level `scripts/` directory (a sibling of `.claude/` and `docs/`, copied
+along with them - `presets.py` copies the whole preset tree, not just those two names). This is a
+deliberate second tier, distinct from `.claude/hooks/`: hooks are fast, auto-triggered gates wired into
+`settings.json` (they run on every matching tool call, so they must stay cheap and self-contained -
+`doc_link_check.py` never imports from `scripts/`); `scripts/` holds heavier, on-demand tools that a
+skill's documented workflow invokes explicitly (e.g. `/link-check` runs `scripts/check_doc_links.py`, a
+slower corpus-wide checker, as a deeper complement to the `doc_link_check` hook's cheap per-edit pass).
+Don't add a `scripts/*.py` file unless some shipped agent/skill/hook actually documents invoking it, and
+don't add a `.claude/hooks/*.py` file with the same name as a `scripts/` tool expecting them to share an
+implementation - they don't (confirm with an import check before assuming otherwise).
 
 ### Generator pipeline (`src/awesome_claude`)
 

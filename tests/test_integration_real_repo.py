@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 from awesome_claude.catalog import discover, list_presets
 from awesome_claude.cli import app
 from awesome_claude.dependencies import build_dependency_graph
+from awesome_claude.templating import PLACEHOLDER_RE
 from awesome_claude.workspace import Workspace
 
 REAL_REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -63,3 +64,25 @@ def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
     graph = build_dependency_graph(workspace, catalog, extra_scan_path=workspace.path("docs"))
     broken_docs = [r for r in graph.missing if r.kind == "doc"]
     assert broken_docs == []
+
+
+def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_path):
+    # awesome-claude.example.toml is the documented --config example (see
+    # README.md's "Config file" section) - it must actually work end to end,
+    # and every deterministic {{PLACEHOLDER}} token it fills in must leave no
+    # trace in the generated Markdown. docs/adr/template.md's own `{{ seq }}`
+    # / `{{ title }}` Jinja tokens are a deliberate exception (a different
+    # engine - see doctemplates.py - renders those later, at `docs new adr`
+    # time, not at generate time) and PLACEHOLDER_RE correctly ignores them
+    # since they aren't the all-caps `{{WORD}}` shape it matches.
+    config_path = REAL_REPO_ROOT / "awesome-claude.example.toml"
+    proj = tmp_path / "proj"
+    result = runner.invoke(app, ["generate", "--config", str(config_path), "--out", str(proj)])
+    assert result.exit_code == 0, result.stdout
+    assert "Warnings:" not in result.stdout
+
+    md_files = list(proj.rglob("*.md"))
+    assert md_files  # sanity: didn't just generate an empty tree
+
+    leftover = [f for f in md_files if PLACEHOLDER_RE.search(f.read_text(encoding="utf-8"))]
+    assert leftover == []

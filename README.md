@@ -56,6 +56,43 @@ uv run awesome-claude docs new adr "Adopt structured logging" --preset python
 
 `generate` also accepts `--config <file.json|file.toml>` (any flag passed alongside overrides the matching config value) and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets a `.claude/` and a `docs/` subdirectory (default: `.`); pass `--force` to overwrite existing content in either. Run `uv run awesome-claude generate --help` for the full flag reference.
 
+### Config file
+
+[`awesome-claude.example.toml`](awesome-claude.example.toml) is a documented example of the file
+`--config` accepts - copy it into your own project, edit the values, and run:
+
+```bash
+uv run awesome-claude generate --config awesome-claude.example.toml
+```
+
+JSON works the same way (picked by file extension); the schema is the same shape either way:
+
+```json
+{
+  "preset": "python",
+  "out": ".",
+  "force": false,
+  "project": {
+    "name": "Acme Sync",
+    "package": "acme_sync",
+    "purpose": "Synchronizes Acme customer records nightly.",
+    "slug_upper": "ACME_SYNC"
+  }
+}
+```
+
+| Field              | Substitutes            | Default if omitted                          |
+|--------------------|-------------------------|----------------------------------------------|
+| `preset`           | —                       | none - required (or pass `--preset`)         |
+| `out`              | —                       | `.`                                          |
+| `force`            | —                       | `false`                                      |
+| `project.name`     | `{{PROJECT_NAME}}`      | none - required (or pass `--name`)           |
+| `project.package`  | `{{PROJECT_PACKAGE}}`   | slugified `project.name`                     |
+| `project.purpose`  | `{{PROJECT_PURPOSE}}`   | a `TODO: describe what this project does` placeholder |
+| `project.slug_upper` | `{{PROJECT_SLUG_UPPER}}` | upper-slugified `project.name`             |
+
+Any CLI flag passed alongside `--config` overrides the matching value from the file.
+
 ### Development
 
 Test suite and lint

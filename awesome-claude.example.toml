@@ -1,0 +1,46 @@
+# Example config for `awesome-claude generate --config <this file>`.
+#
+# Every value here fills in one of the deterministic {{PLACEHOLDER}} tokens
+# substituted across a preset's .claude/ and docs/ files (PROJECT_NAME,
+# PROJECT_PACKAGE, PROJECT_PURPOSE, PROJECT_SLUG_UPPER) - see README.md's
+# "Config file" section for the full field reference.
+#
+# Copy this file into your own project (any name/location works), edit the
+# values, and run:
+#
+#   uv run awesome-claude generate --config awesome-claude.example.toml
+#
+# Any flag passed alongside --config overrides the matching value here, e.g.
+# `--config awesome-claude.example.toml --force` keeps everything below but
+# turns force on.
+
+# Which preset to generate - see `uv run awesome-claude list`.
+preset = "python"
+
+# Project root to generate into: gets a .claude/ and a docs/ subdirectory.
+# Defaults to "." (the current directory) if omitted.
+out = "."
+
+# Overwrite existing .claude/ or docs/ content instead of failing. Defaults
+# to false if omitted.
+force = false
+
+[project]
+# Substitutes {{PROJECT_NAME}} - used in prose (agent/skill instructions,
+# docs headers) and settings.json wiring.
+name = "Acme Sync"
+
+# Substitutes {{PROJECT_PACKAGE}} - the Python package name hooks/skills
+# reference (e.g. `--cov={{PROJECT_PACKAGE}}` in run_tests.py). Defaults to
+# a slugified form of `name` if omitted (e.g. "Acme Sync" -> "acme_sync").
+package = "acme_sync"
+
+# Substitutes {{PROJECT_PURPOSE}} - a one-line description used where agents
+# need project context. Defaults to a TODO placeholder if omitted.
+purpose = "Synchronizes Acme customer records nightly."
+
+# Substitutes {{PROJECT_SLUG_UPPER}} - the upper-snake-case form used for
+# environment variable names (e.g. guard_bash.py's
+# `{{PROJECT_SLUG_UPPER}}_PROD_CONFIRMED`). Defaults to an upper-slugified
+# form of `name` if omitted (e.g. "Acme Sync" -> "ACME_SYNC").
+slug_upper = "ACME_SYNC"
