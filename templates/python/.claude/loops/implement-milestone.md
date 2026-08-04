@@ -7,7 +7,7 @@ terminates-when: Every task row in the milestone status.md shows ✅ Complete (o
 
 # implement-milestone - milestone-level execution loop
 
-This loop drives **one whole milestone** (e.g. `docs/roadmap/0002-forensic-agents/`) to
+This loop drives **one whole milestone** (e.g. `docs/roadmap/0002-notification-delivery/`) to
 completion. It is the level above [implement-subtasks.md](implement-subtasks.md): that
 loop builds one task; this one researches the milestone, sequences its tasks by their
 dependency graph, and executes each task *through* the implement-subtasks algorithm -
@@ -30,9 +30,14 @@ docs/roadmap/{NNNN}-{milestone-slug}/plan.md      → tasks, dependency graph, s
 `<milestone>` identifies which milestone to drive. Accepted forms (most specific wins):
 
 - `0002` - milestone number; resolves `docs/roadmap/0002-*/`.
-- `0002-forensic-agents` or `forensic-agents` - the folder slug (full or suffix).
-- `"Forensic Agents"` - the milestone title, matched (case-insensitive, substring)
-  against each `plan.md`'s H1.
+- `0002-notification-delivery` or `notification-delivery` - the folder slug (full or suffix).
+- `"Notification Delivery Pipeline"` - the milestone title, matched (case-insensitive,
+  substring) against each `plan.md`'s H1.
+
+These are illustrative - a fictional example milestone, not one this preset ships. The
+shapes below (multi-task dependency graph, a security-sensitive task, shared contracts)
+are what a real milestone looks like; substitute your own project's actual milestone
+argument forms once one exists.
 
 If the argument matches zero or more than one milestone, **stop** and ask the user to
 disambiguate - do not guess. If the folder exists but has no `plan.md`, **stop**: this
@@ -46,25 +51,25 @@ job, not an execution loop's.
 **This loop embeds the implement-subtasks algorithm; it never spawns it.** A loop owns
 its own `ScheduleWakeup`: if this loop rescheduled with `/loop implement-subtasks
 <task>`, control would pass to the task loop permanently - implement-subtasks
-terminates by *not* rescheduling, so there is no wakeup left to return to the
+terminate by *not* rescheduling, so there is no wakeup left to return to the
 milestone. Instead, each iteration of this loop executes **Steps 2-6 of
 [implement-subtasks.md](implement-subtasks.md) verbatim, by reference** (pick subtask →
 delegate to the fleet → stop-and-ask on forks → verification gate → `/verify-subtask` +
 quality gates), and overrides only the boundary steps that implement-subtasks defines
 for a *single-task* run:
 
-| implement-subtasks step | Milestone-run override |
-|--------------------------|------------------------|
-| Step 1 (cursor)          | The cursor is milestone-level (below); the task-level fields implement-subtasks needs are embedded in it |
-| Step 7, "task complete"  | Do **not** stop: run the task-close gate, record the task, advance the task queue (Step M4 below) |
-| Step 7.1-7.2 (recording) | Additionally update `status.md` after **every** subtask, not only at task close (Step M3 below) |
+| implement-subtasks step  | Milestone-run override                                                                                       |
+|--------------------------|--------------------------------------------------------------------------------------------------------------|
+| Step 1 (cursor)          | The cursor is milestone-level (below); the task-level fields implement-subtasks needs are embedded in it     |
+| Step 7, "task complete"  | Do **not** stop: run the task-close gate, record the task, advance the task queue (Step M4 below)            |
+| Step 7.1-7.2 (recording) | Additionally update `status.md` after **every** subtask, not only at task close (Step M3 below)              |
 | Step 8 (reschedule)      | Reschedule with `/loop implement-milestone <milestone>` - always the milestone prompt, never the task prompt |
 
 Everything else in implement-subtasks - the fleet routing table, briefing discipline
 (paths and anchors, never pasted bodies), return discipline, stop-and-ask rules, the
 verification and spec-compliance gates - applies unchanged and is **not** duplicated
 here. If the two files ever disagree about a per-subtask mechanic, implement-subtasks
-wins; if they disagree about task sequencing or milestone state, this file wins.
+win; if they disagree about task sequencing or milestone state, this file wins.
 
 ---
 
@@ -77,33 +82,40 @@ Resolve once, then never re-read `plan.md`/`status.md` wholesale in the main loo
 ```
 ```json
 {
-  "milestone_path": "docs/roadmap/0002-forensic-agents",
-  "milestone_title": "Forensic Agents",
+  "milestone_path": "docs/roadmap/0002-notification-delivery",
+  "milestone_title": "Notification Delivery Pipeline",
   "phase": "execute",
   "task_queue": [
-    {"tt": "01.0", "slug": "agent-package-restructure", "status": "complete",
+    {"tt": "01.0", "slug": "delivery-queue-foundation", "status": "complete",
      "depends_on": [], "security_sensitive": false, "subtasks_done": 4, "subtasks_total": 4},
-    {"tt": "02.0", "slug": "extensible-panel", "status": "in_progress",
-     "depends_on": ["01.0"], "security_sensitive": false, "subtasks_done": 2, "subtasks_total": 6}
+    {"tt": "02.0", "slug": "retry-and-backoff-policy", "status": "in_progress",
+     "depends_on": ["01.0"], "security_sensitive": false, "subtasks_done": 1, "subtasks_total": 3},
+    {"tt": "03.0", "slug": "webhook-signing", "status": "not_started",
+     "depends_on": ["01.0"], "security_sensitive": true, "subtasks_done": 0, "subtasks_total": 4},
+    {"tt": "04.0", "slug": "delivery-dashboard", "status": "not_started",
+     "depends_on": ["02.0", "03.0"], "security_sensitive": false, "subtasks_done": 0, "subtasks_total": 3}
   ],
   "current_task": {
-    "task_folder": "docs/roadmap/0002-forensic-agents/02.0-extensible-panel",
-    "subtask_queue": [{"nn": "01", "slug": "generalize-base-agent", "status": "complete"}],
+    "task_folder": "docs/roadmap/0002-notification-delivery/02.0-retry-and-backoff-policy",
+    "subtask_queue": [
+      {"nn": "01", "slug": "backoff-schedule-model", "status": "complete"},
+      {"nn": "02", "slug": "...", "status": "not_started"}
+    ],
     "next_index": 1
   },
   "research_digest": {
     "contracts_anchor": "plan.md#shared-contracts-authoritative",
-    "contracts": ["C1 canonical agent keys", "C2 generalized BaseAgent"],
-    "exit_gates": ["full regression", "security-auditor pass (Task 05 surface)"],
-    "gap_dispositions": ["C6 schema tests uncovered -> authored 03.0/06-schema-tests.md"]
+    "contracts": ["C1 delivery-attempt schema", "C2 idempotency-key format"],
+    "exit_gates": ["full regression", "security-auditor pass (Task 03.0 surface)"],
+    "gap_dispositions": ["Task 04.0 implied a dashboard-auth subtask the README lacked -> authored 04.0/03-dashboard-auth.md"]
   },
-  "decisions": ["02.0 ratified as superset 2026-07-07 (see status.md Notes & decisions)"]
+  "decisions": ["03.0 signing algorithm ratified as HMAC-SHA256 2026-02-03 (see status.md Notes & decisions)"]
 }
 ```
 
 The cursor is a **derived cache**; `plan.md`, `status.md`, and the task READMEs remain
 the source of truth. `current_task` is the embedded implement-subtasks cursor for the
-in-flight task. `research_digest` holds one-line pointers (anchor + label), never
+in-flight task. `research_digest` holds one-line pointers (anchor and label), never
 copied contract text - agents are briefed with the anchors and read the plan
 themselves. Refresh the cursor only at subtask close (M3) and task close (M4).
 
@@ -133,13 +145,13 @@ Read `status.md` (or note its absence). Classify:
   one row per task, all `⬜`, plus the legend) so every later update is a row edit.
 - **IN PROGRESS** - a mix of `✅`/`🔶`/`⬜` → resume. Trust `✅` rows *provisionally*,
   pending R3.
-- **DIVERGED** - the `## Notes & decisions` section records supersessions or
+- **DIVERGED** - the `## Notes & decisions` section records supersession or
   ratified redesigns → read those notes into `decisions` before anything else; they
   override the plan's per-task specs where they conflict.
 - **COMPLETE** - every row `✅` → do **not** re-implement. Spot-verify (R3 probes on a
   sample), report the milestone's standing, and **stop** without rescheduling.
 
-### R3 - as-built reconnaissance (code is truth, status is a cache)
+### R3 - as-built reconnaissance (code is the truth, status is a cache)
 
 For every task not marked `✅`, spawn a cheap probe: do the artifacts named in the
 task's `Output` column already exist in the codebase? Three outcomes per task:
@@ -177,23 +189,23 @@ the cursor; set `phase: "execute"`; proceed to Step M1 in the same iteration if
 budget allows, else reschedule.
 
 <!-- TEMPLATE-INIT: list this project's own milestone exit gates here so R1 can
-collect them even when a plan.md omits its closing task - e.g. a required
+collect them even when a plan.md omits its closing task - e.g., a required
 security-review pass, a domain-expert lifecycle audit, a ground-truth/benchmark run,
-a coverage floor. The Aegis reference milestone gated on: full regression,
-security-auditor pass over the attacker-facing task, incident-analyst lifecycle pass,
-and a ground-truth run. If this project has no gates beyond "full suite green +
-/pr-review", say so explicitly so the loop doesn't invent any. -->
+a coverage floor. A milestone with a security-sensitive task (like the illustrative
+Task 03.0 above) typically gates on at least: full regression, and a security-review
+pass scoped to that task's surface. If this project has no gates beyond "full suite
+green + /pr-review", say so explicitly so the loop doesn't invent any. -->
 
 ## Iteration algorithm (execute phase)
 
 ### Step M1 - load the cursor
 
 Warm path only reads the cursor (~400 tokens). Never re-read `plan.md` or `status.md`
-wholesale; a single needed field is a `grep` of one row.
+wholesale; a single necessary field is a `grep` of one row.
 
 ### Step M2 - select the active task
 
-If `current_task` is in flight, continue it. Otherwise pick the first `task_queue`
+If `current_task` is in flight, continue it. Otherwise, pick the first `task_queue`
 entry whose status is pending and whose `depends_on` are all `complete` - plan order
 within a parallel-eligible group (this loop is one conversation, so "parallel" tasks
 still execute serially; parallelism lives *inside* a subtask, at the agent level, per
@@ -213,7 +225,7 @@ addition to the briefing: include the plan's shared-contracts anchor
 (`research_digest.contracts_anchor`) plus the names of the contracts this task
 touches, so every agent reads the authoritative contract instead of re-deriving it.
 
-Then close the subtask with implement-subtasks Step 7.1-7.2 (task README row edit +
+Then close the subtask with implement-subtasks Step 7.1-7.2 (task README row edit and
 cursor refresh) **plus the milestone addendum - a `status.md` update after every
 completed subtask** (this is a hard rule of this loop, not an option): a targeted
 edit of the task's row in `## Current status`, e.g. Status cell
@@ -287,7 +299,7 @@ its `/verify-subtask` PARTIAL flow already logs them. This protocol is for
 
 <!-- TEMPLATE-INIT: state where this project records ratified divergence decisions.
 Default used above: the milestone status.md `## Notes & decisions` section. If this
-project requires an ADR for contract-level changes (via /adr-write), or has a design
+project requires an ADR for contract-level changes (via /adr-write) or has a design
 authority who must sign off beyond AskUserQuestion, name that here - and adjust step
 3 accordingly. -->
 
@@ -296,12 +308,12 @@ authority who must sign off beyond AskUserQuestion, name that here - and adjust 
 ## Token-economy invariants
 
 All five implement-subtasks invariants hold per subtask. At milestone level, three
-more compound across the (much longer) run:
+more compounds across the (much longer) run:
 
 1. **Research once, digest forever.** Phase R is the only wholesale read of the plan,
    and it happens inside subagents. After R5 the main loop touches only the cursor,
    single grepped rows, and the *current* subtask spec.
-2. **Write records from state you already hold.** Per-task detail sections (M4) come
+2. **Write records from the state you already hold.** Per-task detail sections (M4) come
    from the task cursor and agent summaries; never re-read diffs or re-run gates to
    write prose.
 3. **`/compact` at task boundaries.** A milestone run spans dozens of iterations; the
@@ -311,25 +323,22 @@ more compound across the (much longer) run:
 
 ## Termination conditions
 
-| Condition                                                         | Action                                             |
-|-------------------------------------------------------------------|-----------------------------------------------------|
-| All tasks `✅` + exit gates pass (M5)                             | Final status.md pass, delete cursor, do NOT reschedule |
-| Milestone already COMPLETE at Phase R                             | Spot-verify, report standing, do NOT reschedule    |
-| Argument matches zero or >1 milestone / no plan.md                | Stop, ask the user                                 |
-| Dependency cycle, or pending tasks all blocked                    | Stop, surface the graph                            |
-| Divergence fork the user declines to resolve                      | Stop; record the open fork in Notes & decisions    |
-| Any implement-subtasks stop condition fires mid-task              | Stop the whole loop, surface it - never skip to the next task over a failed gate |
-| Exit gate fails at M5                                             | Stop, surface the failing gate; do not flip status.md to complete |
+| Condition                                            | Action                                                                           |
+|------------------------------------------------------|----------------------------------------------------------------------------------|
+| All tasks `✅` + exit gates pass (M5)                | Final status.md pass, delete cursor, do NOT reschedule                           |
+| Milestone already COMPLETE at Phase R                | Spot-verify, report standing, do NOT reschedule                                  |
+| Argument matches zero or >1 milestone / no plan.md   | Stop, ask the user                                                               |
+| Dependency cycle, or pending tasks all blocked       | Stop, surface the graph                                                          |
+| Divergence fork the user declines to resolve         | Stop; record the open fork in Notes & decisions                                  |
+| Any implement-subtasks stop condition fires mid-task | Stop the whole loop, surface it - never skip to the next task over a failed gate |
+| Exit gate fails at M5                                | Stop, surface the failing gate; do not flip status.md to complete                |
 
 An implement-subtasks-level failure (verification red after retries, `/verify-subtask`
 FAIL, CRITICAL security finding, `/pr-review` unresolved) stops the **milestone**
 loop, not just the task: a milestone must never advance past a task that could not
 pass its own gates.
 
-<!-- TEMPLATE-INIT: if this project defines a different bar for "task complete" or
-"milestone complete" than implement-subtasks' defaults (full unit suite green +
-/pr-review LGTM) - e.g. a minimum coverage percentage, a mandatory integration-suite
-run, a staging deploy - state it here and in the M4/M5 gate lists above. -->
+<!-- TEMPLATE-INIT: if this project defines a different bar for "task complete" or "milestone complete," then `implement-subtasks.md` defaults (full unit suite green + /pr-review LGTM) - e.g., a minimum coverage percentage, a mandatory integration-suite run, a staging deployment - state it here and in the M4/M5 gate lists above. -->
 
 ---
 

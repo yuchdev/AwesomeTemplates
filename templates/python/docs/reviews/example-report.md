@@ -13,7 +13,7 @@ of commits).
 
 ## Verdict
 
-No CRITICAL or HIGH findings - does not block merge.
+No CRITICAL or HIGH findings - do not block merge.
 
 ## Recommended actions
 

@@ -5,8 +5,10 @@
 - Annotation and typing, Union, Optional
 - Exceptions
 - Test documentation
-- Sphinx notation (@ :)
 - ruff, mypy, Flake8
+- Imports formatting - compare to Ruff
+- Getters and Setters - check in Python course
+
 
 ## 1. Semicolons
 
@@ -355,7 +357,8 @@ These strings can be extracted automatically through the `__doc__` member of the
 Always use the three-double-quote `"""` format for docstrings (per [PEP 257](https://peps.python.org/pep-0257/)). A docstring should be organized as a summary line (one physical line not exceeding 120 characters) terminated by a period, question mark, or exclamation point.
 When writing more (encouraged), this must be followed by a blank line, followed by the rest of the docstring starting at the same cursor position as the first quote of the first line.
 
-**Note: Sphinx notation (`@param`, `@type`, `@returns`, `@raises`, `@ivar`, etc.) is required for documenting functions, classes, and methods instead of Google style (`Args:`, `Raises:`).**
+**Note: Sphinx notation with leading colons (`:param`, `:type`, `:returns`, `:raises`, `:ivar`, etc.) is required for documenting functions, classes, and methods instead of Google style (`Args:`, `Raises:`).**
+**If explicitly requested by a project/team, the `@`-prefixed variant (`@param`, `@type`, `@returns`, `@raises`, `@ivar`, etc.) may be supported as a secondary option.**
 There are more formatting guidelines for docstrings below.
 
 ### 8.2 Modules
@@ -417,37 +420,37 @@ Otherwise, subtle but important details of a function's implementation that are 
 The docstring may be descriptive-style (`"""Fetches rows from a Bigtable."""`) or imperative-style (`"""Fetch rows from a Bigtable."""`), but the style should be consistent within a file.
 The docstring for a `@property` data descriptor should use the same style as the docstring for an attribute or a [function argument](#doc-function-args) (`"""The Bigtable path."""`, rather than `"""Returns the Bigtable path."""`).
 
-Certain aspects of a function should be documented using Sphinx notation, using the tags `@param`, `@type`, `@returns`, `@yields`, and `@raises` (or alternatively `:param`, `:type`, `:returns`, `:yields`, `:raises`). The tags must be aligned with the text of the docstring.
+Certain aspects of a function should be documented using Sphinx notation, using the tags `:param`, `:type`, `:returns`, `:yields`, and `:raises`. The tags must be aligned with the text of the docstring.
 
 #### 8.3.1 Param and Return Tags
 
 <a id="doc-function-args"></a>
-[*@param* and *@type:*](#doc-function-args)
+[*:param* and *:type:*](#doc-function-args)
 
-`@param name: description` lists a parameter by name and describes it.
+`:param name: description` lists a parameter by name and describes it.
 
-`@type name: type` defines the type of the parameter, if not present in the type annotations.
+`:type name: type` defines the type of the parameter, if not present in the type annotations.
 
 If the description is too long to fit on a single 120-character line, use a hanging indent of 2 or 4 spaces (be consistent with the rest of the docstrings in the file).
-If a function accepts `*foo` (variable length argument lists) and/or `**bar` (arbitrary keyword arguments), they should be listed as `@param *foo:` and `@param **bar:`.
+If a function accepts `*foo` (variable length argument lists) and/or `**bar` (arbitrary keyword arguments), they should be listed as `:param *foo:` and `:param **bar:`.
 
 #### 8.3.2 Raises Tag
 
 <a id="doc-function-returns"></a>
-[*@returns* (or *@yields* for generators):](#doc-function-returns)
+[*:returns* (or *:yields* for generators):](#doc-function-returns)
 
-`@returns: description` describes the semantics of the return value, including any type information that the type annotation does not provide. If the function only returns `None`, this tag is not required.
+`:returns: description` describes the semantics of the return value, including any type information that the type annotation does not provide. If the function only returns `None`, this tag is not required.
 
-`@rtype: type` 
+`:rtype: type`
 
-If the function uses `yield` (is a generator), the `@yields` tag should document the object returned by `next()`, instead of the generator object itself.
+If the function uses `yield` (is a generator), the `:yields` tag should document the object returned by `next()`, instead of the generator object itself.
 
 #### 8.3.3 Raises Tag
 
 <a id="doc-function-raises"></a>
-[*@raises:*](#doc-function-raises)
+[*:raises:*](#doc-function-raises)
 
-`@raises ExceptionType: description` lists exceptions that are relevant to the interface followed by a description.
+`:raises ExceptionType: description` lists exceptions that are relevant to the interface followed by a description.
 
 ```python
 def fetch_smalltable_rows(
@@ -460,44 +463,11 @@ def fetch_smalltable_rows(
     Retrieves rows pertaining to the given keys from the Table instance
     represented by table_handle.  String keys will be UTF-8 encoded.
 
-    @param table_handle: An open smalltable.Table instance.
-    @param keys: A sequence of strings representing the key of each table row to fetch.  String keys will be UTF-8 encoded.
-    @param require_all_keys: If True only rows with values set for all keys will be returned.
-    @returns: A dict mapping keys to the corresponding table row data fetched. Each row is represented as a tuple of strings. 
-    For example:
-
-      {b'Serak': ('Rigel VII', 'Preparer'),
-       b'Zim': ('Irk', 'Invader'),
-       b'Lrrr': ('Omicron Persei 8', 'Emperor')}
-
-      Returned keys are always bytes.  If a key from the keys argument is
-      missing from the dictionary, then that row was not found in the
-      table (and require_all_keys must have been False).
-    @raises IOError: An error occurred accessing the smalltable.
-    """
-    pass
-```
-
-#### 8.3.4 Colon-based Sphinx Notation
-
-Similarly, this variation using colon-based Sphinx notation is also allowed:
-
-```python
-def fetch_smalltable_rows(
-    table_handle: smalltable.Table,
-    keys: Sequence[Union[bytes, str]],
-    require_all_keys: bool = False,
-) -> Mapping[bytes, tuple[str, ...]]:
-    """Fetches rows from a Smalltable.
-
-    Retrieves rows pertaining to the given keys from the Table instance
-    represented by table_handle.  String keys will be UTF-8 encoded.
-
     :param table_handle: An open smalltable.Table instance.
     :param keys: A sequence of strings representing the key of each table row to fetch.  String keys will be UTF-8 encoded.
     :param require_all_keys: If True only rows with values set for all keys will be returned.
-    :returns: A dict mapping keys to the corresponding table row data fetched. Each row is represented as a tuple of strings. For
-      example:
+    :returns: A dict mapping keys to the corresponding table row data fetched. Each row is represented as a tuple of strings.
+    For example:
 
       {b'Serak': ('Rigel VII', 'Preparer'),
        b'Zim': ('Irk', 'Invader'),
@@ -510,46 +480,41 @@ def fetch_smalltable_rows(
     """
 ```
 
-#### 8.3.5 Overridden Methods
+#### 8.3.4 At-sign Sphinx Notation (Secondary, On Request)
 
-A method that overrides a method from a base class does not need a
-docstring if it is explicitly decorated with
-[`@override`](https://typing-extensions.readthedocs.io/en/latest/#override) (from `typing_extensions` or `typing` modules), unless the overriding method's behavior materially refines the base method's contract, or details need to be provided (e.g., documenting additional side effects), in which case a docstring with at least those differences is required on the overriding method.
+If explicitly requested by the project/team, this `@`-prefixed Sphinx variation is also allowed as a secondary option:
 
 ```python
-from typing_extensions import override
+def fetch_smalltable_rows(
+    table_handle: smalltable.Table,
+    keys: Sequence[Union[bytes, str]],
+    require_all_keys: bool = False,
+) -> Mapping[bytes, tuple[str, ...]]:
+    """Fetches rows from a Smalltable.
 
-class Parent:
-  def do_something(self):
-    """Parent method, includes docstring."""
+    Retrieves rows pertaining to the given keys from the Table instance
+    represented by table_handle.  String keys will be UTF-8 encoded.
 
-# Child class, method annotated with override.
-class Child(Parent):
-  @override
-  def do_something(self):
-    pass
-```
+    @param table_handle: An open smalltable.Table instance.
+    @param keys: A sequence of strings representing the key of each table row to fetch.  String keys will be UTF-8 encoded.
+    @param require_all_keys: If True only rows with values set for all keys will be returned.
+    @returns: A dict mapping keys to the corresponding table row data fetched. Each row is represented as a tuple of strings. For
+      example:
 
-```python
-# Child class, but without @override decorator, a docstring is required.
-class Child(Parent):
-  def do_something(self):
-    pass
+      {b'Serak': ('Rigel VII', 'Preparer'),
+       b'Zim': ('Irk', 'Invader'),
+       b'Lrrr': ('Omicron Persei 8', 'Emperor')}
 
-# Docstring is trivial, @override is sufficient to indicate that docs can be
-# found in the base class.
-class Child(Parent):
-  @override
-  def do_something(self):
-    """See base class."""
+      Returned keys are always bytes.  If a key from the keys argument is
+      missing from the dictionary, then that row was not found in the
+      table (and require_all_keys must have been False).
+    @raises IOError: An error occurred accessing the smalltable.
+    """
 ```
 
 ### 8.4 Classes
 
-Classes should have a docstring below the class definition describing
-the class. Public attributes, excluding [properties](python_language_rules.md#s13-properties),
-should be documented here using `@ivar` (instance variable) or `@type` tags and follow the same formatting as a
-[function's parameters](#doc-function-args).
+Classes should have a docstring below the class definition describing the class. Public attributes, excluding [properties](python_language_rules.md#s13-properties), should be documented here using `:ivar` (instance variable) or `:type` tags and follow the same formatting as a [function's parameters](#doc-function-args).
 
 ```python
 class SampleClass:
@@ -558,14 +523,14 @@ class SampleClass:
     Longer class information...
     Longer class information...
 
-    @ivar likes_spam: A boolean indicating if we like SPAM or not.
-    @ivar eggs: An integer count of the eggs we have laid.
+    :ivar likes_spam: A boolean indicating if we like SPAM or not.
+    :ivar eggs: An integer count of the eggs we have laid.
     """
 
     def __init__(self, likes_spam: bool = False):
         """Initializes the instance based on spam preference.
 
-        @param likes_spam: Defines if instance exhibits this preference.
+        :param likes_spam: Defines if instance exhibits this preference.
         """
         self.likes_spam = likes_spam
         self.eggs = 0
@@ -575,15 +540,13 @@ class SampleClass:
         """The number of butter sticks we have."""
 ```
 
-All class docstrings should start with a one-line summary that describes
-what the class instance represents. This implies that subclasses of
-`Exception` should also describe
-what the exception represents, and not the context in which it might
-occur. The class docstring should not repeat unnecessary information,
-such as that the class is a class.
+All class docstrings should start with a one-line summary that describes what the class instance represents. 
+This implies that subclasses of `Exception` should also describe what the exception represents, and not the context in which it might occur. 
+The class docstring should not repeat unnecessary information, such as that the class is a class.
+
+Yes:
 
 ```python
-# Yes:
 class CheeseShopAddress:
   """The address of a cheese shop.
 
@@ -594,8 +557,9 @@ class OutOfCheeseError(Exception):
   """No more cheese is available."""
 ```
 
+No:
+
 ```python
-# No:
 class CheeseShopAddress:
   """Class that describes the address of a cheese shop.
 
@@ -608,12 +572,10 @@ class OutOfCheeseError(Exception):
 
 ### 8.5 Block and Inline Comments
 
-The final place to have comments is in tricky parts of the code. If
-you're going to have to explain it at the next [code
-review](http://en.wikipedia.org/wiki/Code_review), you should comment it
-now. Complicated operations get a few lines of comments before the
-operations commence. Non-obvious ones get comments at the end of the
-line.
+The final place to have comments is in tricky parts of the code. 
+If you're going to have to explain it at the next code review, you should comment it now. 
+Complicated operations get a few lines of comments before the operations commence.
+Try to avoid comments at the end of the line, prefer comments one line above. 
 
 ```python
 # We use a weighted dictionary search to find out where i is in
@@ -624,13 +586,8 @@ line.
 if i & (i-1) == 0:  # True if i is 0 or a power of 2.
 ```
 
-To improve legibility, these comments should start at least 2 spaces
-away from the code with the comment character `#`, followed by at least one space before the text of
-the comment itself.
-
-On the other hand, never describe the code. Assume the person reading
-the code knows Python (though not what you're trying to do) better than
-you do.
+Never describe the code in comment. 
+Assume the person reading the code knows Python (though not what you're trying to do) better than you do.
 
 ```python
 # BAD COMMENT: Now go through the b array and make sure whenever i occurs
@@ -648,126 +605,124 @@ more readable than sentence fragments. Shorter comments, such as
 comments at the end of a line of code, can sometimes be less formal, but
 you should be consistent with your style.
 
-Although it can be frustrating to have a code reviewer point out that
-you are using a comma when you should be using a semicolon, it is very
-important that source code maintain a high level of clarity and
-readability. Proper punctuation, spelling, and grammar help with that
-goal.
+It is very important that source code maintain a high level of clarity and readability. 
+Proper punctuation, spelling, and grammar help with that goal.
 
 ## 10. Strings
 
-Use an
-[f-string](https://docs.python.org/3/reference/lexical_analysis.html#f-strings),
-the `%` operator, or the
-`format` method for formatting
-strings, even when the parameters are all strings. Use your best
-judgment to decide between string formatting options. A single join with
-`+` is okay but do not format
-with `+`.
+Prefer the f-string. Do not use the `%` operator as outdated. 
+Use the `format()` method only for string parameters passed by name.
+For example:
 
 ```python
-Yes: x = f'name: {name}; score: {n}'
-     x = '%s, %s!' % (imperative, expletive)
+SCORE_TEMPLATE = "The score of {team} if {score}"
+
+score_template = SCORE_TEMPLATE.format(team="Team A", score=42)
+```
+
+A single string join with `+` is okay but never format with `+`
+
+Yes:
+
+```python
+x = f'name: {name}; score: {n}'
      x = '{}, {}'.format(first, second)
-     x = 'name: %s; score: %d' % (name, n)
-     x = 'name: %(name)s; score: %(score)d' % {'name':name, 'score':n}
      x = 'name: {}; score: {}'.format(name, n)
      x = a + b
 ```
 
+No: 
+
 ```python
-No: x = first + ', ' + second
+x = first + ', ' + second
     x = 'name: ' + name + '; score: ' + str(n)
+    x = '%s, %s!' % (imperative, expletive)
+    x = 'name: %s; score: %d' % (name, n)
+    x = 'name: %(name)s; score: %(score)d' % {'name':name, 'score':n}
 ```
 
-Avoid using the `+` and
-`+=` operators to accumulate a
-string within a loop. In some conditions, accumulating a string with
-addition can lead to quadratic rather than linear running time. Although
-common accumulations of this sort may be optimized on CPython, that is
-an implementation detail. The conditions under which an optimization
-applies are not easy to predict and may change. Instead, add each
-substring to a list and `''.join` the list after the loop terminates, or write each
-substring to an `io.StringIO`
-buffer. These techniques consistently have amortized-linear run-time
-complexity.
+Avoid using the `+` and `+=` operators to accumulate a string within a loop. 
+In some conditions, accumulating a string with addition can lead to quadratic rather than linear running time. 
+Although common accumulations of this sort may be optimized on CPython, that is an implementation detail. 
+The conditions under which an optimization applies are not easy to predict and may change. 
+Instead, add each substring to a list and `''.join` the list after the loop terminates, or write each substring to an `io.StringIO` buffer. 
+These techniques consistently have amortized-linear run-time complexity.
+
+Yes:
 
 ```python
-Yes: items = ['<table>']
+items = ['<table>']
      for last_name, first_name in employee_list:
          items.append('<tr><td>%s, %s</td></tr>' % (last_name, first_name))
      items.append('</table>')
      employee_table = ''.join(items)
 ```
 
+No:
+
 ```python
-No: employee_table = '<table>'
+employee_table = '<table>'
     for last_name, first_name in employee_list:
         employee_table += '<tr><td>%s, %s</td></tr>' % (last_name, first_name)
     employee_table += '</table>'
 ```
 
 Be consistent with your choice of string quote character within a file.
-Pick `'` or
-`"` and stick with it. It is
-okay to use the other quote character on a string to avoid the need to
-backslash-escape quote characters within the string.
+Pick `'` or `"` and stick with it. 
+It is okay to use the other quote character on a string to avoid the need to backslash-escape quote characters within the string.
+
+Yes:
 
 ```python
-Yes:
   Python('Why are you hiding your eyes?')
   Gollum("I'm scared of lint errors.")
   Narrator('"Good!" thought a happy Python reviewer.')
 ```
 
-```python
 No:
+
+```python
   Python("Why are you hiding your eyes?")
   Gollum('The lint. It burns. It burns us.')
   Gollum("Always the great lint. Watching. Watching.")
 ```
 
-Prefer `"""` for multi-line
-strings rather than `'''`.
-Projects may choose to use `'''`
-for all non-docstring multi-line strings if and only if they also use
-`'` for regular strings.
-Docstrings must use `"""`
-regardless.
+Use `"""` for multi-line strings rather than `'''`.
 
-Multi-line strings do not flow with the indentation of the rest of the
-program. If you need to avoid embedding extra space in the string, use
-either concatenated single-line strings or a multi-line string with
-[`textwrap.dedent()`](https://docs.python.org/3/library/textwrap.html#textwrap.dedent)
-to remove the initial space on each line:
+Multi-line strings do not flow with the indentation of the rest of the program. 
+If you need to avoid embedding extra space in the string, use either concatenated single-line strings or a multi-line string with [`textwrap.dedent()`](https://docs.python.org/3/library/textwrap.html#textwrap.dedent) to remove the initial space on each line:
+
+No:
 
 ```python
-  No:
   long_string = """This is pretty ugly.
 Don't do this.
 """
 ```
 
+Yes:
+
 ```python
-  Yes:
+CONST_TOP_LEVEL = """This is fine if your multiline is
+global top-level const."""
+```
+
+```python
   long_string = """This is fine if your use case can accept
       extraneous leading spaces."""
 ```
 
 ```python
-  Yes:
   long_string = ("And this is fine if you cannot accept\n" +
                  "extraneous leading spaces.")
 ```
 
 ```python
-  Yes:
   long_string = ("And this too is fine if you cannot accept\n"
                  "extraneous leading spaces.")
 ```
 
 ```python
-  Yes:
   import textwrap
 
   long_string = textwrap.dedent("""\
@@ -775,30 +730,27 @@ Don't do this.
       will collapse common leading spaces in each line.""")
 ```
 
-Note that using a backslash here does not violate the prohibition
-against [explicit line continuation](#line-length); in this case, the
-backslash is [escaping a
-newline](https://docs.python.org/3/reference/lexical_analysis.html#string-and-bytes-literals)
-in a string literal.
+Note that using a backslash here does not violate the prohibition against [explicit line continuation](#line-length); in this case, the backslash is escaping a newline in a string literal.
 
 ### 10.1 Logging
 
-For logging functions that expect a pattern-string (with %-placeholders)
-as their first argument: Always call them with a string literal (not an
-f-string!) as their first argument with pattern-parameters as subsequent
-arguments. Some logging implementations collect the unexpanded
-pattern-string as a queryable field. It also prevents spending time
-rendering a message that no logger is configured to output.
+`%-strings` and `f-strings` are both allowed in logging.
+
+`%-strings` have two practical advantages:
+
+1. Some logging implementations collect the unexpanded pattern-string as a queryable field.
+2. They can avoid spending time rendering a message that no logger is configured to output.
+
+`f-strings` evaluate eagerly, so message construction happens before the logger decides whether to emit the message.
+
+Depending on the project, these advantages can be important or not important. For that reason, all three approaches are allowed in logs: `%-strings`, `f-strings`, and `t-strings`.
+
+In Python 3.15+, prefer `t-strings` for logging because they offer delayed build.
+
+The only requirement is consistency: choose one approach for the project and apply it consistently.
 
 ```python
-  Yes:
-  import tensorflow as tf
-  logger = tf.get_logger()
-  logger.info('TensorFlow Version is: %s', tf.__version__)
-```
-
-```python
-  Yes:
+  Yes (consistent %-strings):
   import os
   from absl import logging
 
@@ -810,12 +762,38 @@ rendering a message that no logger is configured to output.
 ```
 
 ```python
-  No:
+  Yes (consistent f-strings):
   import os
   from absl import logging
 
-  logging.info('Current $PAGER is:')
-  logging.info(os.getenv('PAGER', default=''))
+  pager = os.getenv('PAGER', default='')
+  logging.info(f'Current $PAGER is: {pager}')
+
+  homedir = os.getenv('HOME')
+  if homedir is None or not os.access(homedir, os.W_OK):
+    logging.error(f'Cannot write to home directory, $HOME={homedir!r}')
+```
+
+```python
+  Yes (Python 3.15+, consistent t-strings):
+  import os
+  from absl import logging
+
+  pager = os.getenv('PAGER', default='')
+  logging.info(t'Current $PAGER is: {pager}')
+
+  homedir = os.getenv('HOME')
+  if homedir is None or not os.access(homedir, os.W_OK):
+    logging.error(t'Cannot write to home directory, $HOME={homedir!r}')
+```
+
+```python
+  No (mixed styles in one project):
+  import os
+  from absl import logging
+
+  pager = os.getenv('PAGER', default='')
+  logging.info('Current $PAGER is: %s', pager)
 
   homedir = os.getenv('HOME')
   if homedir is None or not os.access(homedir, os.W_OK):
@@ -824,9 +802,7 @@ rendering a message that no logger is configured to output.
 
 ### 10.2 Error Messages
 
-Error messages (such as: message strings on exceptions like
-`ValueError`, or messages shown
-to the user) should follow three guidelines:
+Error messages (such as messages on exceptions like `ValueError`, or messages shown to the user) should follow three guidelines:
 
 1.  The message needs to precisely match the actual error condition.
 
@@ -834,8 +810,9 @@ to the user) should follow three guidelines:
 
 3.  They should allow simple automated processing (e.g. grepping).
 
+Yes:
+
 ```python
-  Yes:
   if not 0 <= p <= 1:
     raise ValueError(f'Not a probability: {p=}')
 
@@ -846,8 +823,9 @@ to the user) should follow three guidelines:
                     error, workdir)
 ```
 
+No:
+
 ```python
-  No:
   if p < 0 or p > 1:  # PROBLEM: also false for float('nan')!
     raise ValueError(f'Not a probability: {p=}')
 
@@ -872,51 +850,23 @@ to the user) should follow three guidelines:
 
 ## 11. Files, Sockets, and similar Stateful Resources
 
-Explicitly close files and sockets when done with them. This rule
-naturally extends to closeable resources that internally use sockets,
-such as database connections, and also other resources that need to be
-closed down in a similar fashion. To name only a few examples, this also
-includes [mmap](https://docs.python.org/3/library/mmap.html) mappings,
-[h5py File objects](https://docs.h5py.org/en/stable/high/file.html), and
-[matplotlib.pyplot figure
-windows](https://matplotlib.org/2.1.0/api/_as_gen/matplotlib.pyplot.close.html).
+Explicitly close files and sockets when done with them. 
+This rule naturally extends to closeable resources that internally use sockets, such as database connections, and also other resources that need to be closed down in a similar fashion. 
 
-Leaving files, sockets or other such stateful objects open unnecessarily
-has many downsides:
+Leaving files, sockets or other such stateful objects open longer than required has many downsides:
 
-- They may consume limited system resources, such as file descriptors.
-  Code that deals with many such objects may exhaust those resources
-  unnecessarily if they're not returned to the system promptly after
-  use.
-- Holding files open may prevent other actions such as moving or
-  deleting them, or unmounting a filesystem.
-- Files and sockets that are shared throughout a program may
-  inadvertently be read from or written to after logically being closed.
-  If they are actually closed, attempts to read or write from them will
-  raise exceptions, making the problem known sooner.
+- They may consume limited system resources, such as file descriptors. Code that deals with many such objects may exhaust those resources unnecessarily if they're not returned to the system promptly after use.
+- Holding files open may prevent other actions such as moving or deleting them, or unmounting a filesystem.
+- Files and sockets that are shared throughout a program may inadvertently be read from or written to after logically being closed. If they are actually closed, attempts to read or write from them will raise exceptions, making the problem known sooner.
 
-Furthermore, while files and sockets (and some similarly behaving
-resources) are automatically closed when the object is destructed,
-coupling the lifetime of the object to the state of the resource is poor
-practice:
+Furthermore, while files and sockets (and some similarly behaving resources) are automatically closed when the object is destructed, coupling the lifetime of the object to the state of the resource is poor practice:
 
-- There are no guarantees as to when the runtime will actually invoke
-  the `__del__` method.
-  Different Python implementations use different memory management
-  techniques, such as delayed garbage collection, which may increase the
-  object's lifetime arbitrarily and indefinitely.
-- Unexpected references to the file, e.g. in globals or exception
-  tracebacks, may keep it around longer than intended.
+- There are no guarantees as to when the runtime will actually invoke the `__del__` method. Different Python implementations use different memory management techniques, such as delayed garbage collection, which may increase the object's lifetime arbitrarily and indefinitely.
+- Unexpected references to the file, e.g. in globals or exception tracebacks, may keep it around longer than intended.
 
-Relying on finalizers to do automatic cleanup that has observable side
-effects has been rediscovered over and over again to lead to major
-problems, across many decades and multiple languages (see e.g. [this
-article](https://wiki.sei.cmu.edu/confluence/display/java/MET12-J.+Do+not+use+finalizers)
-for Java).
+Relying on finalizers to do automatic cleanup that has observable side effects has been rediscovered over and over again to lead to major problems, across many decades and multiple languages (see e.g. [this article](https://wiki.sei.cmu.edu/confluence/display/java/MET12-J.+Do+not+use+finalizers) for Java).
 
-The preferred way to manage files and similar resources is using the
-[`with`
-statement](http://docs.python.org/reference/compound_stmts.html#the-with-statement):
+The preferred way to manage files and similar resources is using the [`with` statement](http://docs.python.org/reference/compound_stmts.html#the-with-statement):
 
 ```python
 with open("hello.txt") as hello_file:
@@ -924,8 +874,7 @@ with open("hello.txt") as hello_file:
         print(line)
 ```
 
-For file-like objects that do not support the `with` statement, use
-`contextlib.closing()`:
+For file-like objects that do not support the `with` statement, use `contextlib.closing()`:
 
 ```python
 import contextlib
@@ -935,66 +884,54 @@ with contextlib.closing(urllib.urlopen("http://www.python.org/")) as front_page:
         print(line)
 ```
 
-In rare cases where context-based resource management is infeasible,
-code documentation must explain clearly how resource lifetime is
-managed.
+In rare cases where context-based resource management is infeasible, code documentation must explain clearly how resource lifetime is managed.
 
 ## 12. TODO Comments
 
-Use `TODO` comments for code
-that is temporary, a short-term solution, or good-enough but not
-perfect.
+Use `TODO` comments only for intentional technical debt that has ownership and tracking.
 
-A `TODO` comment begins with the
-word `TODO` in all caps, a
-following colon, and a link to a resource that contains the context,
-ideally a bug reference. A bug reference is preferable because bugs are
-tracked and have follow-up comments. Follow this piece of context with
-an explanatory string introduced with a hyphen `-`. The purpose is to have a consistent
-`TODO` format that can be
-searched to find out how to get more details.
+Each `TODO` **must** use this exact metadata prefix:
 
 ```python
-# TODO: crbug.com/192795 - Investigate cpufreq optimizations.
+# TODO: [YYYY-MM-DD][developer-name] debt-slug [issue: #123, https://github.com/org/repo/issues/123] - short action/context
 ```
 
-Old style, formerly recommended, but discouraged for use in new code:
+Required attributes:
+
+1. `TODO:` in uppercase.
+2. `[YYYY-MM-DD]` creation date.
+3. `[developer-name]` owner (GitHub handle or team-approved identifier).
+4. `debt-slug` in `kebab-case` (stable identifier for this debt item).
+5. `[issue: ...]` including the related issue number **and** full issue URL.
+6. `- ...` concise explanation of what should be fixed.
+
+Example:
 
 ```python
-# TODO(crbug.com/192795): Investigate cpufreq optimizations.
-# TODO(yourusername): Use a "\*" here for concatenation operator.
+# TODO: [2026-08-05][alice-ng] remove-legacy-parser [issue: #482, https://github.com/acme/service/issues/482] - Delete fallback parser after migration cutover.
 ```
 
-Avoid adding TODOs that refer to an individual or team as the context:
-
-```python
-# TODO: @yourusername - File an issue and use a '*' for repetition.
-```
-
-If your `TODO` is of the form
-"At a future date do something" make sure that you either include a very
-specific date ("Fix by November 2009") or a very specific event ("Remove
-this code when all clients can handle XML responses.") that future code
-maintainers will comprehend. Issues are ideal for tracking this.
+Do not add TODOs without all fields. Missing owner, date, debt slug, or issue reference makes the debt untraceable and should be treated as invalid.
 
 ## 13. Imports formatting
 
-Imports should be on separate lines; there are [exceptions for
-`typing` and
-`collections.abc`
-imports](#typing-imports).
+Imports should be on separate lines; there are [exceptions for `typing` and `collections.abc` imports](#typing-imports).
 
 E.g.:
 
+Yes:
+
 ```python
-Yes: from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence
      import os
      import sys
      from typing import Any, NewType
 ```
 
+No:
+
 ```python
-No:  import os, sys
+import os, sys
 ```
 
 Imports are always put at the top of the file, just after any module
@@ -1035,16 +972,8 @@ should be grouped from most generic to least generic:
     from myproject.backend.hgwells import time_machine
     ```
 
-    You may find older Google Python Style code doing this, but it is no
-    longer required. **New code is encouraged not to bother with this.**
-    Simply treat application-specific sub-package imports the same as
-    other sub-package imports.
-
-Within each grouping, imports should be sorted lexicographically,
-ignoring case, according to each module's full package path (the
-`path` in
-`from path import ...`). Code
-may optionally place a blank line between import sections.
+Within each grouping, imports should be sorted lexicographically, ignoring case, according to each module's full package path (the `path` in `from path import ...`). 
+Place a blank line between import sections.
 
 ```python
 import collections
@@ -1064,32 +993,26 @@ from myproject.backend.state_machine import main_loop
 from otherproject.ai import body
 from otherproject.ai import mind
 from otherproject.ai import soul
-
-# Older style code may have these imports down here instead:
-#from myproject.backend.hgwells import time_machine
-#from myproject.backend.state_machine import main_loop
 ```
 
 ## 14. Statements
 
 Generally only one statement per line.
 
-However, you may put the result of a test on the same line as the test
-only if the entire statement fits on one line. In particular, you can
-never do so with `try`/`except`
-since the `try` and
-`except` can't both fit on the
-same line, and you can only do so with an `if` if there is no `else`.
+The only exception is an `if` if there is no `else`.
 
-```python
 Yes:
 
-  if foo: bar(foo)
+```python
+if foo: 
+    bar(foo)
+
+if foo: bar(foo)
 ```
 
-```python
 No:
 
+```python
   if foo: bar(foo)
   else:   baz(foo)
 
@@ -1103,180 +1026,91 @@ No:
 
 ## 15. Getters and Setters
 
-Getter and setter functions (also called accessors and mutators) should
-be used when they provide a meaningful role or behavior for getting or
-setting a variable's value.
+Getter and setter functions (also called accessors and mutators) should be used when they provide a meaningful role or behavior for getting or setting a variable's value.
 
-In particular, they should be used when getting or setting the variable
-is complex or the cost is significant, either currently or in a
-reasonable future.
+In particular, they should be used when getting or setting the variable is complex or the cost is significant, either currently or in a reasonable future.
 
-If, for example, a pair of getters/setters simply read and write an
-internal attribute, the internal attribute should be made public
-instead. By comparison, if setting a variable means some state is
-invalidated or rebuilt, it should be a setter function. The function
-invocation hints that a potentially non-trivial operation is occurring.
-Alternatively, [properties](python_language_rules.md#s13-properties) may be an option when simple
-logic is needed, or refactoring to no longer need getters and setters.
+If, for example, a pair of getters/setters simply read and write an internal attribute, the internal attribute should be made public instead. 
+By comparison, if setting a variable means some state is invalidated or rebuilt, it should be a setter function. 
+The function invocation hints that a potentially non-trivial operation is occurring.
+Alternatively, [properties](python_language_rules.md#s13-properties) may be an option when simple logic is needed, or refactoring to no longer need getters and setters.
 
 Getters and setters should follow the [Naming](#s3.16-naming)
 guidelines, such as `get_foo()`
 and `set_foo()`.
 
-If the past behavior allowed access through a property, do not bind the
-new getter/setter functions to the property. Any code still attempting
-to access the variable by the old method should break visibly so they
-are made aware of the change in complexity.
+If the past behavior allowed access through a property, do not bind the new getter/setter functions to the property. 
+Any code still attempting to access the variable by the old method should break visibly so they are made aware of the change in complexity.
 
 <a id="s3.16-naming"></a>
 ## 16. Naming
 
-`module_name`,
-`package_name`,
-`ClassName`,
-`method_name`,
-`ExceptionName`,
-`function_name`,
-`GLOBAL_CONSTANT_NAME`,
-`global_var_name`,
-`instance_var_name`,
-`function_parameter_name`,
-`local_var_name`,
-`query_proper_noun_for_thing`,
-`send_acronym_via_https`.
+| Type                       | Public               | Internal                          |
+|----------------------------|----------------------|-----------------------------------|
+| Packages                   | `lower_with_under`   |                                   |
+| Modules                    | `lower_with_under`   | `_lower_with_under`               |
+| Classes                    | `CapWords`           | `_CapWords`                       |
+| Exceptions                 | `CapWords`           |                                   |
+| Functions                  | `lower_with_under()` | `_lower_with_under()`             |
+| Global/Class Constants     | `CAPS_WITH_UNDER`    | `_CAPS_WITH_UNDER`                |
+| Global/Class Variables     | `lower_with_under`   | `_lower_with_under`               |
+| Instance Variables         | `lower_with_under`   | `_lower_with_under` (protected)   |
+| Method Names               | `lower_with_under()` | `_lower_with_under()` (protected) |
+| Function/Method Parameters | `lower_with_under`   |                                   |
+| Local Variables            | `lower_with_under`   |                                   |
 
-Names should be descriptive. This includes functions, classes,
-variables, attributes, files and any other type of named entities.
+Names should be descriptive. 
+This includes functions, classes, variables, attributes, files and any other type of named entities.
 
-Avoid abbreviation. In particular, do not use abbreviations that are
-ambiguous or unfamiliar to readers outside your project, and do not
-abbreviate by deleting letters within a word.
+Avoid abbreviation. 
+In particular, do not use abbreviations that are ambiguous or unfamiliar to readers outside your project, do not abbreviate by deleting letters within a word.
 
-Always use a `.py` filename
-extension. Never use dashes.
+Always use a `.py` filename extension. Never use dashes (`-`) in filenames, use underscores (`_`) instead.
 
 ### 16.1 Names to Avoid
 
 - single character names, except for specifically allowed cases:
-
-  - counters or iterators (e.g. `i`, `j`,
-    `k`, `v`, et al.)
-  - `e` as an exception
-    identifier in `try/except`
-    statements.
-  - `f` as a file handle in
-    `with` statements
-  - private [type variables](#typing-type-var) with no constraints (e.g.
-    `_T = TypeVar("_T")`,
-    `_P = ParamSpec("_P")`)
-  - names that match established notation in a reference paper or
-    algorithm (see [Mathematical Notation](#math-notation))
-
-  Please be mindful not to abuse single-character naming. Generally
-  speaking, descriptiveness should be proportional to the name's scope
-  of visibility. For example, `i` might be a fine name for 5-line code block but
-  within multiple nested scopes, it is likely too vague.
-
-- dashes (`-`) in any
-  package/module name
-
+  - counters or iterators (e.g. `i`, `j`, `k`, `v`, et al.)
+  - `e` as an exception identifier in `try/except` statements.
+  - `f` as a file handle in `with` statements
+  - private [type variables](#typing-type-var) with no constraints (e.g. `_T = TypeVar("_T")`, `_P = ParamSpec("_P")`)
+  - names that match established notation in a reference paper or algorithm (see [Mathematical Notation](#math-notation))
+- dashes (`-`) in any package/module name
 - `__double_leading_and_trailing_underscore__` names (reserved by Python)
+- names that needlessly include the type of the variable (for example: `id_to_name_dict`)
 
-- offensive terms
-
-- names that needlessly include the type of the variable (for example:
-  `id_to_name_dict`)
+Please be mindful not to abuse too short naming. 
+Generally speaking, descriptiveness should be proportional to the name's scope of visibility. 
+For example, `i` might be a fine name for a 5-line code block, but within multiple nested scopes, it is likely too vague.
 
 ### 16.2 Naming Conventions
 
-- "Internal" means internal to a module, or protected or private within
-  a class.
-
-- Prepending a single underscore (`_`) has some support for protecting module variables
-  and functions (linters will flag protected member access). Note that
-  it is okay for unit tests to access protected constants from the
-  modules under test.
-
-- Prepending a double underscore (`__` aka "dunder") to an instance variable or method
-  effectively makes the variable or method private to its class (using
-  name mangling); we discourage its use as it impacts readability and
-  testability, and isn't *really* private. Prefer a single underscore.
-
-- Place related classes and top-level functions together in a module.
-  Unlike Java, there is no need to limit yourself to one class per
-  module.
-
-- Use CapWords for class names, but lower_with_under.py for module
-  names. Although there are some old modules named CapWords.py, this is
-  now discouraged because it's confusing when the module happens to be
-  named after a class. ("wait -- did I write
-  `import StringIO` or
-  `from StringIO import StringIO`?")
-
-- New *unit test* files follow PEP 8 compliant lower_with_under method
-  names, for example,
-  `test_<method_under_test>_<state>`. For consistency(\*) with legacy modules that
-  follow CapWords function names, underscores may appear in method names
-  starting with `test` to
-  separate logical components of the name. One possible pattern is
-  `test<MethodUnderTest>_<state>`.
+- "Internal" means internal to a module, or protected or private within a class.
+- Prepending a single underscore (`_`) has some support for protecting module variables and functions (linters will flag protected member access)
+- Note that it is okay for unit tests to access protected constants from the modules under test.
+- We discourage its use a double underscore (`__`), as it impacts readability. testability, and isn't *really* private. Prefer a single underscore.
+- Place related classes and top-level functions together in a module. Unlike Java, there is no need to limit yourself to one class per module.
+- Use `CapWords` for class names, but `lower_with_under` for module names.
+- Unit test files follow PEP 8 compliant `lower_with_under` method names, for example, `test_<method_under_test>_<state>`. 
 
 ### 16.3 File Naming
 
-Python filenames must have a `.py` extension and must not contain dashes
-(`-`). This allows them to be
-imported and unittested. If you want an executable to be accessible
-without the extension, use a symbolic link or a simple bash wrapper
-containing `exec "$0.py" "$@"`.
-
-### 16.4 Guidelines derived from [Guido](https://en.wikipedia.org/wiki/Guido_van_Rossum)'s Recommendations
-
-  ---------------------------- ---------------------- -----------------------------------
-  Type                         Public                 Internal
-  Packages                     `lower_with_under`     
-  Modules                      `lower_with_under`     `_lower_with_under`
-  Classes                      `CapWords`             `_CapWords`
-  Exceptions                   `CapWords`             
-  Functions                    `lower_with_under()`   `_lower_with_under()`
-  Global/Class Constants       `CAPS_WITH_UNDER`      `_CAPS_WITH_UNDER`
-  Global/Class Variables       `lower_with_under`     `_lower_with_under`
-  Instance Variables           `lower_with_under`     `_lower_with_under` (protected)
-  Method Names                 `lower_with_under()`   `_lower_with_under()` (protected)
-  Function/Method Parameters   `lower_with_under`     
-  Local Variables              `lower_with_under`     
-  ---------------------------- ---------------------- -----------------------------------
+Python filenames must have a `.py` extension and must not contain dashes (`-`) 
+This allows them to be imported and unit-tested.
+If you want an executable to be accessible without the extension, use a symbolic link or a simple bash wrapper containing `exec "$0.py" "$@"`.
 
 <a id="math-notation"></a>
 ### 16.5 Mathematical Notation
 
-For mathematically-heavy code, short variable names that would otherwise
-violate the style guide are preferred when they match established
-notation in a reference paper or algorithm.
+For mathematically heavy code, short variable names that would otherwise violate the style guide are preferred when they match established notation in a reference paper or algorithm.
 
-When using names based on established notation:
-
-1.  Cite the source of all naming conventions, preferably with a
-    hyperlink to academic resource itself, in a comment or docstring. If
-    the source is not accessible, clearly document the naming
-    conventions.
-2.  Prefer PEP8-compliant `descriptive_names` for public APIs, which are much more likely to
-    be encountered out of context.
-3.  Use a narrowly-scoped
-    `pylint: disable=invalid-name` directive to silence warnings. For just a few
-    variables, use the directive as an endline comment for each one; for
-    more, apply the directive at the beginning of a block.
+When using names based on established notation, cite the source of all naming conventions, preferably with a hyperlink to academic resource itself, in a comment or docstring.
 
 ## 17. Main
 
-In Python, `pydoc` as well as
-unit tests require modules to be importable. If a file is meant to be
-used as an executable, its main functionality should be in a
-`main()` function, and your code
-should always check `if __name__ == '__main__'` before executing your main program, so that it is
-not executed when the module is imported.
+In Python, `pydoc` as well as unit tests require modules to be importable. If a file is meant to be used as an executable, its main functionality should be in a `main()` function, and your code should always check `if __name__ == '__main__'` before executing your main program, so that it is not executed when the module is imported.
 
-When using [absl](https://github.com/abseil/abseil-py), use
-`app.run`:
+When using [absl](https://github.com/abseil/abseil-py), use `app.run`:
 
 ```python
 from absl import app
@@ -1295,48 +1129,40 @@ Otherwise, use:
 ```python
 def main():
     ...
+    return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
 ```
 
+Do not use `SystemExit` exception to exit the program. Use `sys.exit()` instead.
+
 All code at the top level will be executed when the module is imported.
-Be careful not to call functions, create objects, or perform other
-operations that should not be executed when the file is being
-`pydoc`ed.
+
+Be careful not to call functions, create objects, or perform other operations that should not be executed when the file is being `pydoc`ed.
 
 ## 18. Function length
 
 Prefer small and focused functions.
 
-We recognize that long functions are sometimes appropriate, so no hard
-limit is placed on function length. If a function exceeds about 40
-lines, think about whether it can be broken up without harming the
-structure of the program.
+We recognize that long functions are sometimes appropriate, so no hard limit is placed on function length. If a function exceeds about 40 lines, think about whether it can be broken up without harming the structure of the program.
 
-Even if your long function works perfectly now, someone modifying it in
-a few months may add new behavior. This could result in bugs that are
-hard to find. Keeping your functions short and simple makes it easier
-for other people to read and modify your code.
+You could find long and complicated functions when working with some code. 
 
-You could find long and complicated functions when working with some
-code. Do not be intimidated by modifying existing code: if working with
-such a function proves to be difficult, you find that errors are hard to
-debug, or you want to use a piece of it in several different contexts,
-consider breaking up the function into smaller and more manageable
-pieces.
+Do not be intimidated by refactoring existing code, and consider breaking up the function into smaller and more manageable pieces.
 
 ## 19. Type Annotations
 
 ### 19.1 General Rules
 
-- Familiarize yourself with [type
-  hints](https://docs.python.org/3/library/typing.html).
+- Use type hints where possible
+- At least annotate your public APIs.
+- Use judgment to get to a good balance between safety and clarity on the one hand, and flexibility on the other.
+- Annotate code that is prone to type-related errors (previous bugs or complexity).
+- Annotate code that is hard to understand.
+- Annotate code as it becomes stable from a types' perspective. In many cases, you can annotate all the functions in mature code without losing too much flexibility.
 
-- Annotating `self` or
-  `cls` is generally not
-  necessary. [`Self`](https://docs.python.org/3/library/typing.html#typing.Self)
-  can be used if it is necessary for proper type information, e.g.
+- Annotating `self` or `cls` is generally not necessary. [`Self`](https://docs.python.org/3/library/typing.html#typing.Self) can be used if it is necessary for proper type information, e.g.
 
   ```python
   from typing import Self
@@ -1350,64 +1176,45 @@ pieces.
       ...
   ```
 
-- Similarly, don't feel compelled to annotate the return value of
-  `__init__` (where
-  `None` is the only valid
-  option).
-
-- If any other variable or a returned type should not be expressed, use
-  `Any`.
-
+- Similarly, don't feel compelled to annotate the return value of `__init__`
+- If any other variable or a returned type should not be expressed, use `Any`.
 - You are not required to annotate all the functions in a module.
+- Do not annotate returning ` -> None`
 
-  - At least annotate your public APIs.
-  - Use judgment to get to a good balance between safety and clarity on
-    the one hand, and flexibility on the other.
-  - Annotate code that is prone to type-related errors (previous bugs or
-    complexity).
-  - Annotate code that is hard to understand.
-  - Annotate code as it becomes stable from a types perspective. In many
-    cases, you can annotate all the functions in mature code without
-    losing too much flexibility.
 
 ### 19.2 Line Breaking
 
 Try to follow the existing [indentation](#indentation) rules.
 
-After annotating, many function signatures will become "one parameter
-per line". To ensure the return type is also given its own line, a comma
-can be placed after the last parameter.
+After annotating, many function signatures will become "one parameter per line". To ensure the return type is also given its own line, a comma can be placed after the last parameter.
 
 ```python
 def my_method(
     self,
     first_var: int,
     second_var: Foo,
-    third_var: Bar | None,
+    third_var: Optional[Bar],
 ) -> int:
   ...
 ```
 
-Always prefer breaking between variables, and not, for example, between
-variable names and type annotations. However, if everything fits on the
-same line, go for it.
+However, if everything fits on the same line, go for it.
 
 ```python
 def my_method(self, first_var: int) -> int:
-  ...
+    ...
 ```
 
-If the combination of the function name, the last parameter, and the
-return type is too long, indent by 4 in a new line. When using line
-breaks, prefer putting each parameter and the return type on their own
-lines and aligning the closing parenthesis with the
-`def`:
+If the combination of the function name, the last parameter, and the return type is too long, indent by 4 in a new line.
+
+When using line breaks, prefer putting each parameter and the return type on their own lines and aligning the closing parenthesis with the `def`:
+
+Yes:
 
 ```python
-Yes:
 def my_method(
     self,
-    other_arg: MyLongType | None,
+    other_arg: Optional[MyLongType],
 ) -> tuple[MyLongType1, MyLongType1]:
   ...
 ```
@@ -1415,8 +1222,9 @@ def my_method(
 Optionally, the return type may be put on the same line as the last
 parameter:
 
+Yes:
+
 ```python
-Okay:
 def my_method(
     self,
     first_var: int,
@@ -1424,21 +1232,22 @@ def my_method(
   ...
 ```
 
-`pylint` allows you to move the
-closing parenthesis to a new line and align with the opening one, but
-this is less readable.
+`pylint` allows you to move the closing parenthesis to a new line and align with the opening one, but this is less readable.
+
+No:
 
 ```python
-No:
 def my_method(self,
-              other_arg: MyLongType | None,
+              other_arg: Optional[MyLongType],
              ) -> dict[OtherLongType, MyLongType]:
   ...
 ```
 
-As in the examples above, prefer not to break types. However, sometimes
-they are too long to be on a single line (try to keep sub-types
-unbroken).
+As in the examples above, prefer not to break types. 
+
+However, in very rare cases they are too long to be on a single line. 
+
+Anyway, try to keep subtypes unbroken.
 
 ```python
 def my_method(
@@ -1451,12 +1260,11 @@ def my_method(
   ...
 ```
 
-If a single name and type is too long, consider using an
-[alias](#typing-aliases) for the type. The last resort is to break after
-the colon and indent by 4.
+If a single name and type is too long, consider using an [alias](#typing-aliases) for the type. The last resort is to break after the colon and indent by 4.
+
+Yes:
 
 ```python
-Yes:
 def my_function(
     long_variable_name:
         long_module_name.LongTypeName,
@@ -1464,8 +1272,9 @@ def my_function(
   ...
 ```
 
-```python
 No:
+
+```python
 def my_function(
     long_variable_name: long_module_name.
         LongTypeName,
