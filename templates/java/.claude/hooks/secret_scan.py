@@ -33,10 +33,25 @@ PATTERNS: dict[str, re.Pattern[str]] = {
     "Slack token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"),
     "Private key block": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----"),
     "Generic assigned secret": re.compile(
-        r"(?i)(password|passwd|secret|token|api[_-]?key)\s*[=:]\s*['\"][^'\"\s]{8,}['\"]"
+        r"(?i)(password|passwd|secret|token|api[_-]?key)\s*[=:]\s*['\"](?P<value>[^'\"\s]{8,})['\"]"
     ),
     "Postgres URL with password": re.compile(r"postg(?:res|resql)://[^:\s]+:[^@\s]+@"),
 }
+
+# Findings whose captured `value` is checked against the memory-address exemption
+# below. Only the keyword-driven pattern needs it: every other pattern is anchored
+# to a vendor prefix (AKIA, sk-ant-, ghp_, ...) that an address can never produce.
+ADDRESS_EXEMPT_TYPES = frozenset({"Generic assigned secret"})
+
+# A 32-/64-bit hex memory address, e.g. 0xDEADBEEF or 0x00007fff5fbff8c0, with
+# optional C integer suffix (0xFFFFF80000000000ULL). Underscore digit separators
+# are stripped before matching (0x0000_7fff_5fbf_f8c0).
+#
+# The 16-digit ceiling is the safety property, not a style choice: a 64-bit address
+# is at most 16 hex digits, while every hex-encoded credential worth catching is
+# longer - AES-128 is 32 digits, AES-256 and Ethereum private keys are 64. So this
+# exempts real addresses without opening a hole for `token = "0x<64 hex digits>"`.
+_MEM_ADDRESS_RE = re.compile(r"0[xX][0-9a-fA-F]{1,16}[uUlL]{0,3}")
 
 # Substrings that mark an obvious placeholder, so we do not cry wolf.
 ALLOWLIST = (
@@ -62,6 +77,15 @@ def _is_placeholder(line: str) -> bool:
     return any(token in low for token in ALLOWLIST)
 
 
+def _is_memory_address(value: str) -> bool:
+    """True when `value` is nothing but a 32-/64-bit hex memory address.
+
+    Checked against the *captured value*, never the whole line, so a line that
+    happens to mention an address alongside a real credential is still flagged.
+    """
+    return bool(_MEM_ADDRESS_RE.fullmatch(value.replace("_", "")))
+
+
 def scan_text(text: str) -> list[tuple[str, int, str]]:
     """Return (finding_name, line_number, line_excerpt) tuples."""
     hits: list[tuple[str, int, str]] = []
@@ -69,8 +93,14 @@ def scan_text(text: str) -> list[tuple[str, int, str]]:
         if _is_placeholder(line):
             continue
         for name, pattern in PATTERNS.items():
-            if pattern.search(line):
-                hits.append((name, lineno, line.strip()[:120]))
+            match = pattern.search(line)
+            if match is None:
+                continue
+            if name in ADDRESS_EXEMPT_TYPES:
+                value = match.groupdict().get("value")
+                if value and _is_memory_address(value):
+                    continue  # a pointer/offset named `token`, not a credential
+            hits.append((name, lineno, line.strip()[:120]))
     return hits
 
 

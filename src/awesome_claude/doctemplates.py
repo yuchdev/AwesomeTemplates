@@ -1,5 +1,5 @@
 """Scaffold a new document from a real template (Jinja2) - not just a verbatim
-docs/ copy (see docs_scaffold.py for that).
+docs/ copy (see presets.py for that).
 
 v1 covers one doc-type: ADR (`docs/adr/template.md` is the only doc-type with
 a real template file today; `docs/reviews/` and `docs/security/` describe

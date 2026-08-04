@@ -12,6 +12,6 @@ adopt this template - it exists to show the shape, not to be extended.
 
 ## Tasks
 
-| Task | Name                  | Category | Output                                                    |
-|------|-----------------------|----------|------------------------------------------------------------|
-| 01.0 | Hello World Endpoint  | feature  | Add a `GET /health` endpoint returning service status      |
+| Task | Name                 | Category | Output                                                |
+|------|----------------------|----------|-------------------------------------------------------|
+| 01.0 | Hello World Endpoint | feature  | Add a `GET /health` endpoint returning service status |

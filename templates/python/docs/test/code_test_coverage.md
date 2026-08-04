@@ -16,7 +16,7 @@ pip install -e .[dev]
 pytest
 
 # View detailed coverage report
-# Open: htmlcov/index.html
+# Open: .htmlcov/index.html
 ```
 
 ### What This Means
@@ -24,11 +24,11 @@ pytest
 - ✅ All test runs automatically measure and report code coverage
 - ✅ Tests **fail** if coverage drops below 85%
 - ✅ Failed tests block merging to main branches
-- ✅ Coverage reports are always available in `htmlcov/` directory
+- ✅ Coverage reports are always available in `.htmlcov/` directory
 
 ### If Coverage Check Fails
 
-1. **Identify uncovered code**: Open `htmlcov/index.html` in a browser
+1. **Identify uncovered code**: Open `.htmlcov/index.html` in a browser
     - Red lines = not covered by tests
     - Yellow lines = partially covered
     - Green lines = fully covered
@@ -82,7 +82,7 @@ Coverage settings are in `pyproject.toml` and `.coveragerc`
 
 ### ✅ Code Review
 
-- [ ] Reviewed uncovered code in `htmlcov/index.html`
+- [ ] Reviewed uncovered code in `.htmlcov/index.html`
   - [ ] Red lines (uncovered) are intentional or excluded
   - [ ] If uncovered, added `# pragma: no cover` with explanation
   - [ ] New code has test coverage ≥ 85%
@@ -157,9 +157,11 @@ Coverage settings are in `pyproject.toml` and `.coveragerc`
 
 1. **Add test case** to relevant test file
 2. **Verify test fails** (red):
-   ```powershell
-   pytest tests/feature/test_module.py::test_new_function
-   ```
+
+```powershell
+pytest tests/feature/test_module.py::test_new_function
+```
+
 3. **Implement function** to pass test
 4. **Verify test passes** (green)
 5. **Check coverage** includes new code
@@ -205,7 +207,7 @@ If local tests show coverage < 85%:
 
 ```powershell
 # Open coverage report
-open htmlcov/index.html
+open .htmlcov/index.html
 
 # Look for red lines (uncovered code)
 ```
@@ -249,7 +251,7 @@ pytest
    pytest --cov-report=term-missing
    ```
 
-2. Open `htmlcov/index.html` to visualize
+2. Open `.htmlcov/index.html` to visualize
 
 3. Add tests or pragma comments
 
@@ -270,7 +272,7 @@ pytest
 ### "HTML report not generated"
 
 1. Ensure `--cov-report=html` in pytest options
-2. Check `htmlcov/` directory exists
+2. Check `.htmlcov/` directory exists
 3. Try running with explicit flag:
    ```powershell
    pytest --cov --cov-report=html
@@ -292,13 +294,13 @@ pytest
 
 ## Summary
 
-| Action | Command | Expected Result |
-|--------|---------|-----------------|
-| Run all tests | `pytest` | All pass + 85% coverage |
-| View coverage | Open `htmlcov/index.html` | Colored per-file view |
-| Check specific test | `pytest tests/test_module.py` | Tests pass + coverage reported |
-| Refresh coverage | `pytest --cov-erase` | Fresh calculation next run |
-| Find uncovered lines | Look for **red** in HTML | Know what to test next |
+| Action               | Command                       | Expected Result                |
+|----------------------|-------------------------------|--------------------------------|
+| Run all tests        | `pytest`                      | All pass + 85% coverage        |
+| View coverage        | Open `.htmlcov/index.html`    | Colored per-file view          |
+| Check specific test  | `pytest tests/test_module.py` | Tests pass + coverage reported |
+| Refresh coverage     | `pytest --cov-erase`          | Fresh calculation next run     |
+| Find uncovered lines | Look for **red** in HTML      | Know what to test next         |
 
 ---
 

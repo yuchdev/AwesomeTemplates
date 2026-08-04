@@ -25,12 +25,12 @@ body only. Those are the cases you must read and confirm.
 
 ## Semantic definitions (the ground truth for resolving ambiguity)
 
-| Class | Real meaning | {{PROJECT_NAME}} examples |
-|-------|--------------|----------------|
-| **Unit** | Pure logic, no mocks, no I/O. Exercises one function/class in isolation with real inputs. | `DiscountTier.from_subtotal`, pricing/tax math, `shipping` zone mapping. |
-| **Mock** | Unit-scoped but a collaborator is replaced with a mock/patch/monkeypatch. Tests behaviour *around* an external boundary without hitting it. | `resolve_carrier` with the `_CARRIER_MAP` patched; order routing with mocked stores. |
-| **Integration** | Two or more real components wired together, externals mocked at the process edge. Not a pure unit; not a full user flow. | `OrderStore` + a real parser over a fixture file; store round-trip against a temp SQLite. |
-| **E2E** | A full user-facing entry point driven end to end — CLI via `CliRunner`, API via `TestClient`, or browser via Playwright. | `orders process` through `CliRunner`; a FastAPI route through `TestClient`. |
+| Class           | Real meaning                                                                                                                                | {{PROJECT_NAME}} examples                                                                 |
+|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| **Unit**        | Pure logic, no mocks, no I/O. Exercises one function/class in isolation with real inputs.                                                   | `DiscountTier.from_subtotal`, pricing/tax math, `shipping` zone mapping.                  |
+| **Mock**        | Unit-scoped but a collaborator is replaced with a mock/patch/monkeypatch. Tests behaviour *around* an external boundary without hitting it. | `resolve_carrier` with the `_CARRIER_MAP` patched; order routing with mocked stores.      |
+| **Integration** | Two or more real components wired together, externals mocked at the process edge. Not a pure unit; not a full user flow.                    | `OrderStore` + a real parser over a fixture file; store round-trip against a temp SQLite. |
+| **E2E**         | A full user-facing entry point driven end to end — CLI via `CliRunner`, API via `TestClient`, or browser via Playwright.                    | `orders process` through `CliRunner`; a FastAPI route through `TestClient`.               |
 
 Resolution rule of thumb when the script flags ambiguous:
 
@@ -42,7 +42,7 @@ Resolution rule of thumb when the script flags ambiguous:
 The {{PROJECT_NAME}} convention: `tests/unit/` is CI-gated; `tests/integration/` mocks
 externals. A test's *directory* should match its true class — if reading the body
 tells you the directory is wrong, that is a finding to raise, not something to
-paper over with a mislabelled docstring.
+paper over with a mislabeled docstring.
 
 ## Docstring format the script emits
 

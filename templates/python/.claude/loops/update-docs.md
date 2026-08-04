@@ -350,12 +350,13 @@ user; they require deliberate human review.
 | Path 3b                    | `/link-check <TARGET>`          | Validates TARGET's outbound links                |
 | Path 6                     | `/link-check` (whole repo)      | Final gate; loop continues until exit 0          |
 | Optional, before path loop | `/doc-xref <TARGET>`            | Broader reference audit including prose mentions |
-| One-shot registry audit    | `/doc-registry`                 | Non-looping version of scan mode                 |
 
-> `/link-check` catches broken *outbound* links from a file.
-> `/doc-xref` finds *inbound* references from elsewhere.
-> `/doc-registry` (or scan mode) finds *missing-file* references corpus-wide.
-> This loop uses all three, directed at different things and at different stages.
+> `/link-check` catches broken *outbound* links from a file - both missing targets and
+> broken anchors - and reaches for `scripts/doc_registry.py` when a missing target needs
+> a rename candidate.
+> `/doc-xref` finds *inbound* references from elsewhere, including `src/` and `tests/`.
+> This loop uses both, directed at different things and at different stages; scan mode
+> below is the non-looping registry audit that used to be its own `/doc-registry` skill.
 
 ---
 

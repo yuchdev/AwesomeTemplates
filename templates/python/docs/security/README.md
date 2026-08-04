@@ -28,6 +28,6 @@ for point-in-time reviews.
 - Treat all untrusted external input as sensitive - no unredacted raw input
   in logs, exceptions, stored reports, or API error bodies.
 - Untrusted input must never reach a shell, SQL string, `eval`, or an AI
-  prompt without sanitisation/parameterisation.
+  prompt without sanitization/parameterization.
 
 <!-- SME REVIEW NEEDED: populate with this project's first real threat model. -->

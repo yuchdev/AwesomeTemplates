@@ -10,8 +10,8 @@ audits, secret scans, performance-regression findings, and license checks.
 
 ## Contents
 
-| Document | Description |
-|---|---|
+| Document                               | Description               |
+|----------------------------------------|---------------------------|
 | [example-report.md](example-report.md) | Example efficiency audit. |
 
 ## What a review report must contain

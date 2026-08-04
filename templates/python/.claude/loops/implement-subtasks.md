@@ -309,5 +309,7 @@ Because the loop re-fires into one growing conversation, the cost that compounds
 This loop is the **sentence**; the skills are its **vocabulary**. It calls `/verify-subtask`
 (spec compliance), `/test-gap` (coverage), `/dep-audit`, `/secret-scan`, `/link-check`, and
 `/pr-review` at the right checkpoints, and delegates implementation to the dev-fleet agents
-listed in `agent-orchestrator.md`'s roster. It complements the read-only `verify-subtasks`
-loop: this one *builds* a task; that one *audits* an already-built one.
+listed in `agent-orchestrator.md`'s roster. One level up,
+[implement-milestone.md](implement-milestone.md) drives a whole milestone by executing this
+loop's Steps 2-6 per iteration with milestone-scoped overrides (see its composition
+contract); this file remains the authority on all per-subtask mechanics.

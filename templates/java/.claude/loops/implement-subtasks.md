@@ -311,5 +311,6 @@ Because the loop re-fires into one growing conversation, the cost that compounds
 This loop is the **sentence**; the skills are its **vocabulary**. It calls `/verify-subtask`
 (spec compliance), `/secret-scan`, `/link-check`, and `/pr-review` at the right checkpoints,
 and delegates implementation to the dev-fleet agents listed in `agent-orchestrator.md`'s
-roster. It complements the read-only `verify-subtasks` loop: this one *builds* a task; that
-one *audits* an already-built one.
+roster. For one-off spec-compliance audits of an already-built task, invoke the
+`/verify-subtask` skill directly against each subtask spec - no separate audit loop exists
+in this preset.
