@@ -1,10 +1,8 @@
 """Entity {{PLACEHOLDER}} substitution - unchanged behavior from the round-1/2 script.
 
-Deliberately NOT Jinja2: this is a flat find/replace over a small fixed
-glossary (PROJECT_NAME, PROJECT_PACKAGE, PROJECT_PURPOSE, PROJECT_SLUG_UPPER)
-with an explicit "leftover placeholder" warning. See doctemplates.py for the
-Jinja2-based engine used for document generation, which is a different job
-(loops/conditionals over a document skeleton) with different failure needs.
+This is a flat find/replace over a small fixed glossary (PROJECT_NAME,
+PROJECT_PACKAGE, PROJECT_PURPOSE, PROJECT_SLUG_UPPER) with an explicit
+"leftover placeholder" warning.
 """
 
 from __future__ import annotations

@@ -22,7 +22,7 @@ def real_workspace() -> Workspace:
 @pytest.fixture
 def fixture_workspace(tmp_path: Path) -> Workspace:
     """Two tiny synthetic presets ("demo" and "other"), each a self-contained
-    `.claude/` + `docs/` tree, isolated from the real repo."""
+    `.claude/` + `docs/` + `scripts/` tree, isolated from the real repo."""
     root = tmp_path / "repo"
 
     demo = root / "demo"
@@ -66,6 +66,8 @@ def fixture_workspace(tmp_path: Path) -> Workspace:
         "## Context\n"
     )
     (demo / "docs" / "adr" / "0001-existing.md").write_text("# 0001 - Existing\n")
+    (demo / "scripts").mkdir()
+    (demo / "scripts" / "check_docs.py").write_text("# {{PROJECT_NAME}} documentation check\n")
 
     other = root / "other"
     (other / ".claude" / "agents").mkdir(parents=True)

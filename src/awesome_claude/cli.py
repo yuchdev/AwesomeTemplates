@@ -1,12 +1,11 @@
 """Typer CLI for awesome-claude: generate a project-specific preset
-(`.claude/` kit + `docs/`) from this repo's templates.
+(`.claude/` kit + `docs/` + `scripts/`) from this repo's templates.
 
+\b
 Command tree:
   awesome-claude list
   awesome-claude graph [...]
   awesome-claude generate [...]
-  awesome-claude docs copy [...]
-  awesome-claude docs new adr "<title>"
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
+from typer.core import TyperGroup
 
 from awesome_claude.catalog import KINDS, discover, list_presets
 from awesome_claude.config import ConfigError, load_config
@@ -28,10 +28,39 @@ from awesome_claude.dependencies import (
     write_inline_dependencies,
 )
 from awesome_claude.dependencies import to_json as graph_to_json
-from awesome_claude.doctemplates import DOC_TYPES, DocTemplateError, render_new_document
-from awesome_claude.presets import copy_preset, copy_preset_docs
+from awesome_claude.presets import copy_preset
 from awesome_claude.templating import slugify_package, slugify_upper
 from awesome_claude.workspace import Workspace
+
+
+class FullHelpTyperGroup(TyperGroup):
+    """Print top-level help plus all nested command help blocks."""
+
+    def get_help(self, ctx: typer.Context) -> str:
+        help_text = super().get_help(ctx)
+        sections = _collect_subcommand_help(self, ctx)
+        if not sections:
+            return help_text
+        return f"{help_text}\n\n" + "\n\n".join(sections)
+
+
+def _collect_subcommand_help(group: TyperGroup, ctx: typer.Context) -> list[str]:
+    sections: list[str] = []
+    for command_name in group.list_commands(ctx):
+        command = group.get_command(ctx, command_name)
+        if command is None:
+            continue
+        command_ctx = command.make_context(
+            command_name,
+            [],
+            parent=ctx,
+            resilient_parsing=True,
+        )
+        sections.append(command.get_help(command_ctx))
+        if isinstance(command, TyperGroup):
+            sections.extend(_collect_subcommand_help(command, command_ctx))
+    return sections
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The template tree (one self-contained {.claude,docs} tree per preset) lives
@@ -39,9 +68,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # two are never confused with each other.
 TEMPLATES_ROOT = REPO_ROOT / "templates"
 
-app = typer.Typer(add_completion=False, help=__doc__)
-docs_app = typer.Typer(add_completion=False, help="Copy or scaffold docs/ content.")
-app.add_typer(docs_app, name="docs")
+# rich_markup_mode=None forces classic Click help rendering (plain text into
+# the formatter buffer) instead of typer's default Rich-panel help, which
+# prints straight to the live console as a side effect and leaves get_help()
+# returning near-empty text - that's what FullHelpTyperGroup needs to be able
+# to actually capture and concatenate each subcommand's help text below.
+app = typer.Typer(
+    add_completion=False, help=__doc__, cls=FullHelpTyperGroup, rich_markup_mode=None
+)
 
 console = Console()
 
@@ -230,17 +264,17 @@ def generate(
     ),
     out: Optional[str] = typer.Option(
         None, help="project directory to generate into (default: .); "
-        "gets a .claude/ and a docs/ subdirectory"
+        "gets .claude/, docs/, and scripts/ subdirectories"
     ),
     force: Optional[bool] = typer.Option(
-        None, "--force/--no-force", help="overwrite existing .claude/ or docs/ content"
+        None, "--force/--no-force", help="overwrite existing .claude/, docs/, or scripts/ content"
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="print the plan without writing anything"
     ),
     json_out: bool = typer.Option(False, "--json", help="emit dry-run/summary output as JSON"),
 ) -> None:
-    """Generate a project-specific preset (.claude/ kit + docs/)."""
+    """Generate a project-specific preset (.claude/ kit + docs/ + scripts/)."""
     workspace = _workspace()
 
     try:
@@ -287,7 +321,9 @@ def generate(
         return
 
     existing = [
-        d for d in (".claude", "docs") if (out_dir / d).exists() and any((out_dir / d).iterdir())
+        d
+        for d in (".claude", "docs", "scripts")
+        if (out_dir / d).exists() and any((out_dir / d).iterdir())
     ]
     if existing and not force_value:
         _fail(
@@ -313,70 +349,6 @@ def generate(
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:
                 console.print(f"  - {w}")
-
-
-@docs_app.command("copy")
-def docs_copy(
-    preset: Optional[str] = typer.Option(
-        None, help="which preset's docs/ to copy (see `awesome-claude list`)"
-    ),
-    name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
-    package: Optional[str] = typer.Option(
-        None, help="PROJECT_PACKAGE value (default: slugified --name)"
-    ),
-    purpose: Optional[str] = typer.Option(None, help="PROJECT_PURPOSE value"),
-    slug: Optional[str] = typer.Option(
-        None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"
-    ),
-    out: str = typer.Option("docs", "--out", help="where to copy docs/ to"),
-    force: bool = typer.Option(False, "--force", help="overwrite existing files"),
-) -> None:
-    """Copy just a preset's docs/ tree (no .claude/ kit), applying the same
-    {{PLACEHOLDER}} substitution as `generate`."""
-    workspace = _workspace()
-    preset_value = _resolve_preset(workspace, preset)
-    if not name:
-        _fail("--name is required")
-        return
-    out_dir = Path(out)
-    if out_dir.exists() and any(out_dir.iterdir()) and not force:
-        _fail(f"'{out_dir}' is not empty - pass --force to overwrite")
-        return
-    subs = {
-        "PROJECT_NAME": name,
-        "PROJECT_PACKAGE": package or slugify_package(name),
-        "PROJECT_SLUG_UPPER": slug or slugify_upper(name),
-        "PROJECT_PURPOSE": purpose or "TODO: describe what this project does",
-    }
-    warnings: list[str] = []
-    count = copy_preset_docs(workspace, preset_value, out_dir, force, subs, warnings)
-    console.print(f"docs/: {count} file(s) copied to {out_dir}")
-    if warnings:
-        console.print("\n[yellow]Warnings:[/yellow]")
-        for w in warnings:
-            console.print(f"  - {w}")
-
-
-@docs_app.command("new")
-def docs_new(
-    doc_type: str = typer.Argument(
-        ..., help=f"doc type to scaffold ({', '.join(sorted(DOC_TYPES))})"
-    ),
-    title: str = typer.Argument(..., help="document title"),
-    preset: Optional[str] = typer.Option(
-        None, help="which preset's docs/ to scaffold into (see `awesome-claude list`)"
-    ),
-    status: str = typer.Option("Proposed", help="initial status field"),
-) -> None:
-    """Scaffold a new document from a real template (e.g. `docs new adr "My decision" --preset python`)."""
-    workspace = _workspace()
-    preset_value = _resolve_preset(workspace, preset)
-    try:
-        out_path = render_new_document(workspace, preset_value, doc_type, title, status=status)
-    except DocTemplateError as exc:
-        _fail(str(exc))
-        return
-    console.print(f"Wrote {out_path}")
 
 
 if __name__ == "__main__":

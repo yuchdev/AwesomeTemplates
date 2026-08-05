@@ -6,20 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A generator (`awesome-claude` CLI, source in `src/awesome_claude`) that copies a project-specific
 *preset* — a complete, self-contained `.claude/` kit (`agents`, `hooks`, `loops`, `skills`,
-`settings.json`) plus its own starter `docs/` tree — from a template catalog under `templates/`.
+`settings.json`) plus its own starter `docs/` and `scripts/` trees — from a template catalog under
+`templates/`.
 Templates use flat `{{PLACEHOLDER}}` substitution (`PROJECT_NAME`, `PROJECT_PACKAGE`,
 `PROJECT_PURPOSE`, `PROJECT_SLUG_UPPER`) so a preset can be dropped into another project after a
 single find/replace.
 
 A preset is a directory shaped exactly like what lands in the target project:
-`templates/<preset>/.claude/` and `templates/<preset>/docs/` as siblings. There are currently two:
-`python` and `java`. Generating one is *just* a recursive copy with substitution applied to every
-text file (see `presets.py`) — there is no runtime composition step, no category selection, no
-per-entity include/exclude. This is deliberate: `.claude/` and `docs/` used to be generated
-independently (`generate` and `docs copy` as separate invocations, or even separate categories
-composed at generate-time), which meant an agent's `@docs/foo.md` reference could point at a doc that
-never got copied, with nothing to catch it. Baking both halves into one preset tree, authored and
-reviewed together, makes that class of bug structurally impossible instead of runtime-checked — see
+`templates/<preset>/.claude/`, `templates/<preset>/docs/`, and `templates/<preset>/scripts/` as
+siblings. There are currently two: `python` and `java`. Generating one is *just* a recursive copy with
+substitution applied to every text file (see `presets.py`) — there is no runtime composition step, no
+category selection, no per-entity include/exclude. This is deliberate: `.claude/`, `docs/`, and
+`scripts/` must be generated together, because their references form one corpus. Baking all three
+trees into one preset, authored and reviewed together, makes missing generated dependencies
+structurally impossible instead of runtime-checked — see
 `docs/roadmap/0001-docs-claude-connectivity.md` for the fuller design history (that RFC's Phase 0 was
 a runtime `--strict` connectivity check; the preset-tree model superseded it with the same guarantee
 by construction).
@@ -47,8 +47,6 @@ uv sync
 # run the CLI
 uv run awesome-claude list
 uv run awesome-claude generate --preset python --name "Acme Sync" --package acme_sync --out .
-uv run awesome-claude docs copy --preset python --name "Acme Sync" --package acme_sync --out docs
-uv run awesome-claude docs new adr "Adopt structured logging" --preset python
 
 # maintainer-only: render this repo's own agent/hook/loop/skill reference graph
 uv run awesome-claude graph                      # every preset, side by side

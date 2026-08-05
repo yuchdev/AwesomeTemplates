@@ -12,14 +12,13 @@ are in `assets/`.
 
 ## Template
 
-Use `template.md` when creating a new ADR. The recommended invocation is:
+Use `template.md` when creating a new ADR:
 
 ```bash
-uv run awesome-claude docs new adr "Short Title"
+cp docs/adr/template.md docs/adr/0001-short-title.md
 ```
 
-The `docs new adr` command scaffolds a MADR-formatted record pre-filled with context
-and saves it here as the next `000N-slug.md`.
+Replace the template placeholders with the record's number, title, date, and status.
 
 ## Naming conventions
 

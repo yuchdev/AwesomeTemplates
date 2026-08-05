@@ -10,6 +10,19 @@ from awesome_claude.cli import app
 runner = CliRunner()
 
 
+def test_top_level_help_includes_subcommand_options():
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "--log-verbosity" in result.stdout
+    assert "--dry-run" in result.stdout
+    assert "Usage: root docs" not in result.stdout
+
+
+def test_docs_command_is_not_available():
+    result = runner.invoke(app, ["docs"])
+    assert result.exit_code == 2
+
+
 def test_list_json_runs(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(app, ["list", "--json"])
@@ -42,12 +55,6 @@ def test_generate_rejects_unknown_preset(fixture_workspace, monkeypatch):
     assert result.exit_code == 1
 
 
-def test_docs_new_unknown_type(fixture_workspace, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(app, ["docs", "new", "bogus", "Title", "--preset", "demo"])
-    assert result.exit_code == 1
-
-
 def test_generate_writes_a_real_kit(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "proj"
@@ -60,6 +67,7 @@ def test_generate_writes_a_real_kit(fixture_workspace, tmp_path, monkeypatch):
     assert generated == "---\nname: widget-verifier\n---\n\nUse this agent for Acme Sync.\n"
     assert (out_dir / ".claude" / "settings.json").exists()
     assert (out_dir / "docs" / "adr" / "template.md").exists()
+    assert (out_dir / "scripts" / "check_docs.py").exists()
 
 
 def test_generate_refuses_nonempty_claude_without_force(fixture_workspace, tmp_path, monkeypatch):
@@ -73,6 +81,18 @@ def test_generate_refuses_nonempty_claude_without_force(fixture_workspace, tmp_p
     assert result.exit_code == 1
 
 
+def test_generate_refuses_nonempty_scripts_without_force(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    (out_dir / "scripts").mkdir(parents=True)
+    (out_dir / "scripts" / "existing.py").write_text("pre-existing")
+    result = runner.invoke(
+        app, ["generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir)]
+    )
+    assert result.exit_code == 1
+    assert "scripts" in result.stdout
+
+
 def test_generate_force_overwrites(fixture_workspace, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "proj"
@@ -83,59 +103,6 @@ def test_generate_force_overwrites(fixture_workspace, tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.stdout
     assert (out_dir / ".claude" / "agents" / "widget-verifier.md").exists()
-
-
-def test_docs_copy_writes_files(fixture_workspace, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    out_dir = tmp_path / "docs-out"
-    result = runner.invoke(
-        app, ["docs", "copy", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir)]
-    )
-    assert result.exit_code == 0, result.stdout
-    assert (out_dir / "adr" / "template.md").is_file()
-
-
-def test_docs_copy_requires_name(fixture_workspace, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    out_dir = tmp_path / "docs-out"
-    result = runner.invoke(app, ["docs", "copy", "--preset", "demo", "--out", str(out_dir)])
-    assert result.exit_code == 1
-
-
-def test_docs_copy_rejects_unknown_preset(fixture_workspace, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    out_dir = tmp_path / "docs-out"
-    result = runner.invoke(
-        app, ["docs", "copy", "--preset", "nope", "--name", "Acme", "--out", str(out_dir)]
-    )
-    assert result.exit_code == 1
-
-
-def test_docs_copy_applies_substitution(fixture_workspace, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    (fixture_workspace.path("demo", "docs") / "foo.md").write_text("Hello {{PROJECT_NAME}}\n")
-
-    out_dir = tmp_path / "docs-out"
-    result = runner.invoke(
-        app, ["docs", "copy", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir)]
-    )
-    assert result.exit_code == 0, result.stdout
-    text = (out_dir / "foo.md").read_text()
-    assert "Acme Sync" in text
-    assert "{{PROJECT_NAME}}" not in text
-
-
-def test_docs_copy_reports_unresolved_placeholder_warning(fixture_workspace, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    (fixture_workspace.path("demo", "docs") / "foo.md").write_text("Value: {{NOT_A_REAL_KEY}}\n")
-
-    out_dir = tmp_path / "docs-out"
-    result = runner.invoke(
-        app, ["docs", "copy", "--preset", "demo", "--name", "Acme Sync", "--out", str(out_dir)]
-    )
-    assert result.exit_code == 0, result.stdout
-    assert "Warnings:" in result.stdout
-    assert "unresolved placeholder" in result.stdout
 
 
 def test_generate_applies_substitution_to_both_halves(fixture_workspace, tmp_path, monkeypatch):
@@ -151,9 +118,9 @@ def test_generate_applies_substitution_to_both_halves(fixture_workspace, tmp_pat
     assert text == "Project: Acme\n"
 
 
-def test_generate_produces_claude_and_docs_as_siblings(fixture_workspace, tmp_path, monkeypatch):
+def test_generate_produces_complete_preset_tree(fixture_workspace, tmp_path, monkeypatch):
     # Coupling is now structural (one preset tree, one copy) rather than a
-    # runtime check: .claude/ and docs/ always land together, from the same
+    # runtime check: .claude/, docs/, and scripts/ always land together, from the same
     # source tree, so they can never drift out of sync at generation time.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     proj = tmp_path / "proj"
@@ -163,6 +130,7 @@ def test_generate_produces_claude_and_docs_as_siblings(fixture_workspace, tmp_pa
     assert result.exit_code == 0, result.stdout
     assert (proj / ".claude").is_dir()
     assert (proj / "docs").is_dir()
+    assert (proj / "scripts").is_dir()
 
 
 # --- graph ---------------------------------------------------------------
@@ -237,15 +205,6 @@ def test_graph_inline_succeeds_with_force_if_already_present(fixture_workspace, 
     result = runner.invoke(app, ["graph", str(fixture_workspace.root), "--inline", "--force"])
     assert result.exit_code == 0
     assert "Updated inline Dependencies block" in result.stdout
-
-
-def test_docs_new_adr_writes_file(fixture_workspace, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(app, ["docs", "new", "adr", "A CLI-created decision", "--preset", "demo"])
-    assert result.exit_code == 0, result.stdout
-    new_file = fixture_workspace.path("demo", "docs", "adr", "0002-a-cli-created-decision.md")
-    assert new_file.is_file()
-    assert "A CLI-created decision" in new_file.read_text()
 
 
 def test_graph_remove_flag(fixture_workspace, monkeypatch):

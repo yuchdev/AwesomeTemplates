@@ -10,8 +10,10 @@ Each preset is a complete, self-contained tree, shaped exactly like what lands i
 ```
 templates/python/.claude
 templates/python/docs
+templates/python/scripts
 templates/java/.claude
 templates/java/docs
+templates/java/scripts
 ```
 
 `.claude/` contains
@@ -25,9 +27,9 @@ settings.json
 ```
 
 Generating a preset is a plain recursive copy of `templates/<preset>/` into the target project's root,
-with `{{PLACEHOLDER}}` substitution applied to every text file - `.claude/` and `docs/` always land
-together, from the same source tree, so an agent's `@docs/foo.md` reference can never point at a doc
-that didn't get copied.
+with `{{PLACEHOLDER}}` substitution applied to every text file. `.claude/`, `docs/`, and `scripts/`
+always land together, from the same source tree, so agents and scripts cannot reference template
+content that was not generated.
 
 3. Markdown files contain multiple documents links. Rather than introducing templates, create `MIGRATION_REPORT.md` per each entitiy with all document references. Perhaps will be introduced templates for documents, or special documents conventions accross projects, e.g. `docs/adr` and `docs/roadmap`. The following design will be the subject of further design steps
 
@@ -46,15 +48,9 @@ uv sync
 # see every preset and what it contains
 uv run awesome-claude list
 uv run awesome-claude generate --preset python --name "Acme Sync" --package acme_sync --out .
-
-# copy just a preset's docs/ scaffold, with {{PLACEHOLDER}} substitution applied
-uv run awesome-claude docs copy --preset python --name "Acme Sync" --package acme_sync --out docs
-
-# scaffold a new ADR into a preset's docs/
-uv run awesome-claude docs new adr "Adopt structured logging" --preset python
 ```
 
-`generate` also accepts `--config <file.json|file.toml>` (any flag passed alongside overrides the matching config value) and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets a `.claude/` and a `docs/` subdirectory (default: `.`); pass `--force` to overwrite existing content in either. Run `uv run awesome-claude generate --help` for the full flag reference.
+`generate` also accepts `--config <file.json|file.toml>` (any flag passed alongside overrides the matching config value) and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets `.claude/`, `docs/`, and `scripts/` subdirectories (default: `.`); pass `--force` to overwrite existing content in any of them. Run `uv run awesome-claude generate --help` for the full flag reference.
 
 ### Config file
 

@@ -17,7 +17,7 @@
 # Which preset to generate - see `uv run awesome-claude list`.
 preset = "python"
 
-# Project root to generate into: gets a .claude/ and a docs/ subdirectory.
+# Project root to generate into: gets .claude/, docs/, and scripts/ subdirectories.
 # Defaults to "." (the current directory) if omitted.
 out = "."
 

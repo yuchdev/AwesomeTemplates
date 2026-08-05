@@ -51,9 +51,8 @@ def test_discover_against_real_repo_finds_expected_entities(real_workspace):
 
 @pytest.mark.parametrize("preset", ["python", "java"])
 def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
-    # A preset is one self-contained tree copied verbatim (see presets.py) -
-    # there is no separate "docs copy" step to fall out of sync with, so a
-    # freshly generated project must never have a dangling @docs/ reference.
+    # A preset is one self-contained tree copied verbatim (see presets.py), so
+    # a freshly generated project must never have a dangling @docs/ reference.
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
@@ -62,6 +61,7 @@ def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
     assert result.exit_code == 0, result.stdout
     assert (proj / ".claude").is_dir()
     assert (proj / "docs").is_dir()
+    assert (proj / "scripts").is_dir()
 
     workspace = Workspace(root=proj)
     catalog = discover(workspace)
@@ -152,10 +152,9 @@ def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_p
     # README.md's "Config file" section) - it must actually work end to end,
     # and every deterministic {{PLACEHOLDER}} token it fills in must leave no
     # trace in the generated Markdown. docs/adr/template.md's own `{{ seq }}`
-    # / `{{ title }}` Jinja tokens are a deliberate exception (a different
-    # engine - see doctemplates.py - renders those later, at `docs new adr`
-    # time, not at generate time) and PLACEHOLDER_RE correctly ignores them
-    # since they aren't the all-caps `{{WORD}}` shape it matches.
+    # / `{{ title }}` placeholders belong to the shipped ADR skeleton and are
+    # intentionally left for authors to fill. PLACEHOLDER_RE correctly ignores
+    # them because they aren't the all-caps `{{WORD}}` shape it matches.
     config_path = REAL_REPO_ROOT / "awesome-claude.example.toml"
     proj = tmp_path / "proj"
     result = runner.invoke(app, ["generate", "--config", str(config_path), "--out", str(proj)])
