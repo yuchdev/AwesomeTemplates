@@ -269,6 +269,12 @@ def generate(
     force: Optional[bool] = typer.Option(
         None, "--force/--no-force", help="overwrite existing .claude/, docs/, or scripts/ content"
     ),
+    resolve_markers: Optional[bool] = typer.Option(
+        None,
+        "--resolve-markers/--no-resolve-markers",
+        help="AI-resolve <!-- TEMPLATE-INIT --> markers in the generated Markdown "
+        "(needs the 'ai' extra and ANTHROPIC_API_KEY)",
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="print the plan without writing anything"
     ),
@@ -288,6 +294,11 @@ def generate(
     preset_value = preset or cfg.get("preset")
     out_value = out if out is not None else cfg.get("out", ".")
     force_value = force if force is not None else bool(cfg.get("force", False))
+    resolve_value = (
+        resolve_markers
+        if resolve_markers is not None
+        else bool(cfg.get("resolve_markers", False))
+    )
     name_value = name or project_cfg.get("name")
     package_value = package or project_cfg.get("package")
     purpose_value = purpose or project_cfg.get("purpose")
@@ -313,11 +324,17 @@ def generate(
             "out": out_value,
             "substitutions": subs,
         }
+        if resolve_value:
+            from awesome_claude.markers import scan_tree
+
+            payload["markers_to_resolve"] = len(scan_tree(workspace.path(preset_value)))
         if json_out:
             typer.echo(json.dumps(payload, indent=2))
         else:
             console.print(f"Would generate preset '{preset_value}' into: {out_dir}")
             console.print(f"Substitutions: {subs}")
+            if resolve_value:
+                console.print(f"Would AI-resolve {payload['markers_to_resolve']} marker(s)")
         return
 
     existing = [
@@ -341,10 +358,32 @@ def generate(
         "files_written": written,
         "warnings": warnings,
     }
+
+    if resolve_value:
+        try:
+            from awesome_claude import resolver
+        except ModuleNotFoundError:
+            _fail("--resolve-markers needs the 'ai' extra: pip install awesome-claude[ai]")
+            return
+        api_key = resolver.load_api_key(Path.cwd())
+        if not api_key:
+            _fail("--resolve-markers needs ANTHROPIC_API_KEY (in the environment or a .env in the cwd)")
+            return
+        rsum = resolver.resolve_tree(out_dir, api_key=api_key, warnings=warnings)
+        summary["markers_resolved"] = rsum.resolved
+        summary["markers_todo"] = rsum.todos
+        summary["markers_failed"] = rsum.failed
+
     if json_out:
         typer.echo(json.dumps(summary, indent=2))
     else:
         console.print(f"Wrote preset '{preset_value}' to {out_dir} ({written} file(s))")
+        if resolve_value:
+            console.print(
+                f"Resolved {summary['markers_resolved']} marker(s); "
+                f"left {summary['markers_todo']} as TODO; "
+                f"{summary['markers_failed']} failed"
+            )
         if warnings:
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:

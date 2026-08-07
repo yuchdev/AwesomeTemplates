@@ -9,6 +9,12 @@ dependencies = [
     "rich>=13.7",
 ]
 
+[project.optional-dependencies]
+# Opt-in `generate --resolve-markers` (AI resolution of <!-- TEMPLATE-INIT -->
+# markers). Kept out of the core deps so the offline generator installs with no
+# network client; pulled in via `pip install awesome-claude[ai]`.
+ai = ["anthropic>=0.70"]
+
 [project.scripts]
 awesome-claude = "awesome_claude.cli:app"
 
@@ -17,6 +23,9 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
+    # so the mocked-client resolver tests actually run; end users get it via the
+    # `ai` extra instead.
+    "anthropic>=0.70",
 ]
 
 [tool.ruff]

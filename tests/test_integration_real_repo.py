@@ -8,6 +8,7 @@ match what the code assumes" - only running against the real tree can.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from typer.testing import CliRunner
 from awesome_claude.catalog import discover, list_presets
 from awesome_claude.cli import app
 from awesome_claude.dependencies import build_dependency_graph
+from awesome_claude.markers import scan_tree
 from awesome_claude.templating import PLACEHOLDER_RE
 from awesome_claude.workspace import Workspace
 
@@ -166,3 +168,23 @@ def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_p
 
     leftover = [f for f in md_files if PLACEHOLDER_RE.search(f.read_text(encoding="utf-8"))]
     assert leftover == []
+
+
+@pytest.mark.parametrize("preset", ["python", "java"])
+def test_dry_run_reports_marker_count_without_calling_api(preset, tmp_path):
+    # --resolve-markers --dry-run must report the real TEMPLATE-INIT count from
+    # the source preset and make no API call (proven by staying offline here).
+    real_templates = REAL_REPO_ROOT / "templates"
+    expected = len(scan_tree(real_templates / preset))
+    assert expected > 0  # sanity: the real presets do carry markers
+
+    proj = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", preset, "--name", "X", "--out", str(proj),
+         "--resolve-markers", "--dry-run", "--json"],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["markers_to_resolve"] == expected
+    assert not proj.exists()  # dry-run writes nothing

@@ -1,3 +1,5 @@
+# Awesome Claude
+
 The goal of the project is to create easily deplayable sets of Claude Code agents, skills, hooks, loops obtained from the set of templates with easily substituted values.
 
 The idea is as follows:
@@ -86,8 +88,28 @@ JSON works the same way (picked by file extension); the schema is the same shape
 | `project.package`  | `{{PROJECT_PACKAGE}}`   | slugified `project.name`                     |
 | `project.purpose`  | `{{PROJECT_PURPOSE}}`   | a `TODO: describe what this project does` placeholder |
 | `project.slug_upper` | `{{PROJECT_SLUG_UPPER}}` | upper-slugified `project.name`             |
+| `resolve_markers`  | —                       | `false` (or pass `--resolve-markers`)        |
 
 Any CLI flag passed alongside `--config` overrides the matching value from the file.
+
+### Resolving `TEMPLATE-INIT` markers with AI
+
+`{{PLACEHOLDER}}` substitution fills the deterministic gaps. Some agent and loop files carry a second
+kind: `<!-- TEMPLATE-INIT: <instruction> -->` markers describing a project-specific fact no find/replace
+can supply. Pass `--resolve-markers` (or `resolve_markers = true` in the config) to have `generate`
+resolve every such marker across the generated Markdown by calling Anthropic against the target
+project's own code and docs — writing grounded prose, or a visible `> **TODO (fill in ...)**` blockquote
+when it can't answer confidently.
+
+This is opt-in: plain `generate` stays fully offline. It needs the optional `ai` extra and an API key:
+
+```bash
+uv pip install 'awesome-claude[ai]'      # pulls in the anthropic SDK
+export ANTHROPIC_API_KEY=sk-ant-...       # or put it in a .env in the cwd
+uv run awesome-claude generate --config awesome-claude.toml --resolve-markers
+```
+
+`--dry-run` reports how many markers *would* be resolved without calling the API.
 
 ### Development
 

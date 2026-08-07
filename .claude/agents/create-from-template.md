@@ -101,6 +101,10 @@ easy to lose track of which file/marker you've already resolved partway through 
 - This agent is idempotent per target: if run again after every marker in that target is already
   resolved, it finds nothing and says so - it never re-opens or second-guesses prose it (or a human)
   already wrote.
+- There is now a second, programmatic resolver: `awesome-claude generate --resolve-markers` resolves
+  `TEMPLATE-INIT` markers across *all* generated Markdown (including `loops/`) via a single Anthropic
+  call per marker. This agent remains the agents-only, in-editor pass - use it when you want to review
+  and refine each agent file interactively rather than resolve the whole tree in one non-interactive shot.
 
 ## Output format
 
