@@ -28,6 +28,15 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   `graph` at a single preset directory (or an already-generated project) to see that tree's own
   `.claude` <-> `docs` connectivity; both mutating flags edit the template tree in place — review
   `git diff` before committing.
+- `markers.py` / `resolver.py` / `ai/client.py` — the `generate --resolve-markers` feature, split by
+  concern: `markers.py` is the pure scan/splice of `<!-- TEMPLATE-INIT: ... -->` comments (no network);
+  `resolver.py` is the business logic that decides what each marker should say (prompts, the
+  target-project context bundle, the confident/TODO fallback); `ai/client.py` is the only module
+  allowed to import `anthropic`, and only lazily inside its functions — it just places one Messages API
+  request and returns parsed JSON. `resolver.py` never touches the SDK directly, so it takes a `client`
+  parameter and is unit-tested against a fake one (`tests/test_resolver.py`). `cli.py`'s
+  `--resolve-markers` branch imports `resolver` lazily too, so the offline `generate` path stays free of
+  the `ai` extra (pinned by `tests/test_markers.py::test_cli_import_does_not_pull_anthropic`).
 - `cli.py` — Typer app; command tree is `list`, `graph`, `generate`. Each `generate` flag has a
   config-file fallback (`--config file.json|.toml`) merged before CLI flags, which always win.
 

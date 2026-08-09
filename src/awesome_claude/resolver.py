@@ -1,26 +1,25 @@
 """Resolve `<!-- TEMPLATE-INIT: ... -->` markers by asking Anthropic to write
-project-grounded prose - the network half of the AI-resolution feature.
+project-grounded prose - the business-logic half of the AI-resolution feature.
 
 This is the programmatic sibling of `.claude/agents/create-from-template.md`:
 the agent does an interactive, agents-only pass inside Claude Code; this module
-does an all-Markdown pass from `generate --resolve-markers`, calling the
-Messages API once per marker with a curated bundle of the target project's own
-context.
-
-`anthropic` is imported lazily, inside functions only - so a plain
-`awesome-claude generate` (no flag) never imports it and the offline path has
-no dependency on the `ai` extra. markers.py does the pure scan/splice; this
+does an all-Markdown pass from `generate --resolve-markers`, deciding what to
+ask (the prompts, the context bundle, the confidence/TODO fallback) once per
+marker. The actual API round-trip is ai/client.py's job - this module never
+imports `anthropic` or touches the SDK directly, so it stays a plain function
+of (marker, context) -> prose regardless of which client backs it, and is easy
+to unit-test with a fake client. markers.py does the pure scan/splice; this
 module decides what each marker should say.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from awesome_claude.ai import client as ai_client
 from awesome_claude.markers import Marker, apply_replacements, scan_tree
 
 MODEL = "claude-opus-4-8"
@@ -178,11 +177,9 @@ def gather_context(target: Path, *, char_budget: int = 40_000) -> str:
 
 
 def resolve_one(client, marker: Marker, context_bundle: str, *, model: str = MODEL) -> ResolvedMarker:
-    """One Messages API call for one marker, returning parsed confidence+prose.
-
-    Streamed (large adaptive-thinking outputs would otherwise risk an HTTP
-    timeout) with structured output so the confidence signal is first-class. No
-    temperature/top_p - both are rejected on claude-opus-4-8."""
+    """Decide what one marker should say: builds the prompt, delegates the
+    actual round-trip to ai_client.request_json, and parses the confidence
+    signal out of the structured response."""
     placement = "inline within a sentence" if marker.inline else "on its own line"
     user = _USER_TEMPLATE.format(
         placement=placement,
@@ -190,26 +187,8 @@ def resolve_one(client, marker: Marker, context_bundle: str, *, model: str = MOD
         before=marker.before or "(start of file)",
         after=marker.after or "(end of file)",
     )
-    with client.messages.stream(
-        model=model,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        output_config={
-            "effort": "high",
-            "format": {"type": "json_schema", "schema": _SCHEMA},
-        },
-        system=[
-            {
-                "type": "text",
-                "text": _SYSTEM + "\n\n# Target project context\n\n" + context_bundle,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        messages=[{"role": "user", "content": user}],
-    ) as stream:
-        message = stream.get_final_message()
-    text = next(b.text for b in message.content if b.type == "text")
-    data = json.loads(text)
+    system = _SYSTEM + "\n\n# Target project context\n\n" + context_bundle
+    data = ai_client.request_json(client, model=model, system=system, user=user, schema=_SCHEMA)
     return ResolvedMarker(
         marker=marker,
         prose=str(data["prose"]).strip(),
@@ -240,13 +219,6 @@ def render(resolved: ResolvedMarker) -> str:
     return "\n".join(out)
 
 
-def _build_client(api_key: str):
-    import anthropic
-
-    os.environ.setdefault("ANTHROPIC_API_KEY", api_key)
-    return anthropic.Anthropic()
-
-
 def resolve_tree(
     out_dir: Path,
     *,
@@ -266,17 +238,10 @@ def resolve_tree(
     if not markers:
         return summary
 
-    try:
-        import anthropic
-
-        auth_errors: tuple[type[BaseException], ...] = (anthropic.AuthenticationError,)
-        api_errors: tuple[type[BaseException], ...] = (anthropic.APIError,)
-    except ModuleNotFoundError:
-        auth_errors = ()
-        api_errors = (Exception,)
+    auth_errors, api_errors = ai_client.error_classes()
 
     context_bundle = gather_context(out_dir)
-    client = make_client() if make_client is not None else _build_client(api_key)
+    client = make_client() if make_client is not None else ai_client.build_client(api_key)
 
     by_file: dict[Path, list[Marker]] = {}
     for marker in markers:
