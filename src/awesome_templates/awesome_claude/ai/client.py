@@ -1,7 +1,7 @@
 """Thin wrapper around the Anthropic Messages API.
 
-This is the only module in `awesome_claude` allowed to import `anthropic`,
-and it does so lazily, inside functions, so a plain `awesome-claude generate`
+This is the only module in `awesome_templates` allowed to import `anthropic`,
+and it does so lazily, inside functions, so a plain `awesome_templates generate`
 (no `--resolve-markers`) never pays for or requires the `ai` extra. It knows
 nothing about markers, prose, or confidence - resolver.py owns what to ask
 and what to do with the answer; this module only knows how to place one

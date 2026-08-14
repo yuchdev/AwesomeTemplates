@@ -12,8 +12,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from awesome_claude.templating import template_file
-from awesome_claude.workspace import Workspace
+from awesome_templates.templating import template_file
+from awesome_templates.workspace import Workspace
 
 
 def _copy_tree(

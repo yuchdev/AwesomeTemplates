@@ -19,8 +19,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from awesome_claude.ai import client as ai_client
-from awesome_claude.markers import Marker, apply_replacements, scan_tree
+from awesome_templates.ai import client as ai_client
+from awesome_templates.markers import Marker, apply_replacements, scan_tree
 
 MODEL = "claude-opus-4-8"
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from awesome_claude.workspace import Workspace
+from awesome_templates.workspace import Workspace
 
 KINDS = ["agents", "hooks", "loops", "skills"]
 KIND_ALIAS = {"agent": "agents", "hook": "hooks", "loop": "loops", "skill": "skills"}

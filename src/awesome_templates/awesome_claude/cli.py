@@ -1,11 +1,11 @@
-"""Typer CLI for awesome-claude: generate a project-specific preset
+"""Typer CLI for awesome_templates: generate a project-specific preset
 (`.claude/` kit + `docs/` + `scripts/`) from this repo's templates.
 
 \b
 Command tree:
-  awesome-claude list
-  awesome-claude graph [...]
-  awesome-claude generate [...]
+  awesome_templates list
+  awesome_templates graph [...]
+  awesome_templates generate [...]
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ from rich.console import Console
 from rich.table import Table
 from typer.core import TyperGroup
 
-from awesome_claude.catalog import KINDS, discover, list_presets
-from awesome_claude.config import ConfigError, load_config
-from awesome_claude.dependencies import (
+from awesome_templates.catalog import KINDS, discover, list_presets
+from awesome_templates.config import ConfigError, load_config
+from awesome_templates.dependencies import (
     build_dependency_graph,
     render_doc,
     write_inline_dependencies,
 )
-from awesome_claude.dependencies import to_json as graph_to_json
-from awesome_claude.presets import copy_preset
-from awesome_claude.templating import slugify_package, slugify_upper
-from awesome_claude.workspace import Workspace
+from awesome_templates.dependencies import to_json as graph_to_json
+from awesome_templates.presets import copy_preset
+from awesome_templates.templating import slugify_package, slugify_upper
+from awesome_templates.workspace import Workspace
 
 
 class FullHelpTyperGroup(TyperGroup):
@@ -252,7 +252,7 @@ def generate(
         None, "--config", help="JSON or TOML config file; CLI flags override it"
     ),
     preset: Optional[str] = typer.Option(
-        None, help="which preset to generate (see `awesome-claude list`)"
+        None, help="which preset to generate (see `awesome_templates list`)"
     ),
     name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
     package: Optional[str] = typer.Option(
@@ -325,7 +325,7 @@ def generate(
             "substitutions": subs,
         }
         if resolve_value:
-            from awesome_claude.markers import scan_tree
+            from awesome_templates.markers import scan_tree
 
             payload["markers_to_resolve"] = len(scan_tree(workspace.path(preset_value)))
         if json_out:
@@ -361,9 +361,9 @@ def generate(
 
     if resolve_value:
         try:
-            from awesome_claude import resolver
+            from awesome_templates import resolver
         except ModuleNotFoundError:
-            _fail("--resolve-markers needs the 'ai' extra: pip install awesome-claude[ai]")
+            _fail("--resolve-markers needs the 'ai' extra: pip install awesome_templates[ai]")
             return
         api_key = resolver.load_api_key(Path.cwd())
         if not api_key:
