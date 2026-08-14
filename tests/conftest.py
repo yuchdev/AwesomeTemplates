@@ -58,6 +58,11 @@ def fixture_workspace(tmp_path: Path) -> Workspace:
     }
     (demo / ".claude" / "settings.json").write_text(json.dumps(settings))
 
+    (demo / "docs" / "agent").mkdir(parents=True)
+    (demo / "docs" / "agent" / "agents.md").write_text("# Agent Reference\n")
+    (demo / "docs" / "agent" / "skills.md").write_text("# Skills Reference\n")
+    (demo / "docs" / "agent" / "hooks.md").write_text("# Hooks Reference\n")
+
     (demo / "docs" / "adr").mkdir(parents=True)
     (demo / "docs" / "adr" / "template.md").write_text(
         "# {{ seq }} - {{ title }}\n\n"
@@ -68,6 +73,12 @@ def fixture_workspace(tmp_path: Path) -> Workspace:
     (demo / "docs" / "adr" / "0001-existing.md").write_text("# 0001 - Existing\n")
     (demo / "scripts").mkdir()
     (demo / "scripts" / "check_docs.py").write_text("# {{PROJECT_NAME}} documentation check\n")
+
+    (demo / "specializations" / "widgets" / ".claude" / "agents").mkdir(parents=True)
+    (demo / "specializations" / "widgets" / ".claude" / "agents" / "widget-specialist.md").write_text(
+        "---\nname: widget-specialist\n---\n\nSpecialist for {{PROJECT_NAME}}.\n"
+    )
+    (demo / "specializations" / "empty-scaffold" / ".claude" / "agents").mkdir(parents=True)
 
     other = root / "other"
     (other / ".claude" / "agents").mkdir(parents=True)

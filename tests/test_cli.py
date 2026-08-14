@@ -32,6 +32,23 @@ def test_list_json_runs(fixture_workspace, monkeypatch):
     assert payload["demo"]["agents"] == ["widget-verifier"]
 
 
+def test_list_json_includes_specializations_per_preset(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["list", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["demo"]["specializations"] == ["widgets"]
+    assert payload["other"]["specializations"] == []
+
+
+def test_list_table_shows_specializations(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["list"])
+    assert result.exit_code == 0
+    assert "specializations" in result.stdout
+    assert "widgets" in result.stdout
+
+
 def test_generate_dry_run_json(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(
@@ -53,6 +70,53 @@ def test_generate_rejects_unknown_preset(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(app, ["generate", "--preset", "nope", "--name", "Test", "--dry-run"])
     assert result.exit_code == 1
+
+
+def test_generate_rejects_unknown_specialization(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", "demo", "--name", "Test", "--specialization", "nope", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "unknown specialization" in result.stdout
+    assert "widgets" in result.stdout  # lists the valid choice
+
+
+def test_generate_dry_run_json_includes_specializations(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", "demo", "--name", "Test", "--specialization", "widgets",
+         "--dry-run", "--json"],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["specializations"] == ["widgets"]
+
+
+def test_generate_dry_run_json_specializations_empty_by_default(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app, ["generate", "--preset", "demo", "--name", "Test", "--dry-run", "--json"]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert json.loads(result.stdout)["specializations"] == []
+
+
+def test_generate_with_specialization_writes_addon_agent(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", "demo", "--name", "Acme", "--specialization", "widgets",
+         "--out", str(out_dir), "--json"],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["specializations"] == ["widgets"]
+    assert (out_dir / ".claude" / "agents" / "widget-specialist.md").is_file()
+    assert (out_dir / ".claude" / "agents" / "widget-verifier.md").is_file()
 
 
 def test_generate_writes_a_real_kit(fixture_workspace, tmp_path, monkeypatch):
@@ -116,6 +180,103 @@ def test_generate_applies_substitution_to_both_halves(fixture_workspace, tmp_pat
     assert result.exit_code == 0, result.stdout
     text = (out_dir / "docs" / "x.md").read_text()
     assert text == "Project: Acme\n"
+
+
+def test_generate_rejects_seed_roadmap_without_resolve_markers(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", "demo", "--name", "Test", "--seed-roadmap", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--seed-roadmap requires --resolve-markers" in result.stdout
+
+
+def test_generate_populates_agents_doc_without_resolve_markers_flag(
+    fixture_workspace, tmp_path, monkeypatch
+):
+    # docgen runs unconditionally - no --resolve-markers, no API key needed.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app, ["generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir)]
+    )
+    assert result.exit_code == 0, result.stdout
+    agents_doc = (out_dir / "docs" / "agent" / "agents.md").read_text()
+    assert agents_doc != "# Agent Reference\n"
+    assert "widget-verifier" in agents_doc
+
+
+def test_generate_help_documents_log_severity():
+    result = runner.invoke(app, ["generate", "--help"])
+    assert result.exit_code == 0
+    assert "--log-severity" in result.stdout
+
+
+def test_generate_default_log_severity_stays_quiet(fixture_workspace, tmp_path, monkeypatch):
+    # Default --log-severity (warning) must reproduce the exact pre-log_helper
+    # output - no "copying preset"/"wrote ..." trace lines on stderr unless a
+    # caller explicitly asks for --log-severity info or louder.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app, ["generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir)]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "copying preset" not in result.stderr
+    assert "copying preset" not in result.stdout
+
+
+def test_generate_log_severity_info_narrates_copy_steps(fixture_workspace, tmp_path, monkeypatch):
+    # LogHelper writes to stderr, not stdout, so --json output stays parseable
+    # regardless of --log-severity - see log_helper.py's module docstring.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir),
+            "--log-severity", "info",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "copying preset 'demo'" in result.stderr
+    assert "writing" in result.stderr  # docgen narration
+    assert "copying preset" not in result.stdout  # never leaks onto stdout
+
+
+def test_generate_log_severity_debug_traces_individual_files(fixture_workspace, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir),
+            "--log-severity", "debug",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "wrote" in result.stderr
+    assert str(out_dir / ".claude" / "agents" / "widget-verifier.md") in result.stderr
+
+
+def test_generate_json_output_stays_parseable_at_debug_log_severity(
+    fixture_workspace, tmp_path, monkeypatch
+):
+    # The whole point of writing trace output to stderr: --json's stdout must
+    # remain valid JSON no matter how loud --log-severity is.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate", "--preset", "demo", "--name", "Acme", "--out", str(out_dir),
+            "--log-severity", "debug", "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["preset"] == "demo"
 
 
 def test_generate_produces_complete_preset_tree(fixture_workspace, tmp_path, monkeypatch):

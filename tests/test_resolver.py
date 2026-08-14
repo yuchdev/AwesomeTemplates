@@ -18,9 +18,13 @@ from awesome_templates.resolver import (
     ResolvedMarker,
     gather_context,
     load_api_key,
+    maybe_describe_test_conventions,
+    maybe_write_tutorial,
     parse_dotenv,
     render,
+    render_milestone,
     resolve_tree,
+    seed_first_milestone,
 )
 
 # --- fake client -----------------------------------------------------------
@@ -133,6 +137,14 @@ def test_render_low_confidence_is_todo_blockquote(tmp_path: Path):
     assert "> not sure" in out
 
 
+def test_render_sme_review_needed_always_flagged_even_when_confident(tmp_path: Path):
+    text = "<!-- SME REVIEW NEEDED: populate with a threat model. -->"
+    (marker,) = find_markers(text, tmp_path / "a.md")
+    out = render(ResolvedMarker(marker=marker, prose="a drafted threat model outline", confident=True))
+    assert out.startswith("> **SME REVIEW NEEDED")
+    assert "> a drafted threat model outline" in out
+
+
 # --- resolve_tree end to end (mocked) --------------------------------------
 
 
@@ -208,9 +220,212 @@ def test_resolve_tree_auth_error_aborts_with_one_warning(tmp_path: Path):
     assert sum("aborted" in w for w in warnings) == 1
 
 
+def test_resolve_tree_counts_sme_markers_as_human_review_not_resolved(tmp_path: Path):
+    _write(tmp_path, "a.md", "<!-- SME REVIEW NEEDED: populate with a threat model. -->\n")
+    warnings: list[str] = []
+    summary = resolve_tree(
+        tmp_path,
+        api_key="k",
+        warnings=warnings,
+        make_client=_client({"confident": True, "prose": "a drafted threat model outline"}),
+    )
+    result = (tmp_path / "a.md").read_text(encoding="utf-8")
+    assert "<!--" not in result  # marker comment syntax itself is gone...
+    assert "> **SME REVIEW NEEDED" in result  # ...replaced by a flagged draft
+    assert summary.human_review == 1
+    assert summary.resolved == 0 and summary.todos == 0
+    assert any("still needs human review" in w for w in warnings)
+
+
 def test_resolve_tree_no_markers_is_noop(tmp_path: Path):
     _write(tmp_path, "a.md", "nothing to do here\n")
     warnings: list[str] = []
     summary = resolve_tree(tmp_path, api_key="k", warnings=warnings, make_client=_client({}))
     assert summary == resolver.ResolveSummary()
     assert warnings == []
+
+
+# --- AI-assisted tutorial ---------------------------------------------------
+
+
+def _build_tutorial_project(tmp_path: Path) -> Path:
+    project = tmp_path / "proj"
+    (project / ".claude" / "agents").mkdir(parents=True)
+    (project / ".claude" / "agents" / "widget-verifier.md").write_text(
+        "---\nname: widget-verifier\ndescription: Verifies widgets.\n---\n\nBody.\n"
+    )
+    (project / ".claude" / "skills").mkdir(parents=True)
+    (project / "docs" / "agent").mkdir(parents=True)
+    (project / "docs" / "agent" / "tutorial.md").write_text("# Agentic Tutorial\n")
+    return project
+
+
+def test_generate_tutorial_writes_content_referencing_real_agent_names(tmp_path: Path):
+    project = _build_tutorial_project(tmp_path)
+    warnings: list[str] = []
+    client = FakeClient({"markdown": "# Tutorial\n\nStart with `widget-verifier`.\n"})
+
+    written = maybe_write_tutorial(project, client, "context bundle", warnings)
+
+    result = (project / "docs" / "agent" / "tutorial.md").read_text()
+    assert written is True
+    assert "widget-verifier" in result
+    assert warnings == []
+
+
+def test_maybe_write_tutorial_skips_when_already_customized(tmp_path: Path):
+    project = _build_tutorial_project(tmp_path)
+    (project / "docs" / "agent" / "tutorial.md").write_text("# My Own Tutorial\n\nAlready written.\n")
+    warnings: list[str] = []
+    client = FakeClient({"markdown": "should never be used"})
+
+    written = maybe_write_tutorial(project, client, "context bundle", warnings)
+
+    result = (project / "docs" / "agent" / "tutorial.md").read_text()
+    assert written is False
+    assert result == "# My Own Tutorial\n\nAlready written.\n"
+    assert any("already customized" in w for w in warnings)
+
+
+def test_maybe_write_tutorial_overwrites_the_stub(tmp_path: Path):
+    project = _build_tutorial_project(tmp_path)
+    client = FakeClient({"markdown": "# Tutorial\n\nReal content.\n"})
+
+    written = maybe_write_tutorial(project, client, "context bundle", [])
+
+    result = (project / "docs" / "agent" / "tutorial.md").read_text()
+    assert written is True
+    assert result == "# Tutorial\n\nReal content.\n"
+
+
+# --- --seed-roadmap: "good first task" milestone seeding --------------------
+
+_PLAN = {
+    "milestone_title": "Notification Preferences",
+    "task_slug": "notification-prefs",
+    "task_name": "Notification Preferences",
+    "subtasks": [
+        {"slug": "prefs-model", "title": "Preferences model", "summary": "Add a preferences model."},
+        {"slug": "prefs-endpoint", "title": "Preferences endpoint", "summary": "Expose it via an endpoint."},
+    ],
+}
+
+_ROADMAP_SENTINEL_TEXT = (
+    "Illustrative milestone. Replace this whole milestone with your own project's "
+    "first real milestone once you adopt this template - it exists to show the "
+    "shape, not to be extended.\n"
+)
+
+
+def test_render_milestone_produces_expected_file_tree():
+    files = render_milestone(_PLAN)
+    assert set(files) == {
+        "plan.md",
+        "status.md",
+        "01.0-notification-prefs/README.md",
+        "01.0-notification-prefs/01-prefs-model.md",
+        "01.0-notification-prefs/02-prefs-endpoint.md",
+    }
+    assert "| 01.0 | Notification Preferences |" in files["status.md"]
+    assert "Add a preferences model." in files["01.0-notification-prefs/01-prefs-model.md"]
+
+
+def _build_example_milestone(tmp_path: Path) -> Path:
+    project = tmp_path / "proj"
+    milestone_dir = project / "docs" / "roadmap" / "0001-working-implementation"
+    task_dir = milestone_dir / "01.0-hello-world-endpoint"
+    task_dir.mkdir(parents=True)
+    (milestone_dir / "plan.md").write_text(_ROADMAP_SENTINEL_TEXT)
+    (milestone_dir / "status.md").write_text("# Milestone 0001 - Working Implementation - Status\n")
+    (task_dir / "README.md").write_text("# Task 01.0 - Hello World Endpoint\n")
+    return project
+
+
+def test_seed_first_milestone_replaces_example_when_sentinel_present(tmp_path: Path):
+    project = _build_example_milestone(tmp_path)
+    warnings: list[str] = []
+    client = FakeClient(_PLAN)
+
+    acted = seed_first_milestone(project, client, "context bundle", warnings)
+
+    milestone_dir = project / "docs" / "roadmap" / "0001-working-implementation"
+    assert acted is True
+    assert not (milestone_dir / "01.0-hello-world-endpoint").exists()  # example task gone
+    assert (milestone_dir / "01.0-notification-prefs" / "README.md").is_file()
+    assert "Notification Preferences" in (milestone_dir / "plan.md").read_text()
+    assert warnings == []
+
+
+def test_seed_first_milestone_noop_when_sentinel_already_gone(tmp_path: Path):
+    project = _build_example_milestone(tmp_path)
+    milestone_dir = project / "docs" / "roadmap" / "0001-working-implementation"
+    milestone_dir.joinpath("plan.md").write_text("# Milestone 0001 - Our Real First Milestone\n")
+    warnings: list[str] = []
+    client = FakeClient({"should": "never be called"})
+
+    acted = seed_first_milestone(project, client, "context bundle", warnings)
+
+    assert acted is False
+    assert (milestone_dir / "01.0-hello-world-endpoint").exists()  # left untouched
+    assert any("already customized" in w for w in warnings)
+
+
+# --- AI-drafted test-convention paragraph -----------------------------------
+
+
+class _RecordingMessages(_Messages):
+    def stream(self, **kwargs):
+        self.last_kwargs = kwargs
+        return super().stream(**kwargs)
+
+
+class _RecordingClient:
+    def __init__(self, outcomes):
+        self.messages = _RecordingMessages(outcomes)
+
+
+def _build_conventions_project(tmp_path: Path) -> Path:
+    project = tmp_path / "proj"
+    (project / "tests").mkdir(parents=True)
+    (project / "tests" / "test_widgets.py").write_text("SUPER_SECRET_SOURCE_MARKER = 1\n")
+    (project / "docs" / "test").mkdir(parents=True)
+    (project / "docs" / "test" / "code_test_coverage.md").write_text("# Coverage\n")
+    return project
+
+
+def test_describe_test_conventions_uses_filenames_only_not_contents(tmp_path: Path):
+    project = _build_conventions_project(tmp_path)
+    client = _RecordingClient({"paragraph": "Tests mirror the module layout."})
+    warnings: list[str] = []
+
+    acted = maybe_describe_test_conventions(project, client, warnings)
+
+    assert acted is True
+    prompt = client.messages.last_kwargs["messages"][0]["content"]
+    assert "tests/test_widgets.py" in prompt
+    assert "SUPER_SECRET_SOURCE_MARKER" not in prompt
+    result = (project / "docs" / "test" / "code_test_coverage.md").read_text()
+    assert "Tests mirror the module layout." in result
+
+
+def test_describe_test_conventions_skips_when_already_generated(tmp_path: Path):
+    project = _build_conventions_project(tmp_path)
+    (project / "docs" / "test" / "code_test_coverage.md").write_text(
+        "# Coverage\n\n<!-- test-conventions:generated -->\n"
+    )
+    client = _RecordingClient({"paragraph": "should never be used"})
+    warnings: list[str] = []
+
+    acted = maybe_describe_test_conventions(project, client, warnings)
+
+    assert acted is False
+    assert any("already generated" in w for w in warnings)
+
+
+def test_describe_test_conventions_noop_with_no_test_files(tmp_path: Path):
+    project = tmp_path / "proj"
+    (project / "docs" / "test").mkdir(parents=True)
+    (project / "docs" / "test" / "code_test_coverage.md").write_text("# Coverage\n")
+    client = _RecordingClient({"paragraph": "should never be used"})
+
+    assert maybe_describe_test_conventions(project, client, []) is False

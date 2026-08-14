@@ -36,12 +36,14 @@ def test_block_marker_is_not_inline():
     assert marker.inline is False
     assert marker.bullet is None
     assert marker.instruction == "describe the domain model here"
+    assert marker.kind == "TEMPLATE-INIT"
 
 
 def test_inline_marker_detected():
     (marker,) = find_markers(INLINE, Path("a.md"))
     assert marker.inline is True
     assert marker.instruction == "name the untrusted inputs this project ingests"
+    assert marker.kind == "TEMPLATE-INIT"
 
 
 def test_multiline_instruction_collapses_to_one_marker():
@@ -51,6 +53,7 @@ def test_multiline_instruction_collapses_to_one_marker():
     # Whitespace/newlines collapsed for the prompt.
     assert "\n" not in markers[0].instruction
     assert markers[0].instruction.startswith("list this project's own milestone exit gates")
+    assert markers[0].kind == "TEMPLATE-INIT"
 
 
 def test_bullet_captured():
@@ -58,6 +61,7 @@ def test_bullet_captured():
     assert marker.inline is False
     assert marker.bullet is not None and marker.bullet.startswith("-")
     assert marker.indent == ""
+    assert marker.kind == "TEMPLATE-INIT"
 
 
 def test_indented_block_marker():
@@ -65,6 +69,19 @@ def test_indented_block_marker():
     assert marker.inline is False
     assert marker.bullet is None
     assert marker.indent == "  "
+    assert marker.kind == "TEMPLATE-INIT"
+
+
+def test_find_markers_recognizes_sme_review_needed_kind():
+    text = "<!-- SME REVIEW NEEDED: populate with this project's first real threat model. -->\n"
+    (marker,) = find_markers(text, Path("a.md"))
+    assert marker.kind == "SME REVIEW NEEDED"
+    assert marker.instruction == "populate with this project's first real threat model."
+
+
+def test_bare_todo_comment_is_left_untouched():
+    text = "<!-- TODO: describe ruff, mypy, Flake8 -->\n"
+    assert find_markers(text, Path("a.md")) == []
 
 
 def test_apply_replacements_reverse_splices_multiple_markers():
@@ -94,6 +111,18 @@ def test_cli_import_does_not_pull_anthropic():
     # fresh interpreter so it's a true cold-import check.
     code = (
         "import sys; import awesome_templates.cli, awesome_templates.resolver; "
+        "assert 'anthropic' not in sys.modules, 'anthropic imported at load time'"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_docgen_import_does_not_pull_anthropic():
+    # docgen.py runs unconditionally on every `generate`, with zero ai extra -
+    # it must never import anthropic, directly or transitively (even though
+    # resolver.py, which does need it lazily, now imports docgen.py itself).
+    code = (
+        "import sys; import awesome_templates.docgen; "
         "assert 'anthropic' not in sys.modules, 'anthropic imported at load time'"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

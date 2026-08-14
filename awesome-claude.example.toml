@@ -17,6 +17,12 @@
 # Which preset to generate - see `uv run awesome-claude list`.
 preset = "python"
 
+# Optional: layer one or more specializations' agents/skills on top of the
+# preset - see `uv run awesome-claude list` for the choices each preset
+# offers. Passing --specialization on the CLI replaces this list wholesale
+# rather than merging with it. Commented out by default (no specializations).
+# specializations = ["django"]
+
 # Project root to generate into: gets .claude/, docs/, and scripts/ subdirectories.
 # Defaults to "." (the current directory) if omitted.
 out = "."

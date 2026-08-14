@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A generator (`awesome-claude` CLI, source in `src/awesome_templates`) that copies a project-specific
+A generator (`awesome-templates` CLI, source in `src/awesome_templates`) that copies a project-specific
 *preset* — a complete, self-contained `.claude/` kit (`agents`, `hooks`, `loops`, `skills`,
 `settings.json`) plus its own starter `docs/` and `scripts/` trees — from a template catalog under
 `templates/`.
@@ -16,13 +16,24 @@ A preset is a directory shaped exactly like what lands in the target project:
 `templates/<preset>/.claude/`, `templates/<preset>/docs/`, and `templates/<preset>/scripts/` as
 siblings. There are currently two: `python` and `java`. Generating one is *just* a recursive copy with
 substitution applied to every text file (see `presets.py`) — there is no runtime composition step, no
-category selection, no per-entity include/exclude. This is deliberate: `.claude/`, `docs/`, and
-`scripts/` must be generated together, because their references form one corpus. Baking all three
-trees into one preset, authored and reviewed together, makes missing generated dependencies
-structurally impossible instead of runtime-checked — see
+category selection, no per-entity include/exclude *within the preset itself*. This is deliberate:
+`.claude/`, `docs/`, and `scripts/` must be generated together, because their references form one
+corpus. Baking all three trees into one preset, authored and reviewed together, makes missing
+generated dependencies structurally impossible instead of runtime-checked — see
 `docs/roadmap/0001-docs-claude-connectivity.md` for the fuller design history (that RFC's Phase 0 was
 a runtime `--strict` connectivity check; the preset-tree model superseded it with the same guarantee
 by construction).
+
+The one deliberate exception is the **specialization layer**: each preset may ship zero or more
+`templates/<preset>/specializations/<name>/.claude/` add-ons (e.g. `python`'s `django`,
+`webscraping`, `ml-ai`; `java`'s `spring`, `android`), each restricted to `agents/` and `skills/`
+only — never `hooks/`, `loops/`, or a `settings.json`, since a hook needs wiring in the base
+preset's own `settings.json` to do anything (see `specializations.py`'s module docstring). `generate
+--specialization <name>` (repeatable) layers a specialization's agents/skills on top of the base
+preset's own after the normal copy; with no `--specialization` flags, generation is unchanged from
+the plain-preset behavior above. A specialization directory is discovered by pointing
+`catalog.discover` at it directly — it is the same "kind dirs nested one level under `.claude/`"
+shape a preset directory already is, so no separate discovery mechanism exists for it.
 
 Keep `src/awesome_templates` (the generator's own code) and `templates/` (the content it distributes)
 mentally separate — most bugs are in one or the other, rarely both.
@@ -33,7 +44,7 @@ in it so far: some agents inside `templates/<preset>/.claude/agents/*.md` carry 
 `<!-- TEMPLATE-INIT: ... -->` marker — a fact that's project-specific in a way no `{{PLACEHOLDER}}`
 substitution could ever fill in (see `reference/aegis/` for a real, lived-in example of what those
 facts look like once filled). `create-from-template` is what closes that gap: given a target project's
-path (one `awesome-claude generate` already ran against), it deeply analyzes that target and edits
+path (one `awesome-templates generate` already ran against), it deeply analyzes that target and edits
 *its* agent files in place. It is deliberately not shipped inside `templates/<preset>/` — it isn't a
 capability the generated project needs standing presence of; it's a one-time bootstrap step run from
 outside the target, not part of the target's own dev fleet.
@@ -45,14 +56,21 @@ outside the target, not part of the target's own dev fleet.
 uv sync
 
 # run the CLI
-uv run awesome-claude list
-uv run awesome-claude generate --preset python --name "Acme Sync" --package acme_sync --out .
+uv run awesome-templates list
+uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
+uv run awesome-templates generate --preset python --name "Acme Sync" --specialization django --out .
+
+# with the optional 'ai' extra + ANTHROPIC_API_KEY: AI-resolve markers, draft the
+# tutorial, describe test conventions, and (only alongside --resolve-markers) replace
+# the example roadmap milestone with a real first one
+uv run awesome-templates generate --preset python --name "Acme Sync" --resolve-markers
+uv run awesome-templates generate --preset python --name "Acme Sync" --resolve-markers --seed-roadmap
 
 # maintainer-only: render this repo's own agent/hook/loop/skill reference graph
-uv run awesome-claude graph                      # every preset, side by side
-uv run awesome-claude graph templates/python      # one preset's own graph + doc connectivity
-uv run awesome-claude graph --inline --force
-uv run awesome-claude graph --remove
+uv run awesome-templates graph                      # every preset, side by side
+uv run awesome-templates graph templates/python      # one preset's own graph + doc connectivity
+uv run awesome-templates graph --inline --force
+uv run awesome-templates graph --remove
 
 # tests
 uv run pytest --cov=awesome_templates
@@ -66,7 +84,34 @@ uv run ruff check src/ tests/
 `generate` also accepts `--config <file.json|file.toml>` (CLI flags override matching config values)
 and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets a
 `.claude/` and a `docs/` subdirectory (default: `.`); pass `--force` to overwrite existing content in
-either.
+either. `--specialization <name>` is repeatable and adds one specialization's agents/skills on top
+of the preset (see `awesome-templates list` for the choices each preset offers); passing any
+`--specialization` flag replaces a config file's `specializations` list wholesale rather than
+merging with it.
+
+`--log-severity {error|warning|info|debug}` (default `warning`, matching the previous quiet-by-default
+output) controls live console tracing of `generate`'s own pipeline, written to stderr via
+`log_helper.LogHelper` so `--json` output on stdout stays parseable regardless of the level chosen:
+`info` narrates each step (preset copy start/end, each specialization layered, each doc written, each
+marker resolved, each Anthropic API call made under `--resolve-markers`); `debug` additionally traces
+every individual file copied. `warning`/`error` show only problems, at the same severity `generate` has
+always surfaced via its final `warnings` summary list.
+
+`generate` also always runs `docgen.py` (no flags, no API key, no `ai` extra needed): it regenerates
+`docs/agent/{agents,skills,hooks}.md` and appends an "Actual Test Layout" section to
+`docs/test/code_test_coverage.md` from what's actually on disk in the freshly generated tree (after
+any specialization layer). `--resolve-markers` (needs the `ai` extra + `ANTHROPIC_API_KEY`) does
+everything that flag has always done — AI-resolve `<!-- TEMPLATE-INIT: ... -->` markers, grounded in
+`resolver.gather_context`'s read of the target project — plus three more increments layered onto the
+same call: drafting `docs/agent/tutorial.md` (skipped if the user already customized it away from the
+shipped stub), appending one AI paragraph of observed test conventions to
+`docs/test/code_test_coverage.md` (from test file *names* only, never contents; skipped once already
+generated), and — only paired with `--seed-roadmap`, since it deletes example content — replacing
+`docs/roadmap/0001-working-implementation/`'s illustrative milestone with an AI-proposed real first
+one (skipped if the user already replaced `plan.md`'s own "replace this milestone" sentinel sentence).
+A second marker kind, `<!-- SME REVIEW NEEDED: ... -->` (used in `docs/security/README.md`), is never
+silently resolved away like `TEMPLATE-INIT` is — its output always stays flagged as an unreviewed AI
+draft regardless of the model's confidence.
 
 **Ruff config note:** both `ruff.toml` (repo root) and `pyproject.toml`'s `[tool.ruff]` section exist
 and disagree (different `line-length`, `target-version`, `select`/`ignore` sets). `ruff.toml` takes

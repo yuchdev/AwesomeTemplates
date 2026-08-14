@@ -1,11 +1,14 @@
-"""Scan generated Markdown for `<!-- TEMPLATE-INIT: <instruction> -->` markers
-and splice resolved prose back in - the pure, network-free half of the
+"""Scan generated Markdown for `<!-- KIND: <instruction> -->` markers and
+splice resolved prose back in - the pure, network-free half of the
 AI-resolution feature (the API calls live in resolver.py).
 
 A marker is the second kind of gap `generate` fills: not a deterministic
 `{{PLACEHOLDER}}` (that is templating.py's job), but a project-specific fact
 that only exists once someone reads the target project. This module finds every
-marker and knows how to replace it; deciding *what* to write is resolver.py.
+marker and knows how to replace it; deciding *what* to write (and, for
+`SME REVIEW NEEDED`, whether it may be silently resolved away at all) is
+resolver.py's job - see MARKER_KINDS below for the two kinds this module
+recognizes.
 
 The markers in templates/ take several shapes this module must all handle:
 - a whole section on its own line (agents/app-architect.md)
@@ -21,13 +24,24 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+# The two marker kinds this module recognizes, in resolution-policy order:
+# TEMPLATE-INIT is safe to auto-fill with confident AI prose (low confidence
+# falls back to a visible TODO); SME REVIEW NEEDED marks a spot that needs a
+# human security reviewer and must never be silently resolved away - the model
+# may draft a starting point, but resolver.render always keeps it flagged as
+# unreviewed regardless of confidence. A bare `<!-- TODO: ... -->` comment is
+# deliberately NOT a third kind here: it's an ordinary authoring TODO, not a
+# project-specific fact only a target-project read could answer.
+MARKER_KINDS = ("TEMPLATE-INIT", "SME REVIEW NEEDED")
+
 # `.*?` + DOTALL so a marker whose instruction wraps across lines collapses into
 # a single match. Only the comment itself is matched; the line's leading
 # indent/bullet is classified separately (see find_markers) so an inline marker
 # never swallows the inter-word space in front of it. Kept deliberately distinct
 # from templating.py's PLACEHOLDER_RE ({{WORD}}) - the two passes never overlap.
 MARKER_RE = re.compile(
-    r"<!--\s*TEMPLATE-INIT:\s*(?P<instruction>.*?)\s*-->",
+    r"<!--\s*(?P<kind>" + "|".join(re.escape(k) for k in MARKER_KINDS) + r"):\s*"
+    r"(?P<instruction>.*?)\s*-->",
     re.DOTALL,
 )
 
@@ -53,6 +67,7 @@ class Marker:
     start: int
     end: int
     raw: str
+    kind: str  # one of MARKER_KINDS
     instruction: str
     indent: str
     bullet: str | None
@@ -93,6 +108,7 @@ def find_markers(text: str, path: Path) -> list[Marker]:
                 start=start,
                 end=end,
                 raw=text[start:end],
+                kind=m.group("kind"),
                 instruction=_collapse(m.group("instruction")),
                 indent=indent,
                 bullet=bullet,

@@ -22,6 +22,7 @@ from awesome_templates.catalog import discover, list_presets
 from awesome_templates.cli import app
 from awesome_templates.dependencies import build_dependency_graph
 from awesome_templates.markers import scan_tree
+from awesome_templates.specializations import disallowed_kinds_present, list_specializations
 from awesome_templates.templating import PLACEHOLDER_RE
 from awesome_templates.workspace import Workspace
 
@@ -170,6 +171,21 @@ def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_p
     assert leftover == []
 
 
+def test_real_preset_agents_doc_lists_every_real_agent_file(tmp_path):
+    proj = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", "python", "--name", "Big", "--package", "big", "--out", str(proj)],
+    )
+    assert result.exit_code == 0, result.stdout
+
+    agent_stems = {p.stem for p in (REAL_REPO_ROOT / "templates" / "python" / ".claude" / "agents").glob("*.md")}
+    assert len(agent_stems) == 12  # guard the guard: pin the real preset's current agent count
+    agents_doc = (proj / "docs" / "agent" / "agents.md").read_text()
+    for stem in agent_stems:
+        assert stem in agents_doc, f"{stem} missing from generated docs/agent/agents.md"
+
+
 @pytest.mark.parametrize("preset", ["python", "java"])
 def test_dry_run_reports_marker_count_without_calling_api(preset, tmp_path):
     # --resolve-markers --dry-run must report the real TEMPLATE-INIT count from
@@ -188,3 +204,48 @@ def test_dry_run_reports_marker_count_without_calling_api(preset, tmp_path):
     payload = json.loads(result.stdout)
     assert payload["markers_to_resolve"] == expected
     assert not proj.exists()  # dry-run writes nothing
+
+
+# --- specialization layer ----------------------------------------------------
+
+_REAL_TEMPLATES = Workspace(root=REAL_REPO_ROOT / "templates")
+_PRESET_SPECIALIZATION_PAIRS = [
+    (preset, specialization)
+    for preset in list_presets(_REAL_TEMPLATES)
+    for specialization in list_specializations(_REAL_TEMPLATES, preset)
+]
+
+
+def test_real_repo_actually_ships_specializations():
+    # Guard the guard: if this list is ever empty (e.g. a future refactor moves
+    # specializations/ elsewhere without updating list_specializations), the
+    # parametrized test below would silently collect zero cases and report a
+    # cheerful "0 passed" instead of catching the regression.
+    assert _PRESET_SPECIALIZATION_PAIRS, "expected at least one real (preset, specialization) pair"
+
+
+@pytest.mark.parametrize("preset,specialization", _PRESET_SPECIALIZATION_PAIRS)
+def test_real_preset_specialization_has_no_placeholder_leftovers(preset, specialization, tmp_path):
+    proj = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        ["generate", "--preset", preset, "--name", "Big", "--package", "big",
+         "--specialization", specialization, "--out", str(proj)],
+    )
+    assert result.exit_code == 0, result.stdout
+
+    md_files = list(proj.rglob("*.md"))
+    leftover = [f for f in md_files if PLACEHOLDER_RE.search(f.read_text(encoding="utf-8"))]
+    assert leftover == []
+
+
+def test_real_specializations_ship_only_agents_and_skills():
+    # Structural enforcement of the "no hooks/loops/settings.json in a
+    # specialization" rule (see specializations.py's module docstring for why):
+    # a hook needs settings.json wiring only the core preset owns.
+    offenders = {
+        f"{preset}/{specialization}": found
+        for preset, specialization in _PRESET_SPECIALIZATION_PAIRS
+        if (found := disallowed_kinds_present(_REAL_TEMPLATES, preset, specialization))
+    }
+    assert offenders == {}

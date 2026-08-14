@@ -13,13 +13,14 @@ from __future__ import annotations
 import enum
 import json
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 from typer.core import TyperGroup
 
+from awesome_templates import docgen
 from awesome_templates.catalog import KINDS, discover, list_presets
 from awesome_templates.config import ConfigError, load_config
 from awesome_templates.dependencies import (
@@ -28,7 +29,9 @@ from awesome_templates.dependencies import (
     write_inline_dependencies,
 )
 from awesome_templates.dependencies import to_json as graph_to_json
+from awesome_templates.log_helper import LogHelper, LogSeverity
 from awesome_templates.presets import copy_preset
+from awesome_templates.specializations import list_specializations
 from awesome_templates.templating import slugify_package, slugify_upper
 from awesome_templates.workspace import Workspace
 
@@ -115,6 +118,17 @@ def _resolve_preset(workspace: Workspace, preset: Optional[str]) -> str:
     return preset
 
 
+def _resolve_specializations(workspace: Workspace, preset: str, requested: list[str]) -> list[str]:
+    available = list_specializations(workspace, preset)
+    unknown = [name for name in requested if name not in available]
+    if unknown:
+        _fail(
+            f"unknown specialization(s) for preset '{preset}': {', '.join(unknown)} "
+            f"(choices: {', '.join(available) or 'none'})"
+        )
+    return requested
+
+
 @app.command("list")
 def list_cmd(
     json_out: bool = typer.Option(False, "--json", help="emit machine-readable JSON"),
@@ -126,8 +140,11 @@ def list_cmd(
     if json_out:
         payload = {
             preset: {
-                kind: discover(Workspace(root=workspace.path(preset))).names(".", kind)
-                for kind in KINDS
+                **{
+                    kind: discover(Workspace(root=workspace.path(preset))).names(".", kind)
+                    for kind in KINDS
+                },
+                "specializations": list_specializations(workspace, preset),
             }
             for preset in presets
         }
@@ -147,6 +164,9 @@ def list_cmd(
             names = catalog.names(".", kind)
             if names:
                 console.print(f"  [bold]{kind}[/bold]: {', '.join(names)}")
+        specializations = list_specializations(workspace, preset)
+        if specializations:
+            console.print(f"  [bold]specializations[/bold]: {', '.join(specializations)}")
 
 
 @app.command("graph")
@@ -266,6 +286,12 @@ def generate(
         None, help="project directory to generate into (default: .); "
         "gets .claude/, docs/, and scripts/ subdirectories"
     ),
+    specialization: Optional[List[str]] = typer.Option(
+        None,
+        "--specialization",
+        help="add a specialization's agents/skills on top of the preset "
+        "(repeatable; see `awesome-templates list` for choices per preset)",
+    ),
     force: Optional[bool] = typer.Option(
         None, "--force/--no-force", help="overwrite existing .claude/, docs/, or scripts/ content"
     ),
@@ -275,13 +301,28 @@ def generate(
         help="AI-resolve <!-- TEMPLATE-INIT --> markers in the generated Markdown "
         "(needs the 'ai' extra and ANTHROPIC_API_KEY)",
     ),
+    seed_roadmap: bool = typer.Option(
+        False,
+        "--seed-roadmap",
+        help="replace the example roadmap milestone with an AI-proposed first milestone for "
+        "this project - requires --resolve-markers; deletes the example milestone's content",
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="print the plan without writing anything"
     ),
     json_out: bool = typer.Option(False, "--json", help="emit dry-run/summary output as JSON"),
+    log_severity: LogSeverity = typer.Option(
+        LogSeverity.warning,
+        "--log-severity",
+        help="live console tracing detail on stderr: error, warning, info, or debug "
+        "(each level also shows every louder one; 'info' narrates each copy/docgen/marker/"
+        "API-call step, 'debug' adds per-file copy detail; default 'warning' matches the "
+        "previous quiet-by-default behavior)",
+    ),
 ) -> None:
     """Generate a project-specific preset (.claude/ kit + docs/ + scripts/)."""
     workspace = _workspace()
+    log = LogHelper(severity=log_severity)
 
     try:
         cfg = load_config(config) if config else {}
@@ -303,10 +344,20 @@ def generate(
     package_value = package or project_cfg.get("package")
     purpose_value = purpose or project_cfg.get("purpose")
     slug_value = slug or project_cfg.get("slug_upper")
+    # A repeatable flag replaces the config list wholesale when passed at all -
+    # it never merges with config's list. There is no "explicitly zero" via the
+    # flag; not passing it is the only way to defer to config.
+    specializations_value = (
+        specialization if specialization is not None else list(cfg.get("specializations", []))
+    )
 
     preset_value = _resolve_preset(workspace, preset_value)
     if not name_value:
         _fail("--name (or config project.name) is required")
+        return
+    specializations_value = _resolve_specializations(workspace, preset_value, specializations_value)
+    if seed_roadmap and not resolve_value:
+        _fail("--seed-roadmap requires --resolve-markers (it needs the same project context/API key)")
         return
 
     subs = {
@@ -323,6 +374,7 @@ def generate(
             "preset": preset_value,
             "out": out_value,
             "substitutions": subs,
+            "specializations": specializations_value,
         }
         if resolve_value:
             from awesome_templates.markers import scan_tree
@@ -333,6 +385,8 @@ def generate(
         else:
             console.print(f"Would generate preset '{preset_value}' into: {out_dir}")
             console.print(f"Substitutions: {subs}")
+            if specializations_value:
+                console.print(f"Specializations: {', '.join(specializations_value)}")
             if resolve_value:
                 console.print(f"Would AI-resolve {payload['markers_to_resolve']} marker(s)")
         return
@@ -350,18 +404,30 @@ def generate(
         return
 
     warnings: list[str] = []
-    written = copy_preset(workspace, preset_value, out_dir, force_value, subs, warnings)
+    try:
+        written = copy_preset(
+            workspace, preset_value, out_dir, force_value, subs, warnings,
+            specializations=specializations_value, log=log,
+        )
+    except ValueError as exc:
+        _fail(str(exc))
+        return
+
+    docgen.write_agent_docs(out_dir, warnings, log=log)
+    docgen.write_test_layout_doc(out_dir, warnings, log=log)
 
     summary = {
         "preset": preset_value,
         "out": str(out_dir),
         "files_written": written,
+        "specializations": specializations_value,
         "warnings": warnings,
     }
 
     if resolve_value:
         try:
             from awesome_templates import resolver
+            from awesome_templates.ai import client as ai_client
         except ModuleNotFoundError:
             _fail("--resolve-markers needs the 'ai' extra: pip install awesome_templates[ai]")
             return
@@ -369,21 +435,44 @@ def generate(
         if not api_key:
             _fail("--resolve-markers needs ANTHROPIC_API_KEY (in the environment or a .env in the cwd)")
             return
-        rsum = resolver.resolve_tree(out_dir, api_key=api_key, warnings=warnings)
+        client = ai_client.build_client(api_key)
+        rsum = resolver.resolve_tree(
+            out_dir, api_key=api_key, warnings=warnings, make_client=lambda: client, log=log,
+        )
         summary["markers_resolved"] = rsum.resolved
         summary["markers_todo"] = rsum.todos
+        summary["markers_human_review"] = rsum.human_review
         summary["markers_failed"] = rsum.failed
+
+        context_bundle = resolver.gather_context(out_dir)
+        summary["tutorial_written"] = resolver.maybe_write_tutorial(
+            out_dir, client, context_bundle, warnings, log=log,
+        )
+        if seed_roadmap:
+            summary["roadmap_seeded"] = resolver.seed_first_milestone(
+                out_dir, client, context_bundle, warnings, log=log,
+            )
+        summary["test_conventions_described"] = resolver.maybe_describe_test_conventions(
+            out_dir, client, warnings, log=log,
+        )
 
     if json_out:
         typer.echo(json.dumps(summary, indent=2))
     else:
         console.print(f"Wrote preset '{preset_value}' to {out_dir} ({written} file(s))")
+        if specializations_value:
+            console.print(f"Specializations: {', '.join(specializations_value)}")
         if resolve_value:
             console.print(
                 f"Resolved {summary['markers_resolved']} marker(s); "
                 f"left {summary['markers_todo']} as TODO; "
+                f"{summary['markers_human_review']} drafted for human review; "
                 f"{summary['markers_failed']} failed"
             )
+            if summary["tutorial_written"]:
+                console.print("Wrote docs/agent/tutorial.md")
+            if seed_roadmap and summary.get("roadmap_seeded"):
+                console.print("Seeded the first roadmap milestone")
         if warnings:
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:

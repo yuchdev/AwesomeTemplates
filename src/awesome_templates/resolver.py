@@ -1,4 +1,4 @@
-"""Resolve `<!-- TEMPLATE-INIT: ... -->` markers by asking Anthropic to write
+"""Resolve `<!-- KIND: ... -->` markers by asking Anthropic to write
 project-grounded prose - the business-logic half of the AI-resolution feature.
 
 This is the programmatic sibling of `.claude/agents/create-from-template.md`:
@@ -10,16 +10,34 @@ imports `anthropic` or touches the SDK directly, so it stays a plain function
 of (marker, context) -> prose regardless of which client backs it, and is easy
 to unit-test with a fake client. markers.py does the pure scan/splice; this
 module decides what each marker should say.
+
+The two marker kinds carry opposite resolution policies: a `TEMPLATE-INIT`
+marker is fully resolved away on confident output (or left as a visible TODO
+on low confidence), while a `SME REVIEW NEEDED` marker is never resolved
+away - render() always keeps its output flagged as an unreviewed AI draft,
+and resolve_tree counts it under ResolveSummary.human_review rather than
+resolved/todos, regardless of the model's own confidence score.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from awesome_templates.ai import client as ai_client
+from awesome_templates.docgen import (
+    TEST_COVERAGE_DOC,
+    AgentInfo,
+    SkillInfo,
+    list_agents,
+    list_files_under,
+    list_skills,
+    list_test_files,
+)
+from awesome_templates.log_helper import NULL_LOG, LogHelper
 from awesome_templates.markers import Marker, apply_replacements, scan_tree
 
 MODEL = "claude-opus-4-8"
@@ -45,6 +63,15 @@ Return prose only: no `<!-- ... -->` comment syntax and no `{{PLACEHOLDER}}`
 tokens. If the bundle genuinely lacks the signal to answer confidently (e.g. a
 skeletal project with no real code yet), set confident=false and put your best
 partial guidance in prose - do not fabricate specifics to sound confident.
+"""
+
+_SME_REVIEW_ADDENDUM = """
+
+This marker is kind SME REVIEW NEEDED, not TEMPLATE-INIT: draft a starting
+point (e.g. a threat model outline) grounded in the project bundle, but do
+not write as though this is a completed review. Your output will always be
+displayed as an explicitly unreviewed AI draft regardless of your confidence,
+so set confident based only on how well-grounded your draft is.
 """
 
 _USER_TEMPLATE = """\
@@ -85,6 +112,7 @@ class ResolvedMarker:
 class ResolveSummary:
     resolved: int = 0
     todos: int = 0
+    human_review: int = 0
     files_touched: int = 0
     failed: int = 0
 
@@ -150,13 +178,7 @@ def gather_context(target: Path, *, char_budget: int = 40_000) -> str:
 
     tree: list[str] = []
     for sub in ("src", "tests", "app", "lib"):
-        base = target / sub
-        if base.is_dir():
-            tree.extend(
-                str(p.relative_to(target).as_posix())
-                for p in sorted(base.rglob("*"))
-                if p.is_file()
-            )
+        tree.extend(list_files_under(target / sub, target))
     if tree:
         listing = "\n".join(tree[:300])
         if len(tree) > 300:
@@ -187,7 +209,10 @@ def resolve_one(client, marker: Marker, context_bundle: str, *, model: str = MOD
         before=marker.before or "(start of file)",
         after=marker.after or "(end of file)",
     )
-    system = _SYSTEM + "\n\n# Target project context\n\n" + context_bundle
+    system = _SYSTEM
+    if marker.kind != "TEMPLATE-INIT":
+        system += _SME_REVIEW_ADDENDUM
+    system += "\n\n# Target project context\n\n" + context_bundle
     data = ai_client.request_json(client, model=model, system=system, user=user, schema=_SCHEMA)
     return ResolvedMarker(
         marker=marker,
@@ -198,9 +223,16 @@ def resolve_one(client, marker: Marker, context_bundle: str, *, model: str = MOD
 
 def render(resolved: ResolvedMarker) -> str:
     """Turn a resolved marker into the exact text that replaces the comment,
-    honouring inline vs block placement and the low-confidence TODO fallback."""
+    honouring inline vs block placement, the low-confidence TODO fallback, and
+    the SME-review policy (always flagged as an unreviewed draft, regardless
+    of confidence - see the module docstring)."""
     marker = resolved.marker
     prose = resolved.prose
+
+    if marker.kind == "SME REVIEW NEEDED":
+        head = f"{marker.indent}> **SME REVIEW NEEDED (AI-drafted - verify before relying on this):**"
+        body_lines = [f"{marker.indent}> {line}" for line in prose.splitlines() if line.strip()]
+        return head + ("\n" + "\n".join(body_lines) if body_lines else "")
 
     if not resolved.confident:
         head = f"{marker.indent}> **TODO (fill in): {marker.instruction}**"
@@ -225,6 +257,7 @@ def resolve_tree(
     api_key: str,
     warnings: list[str],
     make_client=None,
+    log: LogHelper = NULL_LOG,
 ) -> ResolveSummary:
     """Resolve every marker in a generated tree in place.
 
@@ -236,10 +269,13 @@ def resolve_tree(
     summary = ResolveSummary()
     markers = scan_tree(out_dir)
     if not markers:
+        log.info(f"no markers found under {out_dir} - nothing to resolve")
         return summary
+    log.info(f"found {len(markers)} marker(s) to resolve")
 
     auth_errors, api_errors = ai_client.error_classes()
 
+    log.info("gathering target-project context (README/CLAUDE.md/manifest/source tree)...")
     context_bundle = gather_context(out_dir)
     client = make_client() if make_client is not None else ai_client.build_client(api_key)
 
@@ -253,37 +289,385 @@ def resolve_tree(
             break
         repls: list[tuple[Marker, str]] = []
         for marker in file_markers:
+            log.info(
+                f"resolving marker in {path.name} (kind={marker.kind}) - "
+                f"calling Anthropic API (model={MODEL})..."
+            )
             try:
                 resolved = resolve_one(client, marker, context_bundle)
             except auth_errors as exc:  # abort the whole run
-                warnings.append(
+                message = (
                     f"marker resolution aborted (authentication error: {exc}) - "
                     "check ANTHROPIC_API_KEY and re-run --resolve-markers"
                 )
+                warnings.append(message)
+                log.error(message)
                 summary.failed += 1
                 aborted = True
                 break
             except api_errors as exc:  # soft: leave this marker, keep going
-                warnings.append(f"could not resolve a marker in {path.name} ({exc}) - left in place")
+                message = f"could not resolve a marker in {path.name} ({exc}) - left in place"
+                warnings.append(message)
+                log.warning(message)
                 summary.failed += 1
                 continue
             except Exception as exc:  # bad/unexpected response - soft too
-                warnings.append(f"could not resolve a marker in {path.name} ({exc}) - left in place")
+                message = f"could not resolve a marker in {path.name} ({exc}) - left in place"
+                warnings.append(message)
+                log.warning(message)
                 summary.failed += 1
                 continue
 
             repls.append((marker, render(resolved)))
-            if resolved.confident:
+            if marker.kind == "SME REVIEW NEEDED":
+                summary.human_review += 1
+                message = (
+                    f"drafted a starting point for a SME REVIEW NEEDED marker in {path.name} - "
+                    "still needs human review"
+                )
+                warnings.append(message)
+                log.info(message)
+            elif resolved.confident:
                 summary.resolved += 1
+                log.info(f"resolved marker in {path.name} confidently")
             else:
                 summary.todos += 1
-                warnings.append(
+                message = (
                     f"low confidence for a marker in {path.name} - left a TODO: {marker.instruction}"
                 )
+                warnings.append(message)
+                log.info(message)
 
         if repls:
+            log.debug(f"writing {len(repls)} replacement(s) back to {path}")
             text = path.read_text(encoding="utf-8")
             path.write_text(apply_replacements(text, repls), encoding="utf-8")
             summary.files_touched += 1
 
     return summary
+
+
+# --- AI-assisted tutorial (docs/agent/tutorial.md) --------------------------
+
+# Both presets ship this exact stub - see templates/{python,java}/docs/agent/tutorial.md.
+# Compared after stripping, so trailing-whitespace differences don't matter.
+_TUTORIAL_STUB = "# Agentic Tutorial"
+
+_TUTORIAL_SYSTEM = """\
+You are writing the onboarding tutorial for a generated Claude Code kit, at
+docs/agent/tutorial.md. Audience: a developer joining this specific project
+who has never used this kit before. Ground every claim in the project bundle
+and the actual agent/skill list below - never invent an agent, skill, or
+workflow that isn't in that list. Structure: a short "why this exists"
+paragraph, then a walkthrough of the 2-3 most useful agents/skills for this
+project's actual domain (pick from the real list, don't cover all of them
+exhaustively), each with one concrete example invocation. End with "where to
+go next" pointing at docs/agent/agents.md, skills.md, and hooks.md.
+
+Return the tutorial as a single Markdown document under the "markdown" key,
+starting with a top-level `# ...` heading. No `<!-- ... -->` comment syntax
+and no `{{PLACEHOLDER}}` tokens.
+"""
+
+_TUTORIAL_SCHEMA = {
+    "type": "object",
+    "properties": {"markdown": {"type": "string"}},
+    "required": ["markdown"],
+    "additionalProperties": False,
+}
+
+
+def _format_entity_list(agents: list[AgentInfo], skills: list[SkillInfo]) -> str:
+    agent_lines = [f"- `{a.name}`: {a.description or '(no description)'}" for a in agents]
+    skill_lines = [
+        f"- `{s.name}` ({s.invocation or 'auto'}): {s.description or '(no description)'}"
+        for s in skills
+    ]
+    return (
+        "## Agents\n" + ("\n".join(agent_lines) if agent_lines else "(none)")
+        + "\n\n## Skills\n" + ("\n".join(skill_lines) if skill_lines else "(none)")
+    )
+
+
+def generate_tutorial(
+    client,
+    context_bundle: str,
+    agents: list[AgentInfo],
+    skills: list[SkillInfo],
+    *,
+    model: str = MODEL,
+) -> str:
+    """Ask the model for a tutorial grounded in the real agent/skill list, so
+    it names things that actually shipped rather than plausible-sounding
+    invented ones."""
+    user = (
+        "# Target project context\n\n" + context_bundle
+        + "\n\n# Actual agents and skills shipped in this project's .claude/\n\n"
+        + _format_entity_list(agents, skills)
+    )
+    data = ai_client.request_json(
+        client, model=model, system=_TUTORIAL_SYSTEM, user=user, schema=_TUTORIAL_SCHEMA
+    )
+    return str(data["markdown"]).strip() + "\n"
+
+
+def maybe_write_tutorial(
+    out_dir: Path, client, context_bundle: str, warnings: list[str], log: LogHelper = NULL_LOG
+) -> bool:
+    """Write docs/agent/tutorial.md via the model, unless it's missing (this
+    preset doesn't ship one) or a user already customized it away from the
+    shipped stub - the same non-destructive posture resolve_tree already has
+    toward markers, applied here to a whole file instead of a comment span.
+    Returns whether it actually wrote anything."""
+    path = out_dir / "docs" / "agent" / "tutorial.md"
+    if not path.is_file():
+        log.info(f"{path} does not exist - skipping tutorial generation")
+        return False
+    if path.read_text(encoding="utf-8").strip() != _TUTORIAL_STUB:
+        message = "tutorial.md already customized - left as-is"
+        warnings.append(message)
+        log.info(message)
+        return False
+
+    log.info(f"drafting {path} via Anthropic API (model={MODEL})...")
+    try:
+        markdown = generate_tutorial(client, context_bundle, list_agents(out_dir), list_skills(out_dir))
+    except Exception as exc:  # soft failure: markers already resolved, don't abort the run
+        message = f"could not generate docs/agent/tutorial.md ({exc}) - left as stub"
+        warnings.append(message)
+        log.warning(message)
+        return False
+
+    path.write_text(markdown, encoding="utf-8")
+    log.info(f"wrote {path}")
+    return True
+
+
+# --- "good first task" roadmap seeding (--seed-roadmap) ---------------------
+
+# Both presets' example milestone lives at this fixed path (see
+# templates/{python,java}/docs/roadmap/0001-working-implementation/) - seeding
+# replaces its *content* in place, never renames or moves the directory, so
+# docs/roadmap/README.md's own link to it keeps working either way.
+_ROADMAP_MILESTONE_DIR = "0001-working-implementation"
+_ROADMAP_ID = "0001"
+
+# The literal sentence plan.md itself carries, identical in both presets -
+# collapsed whitespace so a future rewrap of the source line doesn't matter.
+_ROADMAP_SENTINEL = "Replace this whole milestone with your own project's first real milestone"
+
+_ROADMAP_SYSTEM = """\
+You are proposing the first real roadmap milestone for a project that just
+adopted this generated Claude Code kit, replacing the kit's illustrative
+example milestone. Ground the milestone in the project bundle below: propose
+a small, concrete, plausible first slice of real work for THIS project, not
+a generic example. Keep it small - one task, broken into 2-4 subtasks, each
+independently completable in under a day.
+
+Do not invent exact source file paths, package names, or class names - the
+project bundle is a summary, not a full read of the codebase, so guessing
+specifics risks being wrong. Describe requirements and outcomes in prose;
+the developer implementing each subtask decides the concrete specifics once
+they start.
+"""
+
+_ROADMAP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "milestone_title": {"type": "string"},
+        "task_slug": {"type": "string"},
+        "task_name": {"type": "string"},
+        "subtasks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                },
+                "required": ["slug", "title", "summary"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["milestone_title", "task_slug", "task_name", "subtasks"],
+    "additionalProperties": False,
+}
+
+
+def propose_first_milestone(client, context_bundle: str, *, model: str = MODEL) -> dict:
+    """Ask the model for a small, structured first-milestone plan - content
+    only, no file layout. render_milestone turns this into the actual files."""
+    user = "# Target project context\n\n" + context_bundle
+    return ai_client.request_json(
+        client, model=model, system=_ROADMAP_SYSTEM, user=user, schema=_ROADMAP_SCHEMA
+    )
+
+
+def render_milestone(plan: dict) -> dict[str, str]:
+    """Pure function: structured plan -> {relative_path: file_content},
+    following the exact taxonomy plan.md documents (plan.md + status.md at
+    the milestone root, one `{TT.t}-{slug}/README.md` + numbered
+    `{NN}-{subtask-slug}.md` subtask files). No model call - this is the same
+    content/format split render() in this module already applies to markers.
+    Paths are relative to the milestone directory itself (`0001-...-/`)."""
+    milestone_title = plan["milestone_title"]
+    task_slug = plan["task_slug"]
+    task_name = plan["task_name"]
+    subtasks = plan["subtasks"]
+    task_dir = f"01.0-{task_slug}"
+
+    files: dict[str, str] = {
+        "plan.md": (
+            f"# Milestone {_ROADMAP_ID} - {milestone_title}\n\n"
+            "## Tasks\n\n"
+            "| Task | Name |\n"
+            "|------|------|\n"
+            f"| 01.0 | {task_name} |\n\n"
+            f"See [{task_dir}/README.md]({task_dir}/README.md) for the task breakdown.\n"
+        ),
+        "status.md": (
+            f"# Milestone {_ROADMAP_ID} - {milestone_title} - Status\n\n"
+            "Tracks progress against [plan.md](plan.md). Updated as each task lands.\n\n"
+            "## Current status\n\n"
+            "| Task | Name | Status | Tests |\n"
+            "|------|------|--------|-------|\n"
+            f"| 01.0 | {task_name} | ⬜ Not started | - |\n\n"
+            "**Legend:** ✅ Complete · 🔶 In progress / partial · ⬜ Not started\n"
+        ),
+    }
+
+    subtask_rows = []
+    for i, subtask in enumerate(subtasks, start=1):
+        num = f"{i:02d}"
+        filename = f"{num}-{subtask['slug']}.md"
+        subtask_rows.append(f"| {num} | [{subtask['title']}]({filename}) | ⬜ Not started |")
+        files[f"{task_dir}/{filename}"] = (
+            f"# {num} - {subtask['title']}\n\n"
+            "**Parent task:** [README.md](README.md)\n"
+            "**Status:** ⬜ Not started\n\n"
+            "## Summary\n\n"
+            f"{subtask['summary']}\n"
+        )
+
+    files[f"{task_dir}/README.md"] = (
+        f"# Task 01.0 - {task_name}\n\n"
+        "**Parent milestone:** [plan.md](../plan.md)\n"
+        "**Status:** ⬜ Not started\n\n"
+        "## Subtasks\n\n"
+        "| #  | Document | Status |\n"
+        "|----|----------|--------|\n" + "\n".join(subtask_rows) + "\n"
+    )
+
+    return files
+
+
+def seed_first_milestone(
+    out_dir: Path, client, context_bundle: str, warnings: list[str], log: LogHelper = NULL_LOG
+) -> bool:
+    """Replace the example milestone's content with an AI-proposed real first
+    milestone, unless it's missing (this preset ships none) or the sentinel
+    sentence is already gone (a previous run, or the user, already replaced
+    it) - mirrors maybe_write_tutorial's idempotency guard. Returns whether it
+    actually acted."""
+    milestone_dir = out_dir / "docs" / "roadmap" / _ROADMAP_MILESTONE_DIR
+    plan_path = milestone_dir / "plan.md"
+    if not plan_path.is_file():
+        log.info(f"{plan_path} does not exist - skipping roadmap seeding")
+        return False
+    if _ROADMAP_SENTINEL not in re.sub(r"\s+", " ", plan_path.read_text(encoding="utf-8")):
+        message = "roadmap milestone already customized - left as-is"
+        warnings.append(message)
+        log.info(message)
+        return False
+
+    log.info(f"proposing first roadmap milestone via Anthropic API (model={MODEL})...")
+    try:
+        plan = propose_first_milestone(client, context_bundle)
+        files = render_milestone(plan)
+    except Exception as exc:  # soft failure: markers/tutorial already resolved, don't abort
+        message = f"could not seed the first roadmap milestone ({exc}) - left the example as-is"
+        warnings.append(message)
+        log.warning(message)
+        return False
+
+    log.debug(f"replacing {milestone_dir} with {len(files)} generated file(s)")
+    shutil.rmtree(milestone_dir)
+    for rel_path, content in files.items():
+        target = milestone_dir / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    log.info(f"seeded first roadmap milestone at {milestone_dir}")
+    return True
+
+
+# --- AI-drafted test-convention paragraph (docs/test/code_test_coverage.md) -
+
+# Marks that the paragraph has already been generated once, so a repeat
+# `--resolve-markers` run doesn't append a second copy - same append-once
+# posture as the marker/tutorial/roadmap guards above, just keyed off a
+# sentinel comment instead of a stub string, since this section is additive
+# rather than a whole-file replacement.
+_CONVENTIONS_SENTINEL = "<!-- test-conventions:generated -->"
+
+_CONVENTIONS_SYSTEM = """\
+You are drafting one short paragraph describing the apparent test-authoring
+conventions of a project, based ONLY on the list of test file paths below -
+you have NOT been given file contents, so never describe what any test
+actually does or asserts. Describe only structural patterns observable from
+names and layout: e.g. tests mirror the src/ package structure, fixtures are
+centralized in a conftest.py, there's one test file per module, integration
+tests live in their own directory. If the file list is too sparse to say
+anything meaningful, say so plainly instead of guessing.
+"""
+
+_CONVENTIONS_SCHEMA = {
+    "type": "object",
+    "properties": {"paragraph": {"type": "string"}},
+    "required": ["paragraph"],
+    "additionalProperties": False,
+}
+
+
+def maybe_describe_test_conventions(
+    out_dir: Path, client, warnings: list[str], log: LogHelper = NULL_LOG
+) -> bool:
+    """Append one AI-drafted paragraph of observed test conventions to
+    docs/test/code_test_coverage.md, fed only file *names* (never contents) -
+    deliberately cheap and fast regardless of project size. No-ops if the doc
+    is missing, there are no test files yet, or the paragraph was already
+    generated in a previous run (see _CONVENTIONS_SENTINEL)."""
+    path = out_dir.joinpath(*TEST_COVERAGE_DOC)
+    if not path.is_file():
+        log.info(f"{path} does not exist - skipping test-conventions paragraph")
+        return False
+    text = path.read_text(encoding="utf-8")
+    if _CONVENTIONS_SENTINEL in text:
+        message = "test conventions paragraph already generated - left as-is"
+        warnings.append(message)
+        log.info(message)
+        return False
+
+    file_names = list_test_files(out_dir)
+    if not file_names:
+        log.info(f"no test files found under {out_dir / 'tests'} - skipping test-conventions paragraph")
+        return False
+
+    log.info(f"drafting test-conventions paragraph via Anthropic API (model={MODEL})...")
+    user = "Test file paths:\n" + "\n".join(file_names)
+    try:
+        data = ai_client.request_json(
+            client, model=MODEL, system=_CONVENTIONS_SYSTEM, user=user, schema=_CONVENTIONS_SCHEMA
+        )
+        paragraph = str(data["paragraph"]).strip()
+    except Exception as exc:  # soft failure: earlier increments already ran, don't abort
+        message = f"could not describe test conventions ({exc}) - left as-is"
+        warnings.append(message)
+        log.warning(message)
+        return False
+
+    addition = f"\n\n### Observed Conventions\n\n{paragraph}\n\n{_CONVENTIONS_SENTINEL}\n"
+    path.write_text(text.rstrip() + addition, encoding="utf-8")
+    log.info(f"appended Observed Conventions paragraph to {path}")
+    return True
