@@ -1,6 +1,6 @@
-# Generator source (`src/awesome_claude`)
+# Generator source (`src/awesome-templates`)
 
-Loaded only when working under `src/awesome_claude/` — migrated out of the root `CLAUDE.md`
+Loaded only when working under `src/awesome-templates/` — migrated out of the root `CLAUDE.md`
 so it stops costing context in every session. Each module also carries a docstring stating
 its own purpose and rationale; this file is the cross-module map those can't provide.
 
@@ -23,7 +23,7 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   glossary, with an "unresolved placeholder left in <path>" warning rather than a hard failure.
 - `dependencies.py` — a maintainer-only tool for *this* repo's own catalog, not part of the `generate`
   flow: scans every entity's content for whole-word mentions of every other entity's name, builds a
-  graph, and can render it as Mermaid/Markdown (`awesome-claude graph`), or upsert a per-file
+  graph, and can render it as Mermaid/Markdown (`awesome-templates graph`), or upsert a per-file
   "Dependencies" block directly into `templates/**` (`--inline`), or remove them (`--remove`). Point
   `graph` at a single preset directory (or an already-generated project) to see that tree's own
   `.claude` <-> `docs` connectivity; both mutating flags edit the template tree in place — review
