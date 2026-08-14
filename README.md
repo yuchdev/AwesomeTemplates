@@ -1,11 +1,11 @@
 # Awesome Claude
 
-The goal of the project is to create easily deplayable sets of Claude Code agents, skills, hooks, loops obtained from the set of templates with easily substituted values.
+The goal of the project is to create easily deployable sets of Claude Code agents, skills, hooks, loops obtained from the set of templates with easily substituted values.
 
 The idea is as follows:
 
-Replace explicit project name and other project-specific values in files with template that is easily to misrepresent in Markdown, e.g. `{{PROJECT_NAME}}`, `{{PROJECT_PURPOSE}}` and so on.
-After this step, with simple replace artifacts can be added to another Python project.
+Replace explicit project name and other project-specific values in files with a template that is easy to misrepresent in Markdown, e.g. `{{PROJECT_NAME}}`, `{{PROJECT_PURPOSE}}` and so on.
+After this step, with simple replacement artifacts can be added to another Python project.
 
 Each preset is a complete, self-contained tree, shaped exactly like what lands in the target project:
 
@@ -33,11 +33,11 @@ with `{{PLACEHOLDER}}` substitution applied to every text file. `.claude/`, `doc
 always land together, from the same source tree, so agents and scripts cannot reference template
 content that was not generated.
 
-3. Markdown files contain multiple documents links. Rather than introducing templates, create `MIGRATION_REPORT.md` per each entitiy with all document references. Perhaps will be introduced templates for documents, or special documents conventions accross projects, e.g. `docs/adr` and `docs/roadmap`. The following design will be the subject of further design steps
+3. Markdown files contain multiple document links. Rather than introducing templates, create `MIGRATION_REPORT.md` per each entitiy with all document references. Perhaps will be introduced templates for documents, or special documents conventions accross projects, e.g. `docs/adr` and `docs/roadmap`. The following design will be the subject of further design steps
 
-4. Analyze any project- or technology dependent entities aside names and links and provide then in each `MIGRATION_REPORT.md`
+4. Analyze any project or technology-dependent entities aside from names and links and provide then in each `MIGRATION_REPORT.md`
 
-This would be gate for the next design round or the first implementation round.
+This would be the gate for the next design round or the first implementation round.
 
 ## Usage
 
@@ -79,16 +79,16 @@ JSON works the same way (picked by file extension); the schema is the same shape
 }
 ```
 
-| Field              | Substitutes            | Default if omitted                          |
-|--------------------|-------------------------|----------------------------------------------|
-| `preset`           | —                       | none - required (or pass `--preset`)         |
-| `out`              | —                       | `.`                                          |
-| `force`            | —                       | `false`                                      |
-| `project.name`     | `{{PROJECT_NAME}}`      | none - required (or pass `--name`)           |
-| `project.package`  | `{{PROJECT_PACKAGE}}`   | slugified `project.name`                     |
-| `project.purpose`  | `{{PROJECT_PURPOSE}}`   | a `TODO: describe what this project does` placeholder |
-| `project.slug_upper` | `{{PROJECT_SLUG_UPPER}}` | upper-slugified `project.name`             |
-| `resolve_markers`  | —                       | `false` (or pass `--resolve-markers`)        |
+| Field                | Substitutes              | Default if omitted                                    |
+|----------------------|--------------------------|-------------------------------------------------------|
+| `preset`             | —                        | none - required (or pass `--preset`)                  |
+| `out`                | —                        | `.`                                                   |
+| `force`              | —                        | `false`                                               |
+| `project.name`       | `{{PROJECT_NAME}}`       | none - required (or pass `--name`)                    |
+| `project.package`    | `{{PROJECT_PACKAGE}}`    | slugified `project.name`                              |
+| `project.purpose`    | `{{PROJECT_PURPOSE}}`    | a `TODO: describe what this project does` placeholder |
+| `project.slug_upper` | `{{PROJECT_SLUG_UPPER}}` | upper-slugified `project.name`                        |
+| `resolve_markers`    | —                        | `false` (or pass `--resolve-markers`)                 |
 
 Any CLI flag passed alongside `--config` overrides the matching value from the file.
 
