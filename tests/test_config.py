@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from awesome_claude.config import ConfigError, load_config
+from awesome_templates.config import ConfigError, load_config
 
 
 def test_load_json_config(tmp_path):

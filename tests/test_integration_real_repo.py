@@ -18,12 +18,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from awesome_claude.catalog import discover, list_presets
-from awesome_claude.cli import app
-from awesome_claude.dependencies import build_dependency_graph
-from awesome_claude.markers import scan_tree
-from awesome_claude.templating import PLACEHOLDER_RE
-from awesome_claude.workspace import Workspace
+from awesome_templates.catalog import discover, list_presets
+from awesome_templates.cli import app
+from awesome_templates.dependencies import build_dependency_graph
+from awesome_templates.markers import scan_tree
+from awesome_templates.templating import PLACEHOLDER_RE
+from awesome_templates.workspace import Workspace
 
 REAL_REPO_ROOT = Path(__file__).resolve().parents[1]
 

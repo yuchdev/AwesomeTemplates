@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A generator (`awesome-claude` CLI, source in `src/awesome_claude`) that copies a project-specific
+A generator (`awesome-claude` CLI, source in `src/awesome_templates`) that copies a project-specific
 *preset* — a complete, self-contained `.claude/` kit (`agents`, `hooks`, `loops`, `skills`,
 `settings.json`) plus its own starter `docs/` and `scripts/` trees — from a template catalog under
 `templates/`.
@@ -24,7 +24,7 @@ structurally impossible instead of runtime-checked — see
 a runtime `--strict` connectivity check; the preset-tree model superseded it with the same guarantee
 by construction).
 
-Keep `src/awesome_claude` (the generator's own code) and `templates/` (the content it distributes)
+Keep `src/awesome_templates` (the generator's own code) and `templates/` (the content it distributes)
 mentally separate — most bugs are in one or the other, rarely both.
 
 This repo also has its own `.claude/` at the root — that's this repo's *own* maintainer tooling, a
@@ -55,7 +55,7 @@ uv run awesome-claude graph --inline --force
 uv run awesome-claude graph --remove
 
 # tests
-uv run pytest --cov=awesome_claude
+uv run pytest --cov=awesome_templates
 uv run pytest tests/test_catalog.py::test_name_here   # single test
 uv run pytest tests/test_integration_real_repo.py     # exercises the real templates/ tree
 
@@ -135,9 +135,9 @@ tests/test_integration_tooling_tiers.py`: it checks every `hooks/`/`scripts/` me
 Markdown resolves, that `settings.json` wires only hooks that exist (and never a `scripts/` tool), that
 every hook imports cleanly, that every script's `--help` works, and that the slug implementations agree.
 
-### Generator pipeline (`src/awesome_claude`)
+### Generator pipeline (`src/awesome_templates`)
 
-See [`src/awesome_claude/CLAUDE.md`](src/awesome_claude/CLAUDE.md) — the per-module map loads
+See [`src/awesome_templates/CLAUDE.md`](src/awesome_templates/CLAUDE.md) — the per-module map loads
 automatically when working in that directory.
 
 ### Tests

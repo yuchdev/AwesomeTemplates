@@ -12,9 +12,9 @@ anthropic = pytest.importorskip("anthropic")
 
 import httpx
 
-from awesome_claude import resolver
-from awesome_claude.markers import find_markers
-from awesome_claude.resolver import (
+from awesome_templates import resolver
+from awesome_templates.markers import find_markers
+from awesome_templates.resolver import (
     ResolvedMarker,
     gather_context,
     load_api_key,

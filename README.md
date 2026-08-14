@@ -41,7 +41,7 @@ This would be the gate for the next design round or the first implementation rou
 
 ## Usage
 
-The generator lives in `src/awesome_claude` and installs as the `awesome-claude` console script via `uv`.
+The generator lives in `src/awesome_templates` and installs as the `awesome-claude` console script via `uv`.
 
 ```bash
 # one-time setup - creates .venv and uv.lock
@@ -116,6 +116,6 @@ uv run awesome-claude generate --config awesome-claude.toml --resolve-markers
 Test suite and lint
 
 ```bash
-uv run pytest --cov=awesome_claude
+uv run pytest --cov=awesome_templates
 uv run ruff check src/ tests/
 ```

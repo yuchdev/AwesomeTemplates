@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from awesome_claude.templating import (
+from awesome_templates.templating import (
     apply_subs,
     slugify_package,
     slugify_upper,

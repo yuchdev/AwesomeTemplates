@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from awesome_claude.markers import (
+from awesome_templates.markers import (
     apply_replacements,
     find_markers,
     scan_tree,
@@ -93,7 +93,7 @@ def test_cli_import_does_not_pull_anthropic():
     # it's pulled in lazily only inside the --resolve-markers branch. Run in a
     # fresh interpreter so it's a true cold-import check.
     code = (
-        "import sys; import awesome_claude.cli, awesome_claude.resolver; "
+        "import sys; import awesome_templates.cli, awesome_templates.resolver; "
         "assert 'anthropic' not in sys.modules, 'anthropic imported at load time'"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

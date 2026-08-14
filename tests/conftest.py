@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from awesome_claude.workspace import Workspace
+from awesome_templates.workspace import Workspace
 
 REAL_REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_TEMPLATES_ROOT = REAL_REPO_ROOT / "templates"

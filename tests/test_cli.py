@@ -4,8 +4,8 @@ import json
 
 from typer.testing import CliRunner
 
-import awesome_claude.cli as cli_module
-from awesome_claude.cli import app
+import awesome_templates.cli as cli_module
+from awesome_templates.cli import app
 
 runner = CliRunner()
 

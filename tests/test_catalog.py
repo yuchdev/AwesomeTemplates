@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from awesome_claude.catalog import discover, list_presets
-from awesome_claude.workspace import Workspace
+from awesome_templates.catalog import discover, list_presets
+from awesome_templates.workspace import Workspace
 
 
 def test_list_presets_finds_both(fixture_workspace):
