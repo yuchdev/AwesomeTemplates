@@ -45,6 +45,12 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.flake8_lint_tests]
+include = ["tests/flake8_lint/samples/valid_clean_module.py"]
+exclude = []
+select = ["X001", "X002", "X004", "X005", "X006", "X007", "X008", "X009", "X010", "X011"]
+allow_noqa = true
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
