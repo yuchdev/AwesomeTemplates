@@ -1,4 +1,4 @@
-# Example config for `awesome-claude generate --config <this file>`.
+# Example config for `awesome-templates generate --config <this file>`.
 #
 # Every value here fills in one of the deterministic {{PLACEHOLDER}} tokens
 # substituted across a preset's .claude/ and docs/ files (PROJECT_NAME,
@@ -8,17 +8,17 @@
 # Copy this file into your own project (any name/location works), edit the
 # values, and run:
 #
-#   uv run awesome-claude generate --config awesome-claude.example.toml
+#   uv run awesome-templates generate --config awesome-templates.example.toml
 #
 # Any flag passed alongside --config overrides the matching value here, e.g.
-# `--config awesome-claude.example.toml --force` keeps everything below but
+# `--config awesome-templates.example.toml --force` keeps everything below but
 # turns force on.
 
-# Which preset to generate - see `uv run awesome-claude list`.
+# Which preset to generate - see `uv run awesome-templates list`.
 preset = "python"
 
 # Optional: layer one or more specializations' agents/skills on top of the
-# preset - see `uv run awesome-claude list` for the choices each preset
+# preset - see `uv run awesome-templates list` for the choices each preset
 # offers. Passing --specialization on the CLI replaces this list wholesale
 # rather than merging with it. Commented out by default (no specializations).
 # specializations = ["django"]

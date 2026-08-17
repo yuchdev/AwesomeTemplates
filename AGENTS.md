@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A generator (`awesome-claude` CLI, source in `src/awesome_templates`) that copies a project-specific
+A generator (`awesome-templates` CLI, source in `src/awesome_templates`) that copies a project-specific
 *preset* — a complete, self-contained `.claude/` kit (`agents`, `hooks`, `loops`, `skills`,
 `settings.json`) plus its own starter `docs/` and `scripts/` trees — from a template catalog under
 `templates/`.
@@ -33,7 +33,7 @@ in it so far: some agents inside `templates/<preset>/.claude/agents/*.md` carry 
 `<!-- TEMPLATE-INIT: ... -->` marker — a fact that's project-specific in a way no `{{PLACEHOLDER}}`
 substitution could ever fill in (see `reference/aegis/` for a real, lived-in example of what those
 facts look like once filled). `create-from-template` is what closes that gap: given a target project's
-path (one `awesome-claude generate` already ran against), it deeply analyzes that target and edits
+path (one `awesome-templates generate` already ran against), it deeply analyzes that target and edits
 *its* agent files in place. It is deliberately not shipped inside `templates/<preset>/` — it isn't a
 capability the generated project needs standing presence of; it's a one-time bootstrap step run from
 outside the target, not part of the target's own dev fleet.
@@ -45,14 +45,14 @@ outside the target, not part of the target's own dev fleet.
 uv sync
 
 # run the CLI
-uv run awesome-claude list
-uv run awesome-claude generate --preset python --name "Acme Sync" --package acme_sync --out .
+uv run awesome-templates list
+uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
 
 # maintainer-only: render this repo's own agent/hook/loop/skill reference graph
-uv run awesome-claude graph                      # every preset, side by side
-uv run awesome-claude graph templates/python      # one preset's own graph + doc connectivity
-uv run awesome-claude graph --inline --force
-uv run awesome-claude graph --remove
+uv run awesome-templates graph                      # every preset, side by side
+uv run awesome-templates graph templates/python      # one preset's own graph + doc connectivity
+uv run awesome-templates graph --inline --force
+uv run awesome-templates graph --remove
 
 # tests
 uv run pytest --cov=awesome_templates

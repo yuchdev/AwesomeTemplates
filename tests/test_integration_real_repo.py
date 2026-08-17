@@ -151,14 +151,14 @@ def test_preset_never_links_outside_its_own_tree(preset):
 
 
 def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_path):
-    # awesome-claude.example.toml is the documented --config example (see
+    # awesome-templates.example.toml is the documented --config example (see
     # README.md's "Config file" section) - it must actually work end to end,
     # and every deterministic {{PLACEHOLDER}} token it fills in must leave no
     # trace in the generated Markdown. docs/adr/template.md's own `{{ seq }}`
     # / `{{ title }}` placeholders belong to the shipped ADR skeleton and are
     # intentionally left for authors to fill. PLACEHOLDER_RE correctly ignores
     # them because they aren't the all-caps `{{WORD}}` shape it matches.
-    config_path = REAL_REPO_ROOT / "awesome-claude.example.toml"
+    config_path = REAL_REPO_ROOT / "awesome-templates.example.toml"
     proj = tmp_path / "proj"
     result = runner.invoke(app, ["generate", "--config", str(config_path), "--out", str(proj)])
     assert result.exit_code == 0, result.stdout

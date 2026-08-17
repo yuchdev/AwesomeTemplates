@@ -12,7 +12,7 @@ dependencies = [
 [project.optional-dependencies]
 # Opt-in `generate --resolve-markers` (AI resolution of <!-- TEMPLATE-INIT -->
 # markers). Kept out of the core deps so the offline generator installs with no
-# network client; pulled in via `pip install awesome-claude[ai]`.
+# network client; pulled in via `pip install awesome-templates[ai]`.
 ai = ["anthropic>=0.70"]
 
 [project.scripts]

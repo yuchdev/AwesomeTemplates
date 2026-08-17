@@ -83,11 +83,11 @@ uv run awesome-templates generate --preset python --name "Acme Sync" --specializ
 
 ### Config file
 
-[`awesome-claude.example.toml`](awesome-claude.example.toml) is a documented example of the file
+[`awesome-templates.example.toml`](awesome-templates.example.toml) is a documented example of the file
 `--config` accepts - copy it into your own project, edit the values, and run:
 
 ```bash
-uv run awesome-claude generate --config awesome-claude.example.toml
+uv run awesome-templates generate --config awesome-templates.example.toml
 ```
 
 JSON works the same way (picked by file extension); the schema is the same shape either way:
@@ -112,7 +112,7 @@ JSON works the same way (picked by file extension); the schema is the same shape
 | `preset`             | —                        | none - required (or pass `--preset`)                  |
 | `out`                | —                        | `.`                                                   |
 | `force`              | —                        | `false`                                               |
-| `specializations`    | —                        | `[]` - see `uv run awesome-claude list` for choices    |
+| `specializations`    | —                        | `[]` - see `uv run awesome-templates list` for choices |
 | `project.name`       | `{{PROJECT_NAME}}`       | none - required (or pass `--name`)                    |
 | `project.package`    | `{{PROJECT_PACKAGE}}`    | slugified `project.name`                              |
 | `project.purpose`    | `{{PROJECT_PURPOSE}}`    | a `TODO: describe what this project does` placeholder |
@@ -133,9 +133,9 @@ when it can't answer confidently.
 This is opt-in: plain `generate` stays fully offline. It needs the optional `ai` extra and an API key:
 
 ```bash
-uv pip install 'awesome-claude[ai]'      # pulls in the anthropic SDK
+uv pip install 'awesome-templates[ai]'    # pulls in the anthropic SDK
 export ANTHROPIC_API_KEY=sk-ant-...       # or put it in a .env in the cwd
-uv run awesome-claude generate --config awesome-claude.toml --resolve-markers
+uv run awesome-templates generate --config awesome-templates.toml --resolve-markers
 ```
 
 `--dry-run` reports how many markers *would* be resolved without calling the API.
