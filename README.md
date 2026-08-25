@@ -43,43 +43,48 @@ This would be the gate for the next design round or the first implementation rou
 
 The generator lives in `src/awesome_templates` and installs as the `awesome-templates` console script via `uv`.
 
+Setup and test the application works
+
 ```bash
-# one-time setup - creates .venv and uv.lock
+# One-time setup - creates .venv and uv.lock
 uv sync
 
-# see every preset and what it contains (including any specializations each one offers)
+# See every preset and what it contains (including any specializations each one offers)
 uv run awesome-templates list
 
-uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
-
-# layer a specialization's agents/skills on top of the preset (repeatable)
-uv run awesome-templates generate --preset python --name "Acme Sync" --specialization django --out .
-
-  # 1. Plain preview, no specialization (originally into /tmp; now into the in-project .scratch/)
-  uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/plain
-
-  # 2. Preview with a specialization layered on top — verifies it merges into .claude/, no stray top-level folder
-  uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/django --specialization django
-
-  # 3. Full AI-resolution pass: markers, tutorial.md, test-conventions paragraph (needs ANTHROPIC_API_KEY; makes real, billed API calls)
-  uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/resolved --resolve-markers --json
-
-  Plus the test commands that verified the fix:
-
-  # Targeted regression tests for the specialization-copy bug
-  uv run pytest tests/test_specializations.py tests/test_integration_real_repo.py -q
-
-  # Full suite, if you want to confirm nothing else broke
-  uv run pytest --cov=awesome_templates
+# Full suite, if you want to confirm nothing else broke
+uv run pytest --cov=awesome_templates
 ```
 
-  A few things worth knowing before you run these yourself:
+Possible CLI option sets for preset deployment from templates
 
-  - `--out .scratch/...` works because `.scratch/` is now in `.gitignore` — anything you generate there won't show up in the git status clutter.
-  - Add `--specialization <name>` more than once to layer several (awesome-templates list shows valid choices per preset — `django`, `ml-ai`, `webscraping` for python; `spring`, `android` for java).
-  - Command 3 costs real API usage every time you run it — each <!-- TEMPLATE-INIT -->/<!-- SME REVIEW NEEDED --> marker, plus the calls are `tutorial/test-conventions` a separate request. Skip --resolve-markers if you just want to inspect the deterministic output.
-  - Rerunning any of these into an existing .scratch/<name> will fail unless you also pass --force (or delete the directory first) — generate refuses to overwrite non-empty output by default.
-  - `generate` also accepts `--config <file.json|file.toml>` (any flag passed alongside overrides the matching config value) and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets `.claude/`, `docs/`, and `scripts/` subdirectories (default: `.`); pass `--force` to overwrite existing content in any of them. `--specialization <name>` is repeatable and passing it at all replaces a config file's `specializations` list wholesale rather than merging with it. Run `uv run awesome-templates generate --help` for the full flag reference.
+```bash
+# Generate a generic Python preset
+uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
+
+# Layer a specialization's agents/skills on top of the preset (repeatable)
+uv run awesome-templates generate --preset python --name "Acme Sync" --specialization django --out .
+
+# Plain preview, no specialization (originally into /tmp; now into the in-project .scratch/)
+uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/plain
+
+# Preview with a specialization layered on top — verifies it merges into .claude/, no stray top-level folder
+uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/django --specialization django
+
+# Full AI-resolution pass: markers, tutorial.md, test-conventions paragraph (needs ANTHROPIC_API_KEY; makes real, billed API calls)
+uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/resolved --resolve-markers --json
+
+# Targeted regression tests for the specialization-copy bug
+uv run pytest tests/test_specializations.py tests/test_integration_real_repo.py -q
+```
+
+A few things worth knowing before you run these yourself:
+
+* `--out .scratch/...` works because `.scratch/` is now in `.gitignore` — anything you generate there won't show up in the git status clutter.
+* Add `--specialization <name>` more than once to layer several (awesome-templates list shows valid choices per preset — `django`, `ml-ai`, `webscraping` for python; `spring`, `android` for java).
+* Command 3 costs real API usage every time you run it — each `<!-- TEMPLATE-INIT -->/<!-- SME REVIEW NEEDED -->` marker, plus the calls are `tutorial/test-conventions` a separate request. Skip `--resolve-markers` if you just want to inspect the deterministic output.
+* Rerunning any of these into an existing `.scratch/{name}` will fail unless you also pass `--force` (or delete the directory first) — generate refuses to overwrite non-empty output by default.
+* `generate` also accepts `--config {file.json|file.toml}` (any flag passed alongside overrides the matching config value) and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets `.claude/`, `docs/`, and `scripts/` subdirectories (default: `.`); pass `--force` to overwrite existing content in any of them. `--specialization {name}` is repeatable and passing it at all replaces a config file's `specializations` list wholesale rather than merging with it. Run `uv run awesome-templates generate --help` for the full flag reference.
 
 ### Config file
 
