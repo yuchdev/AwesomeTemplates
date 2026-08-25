@@ -102,9 +102,13 @@ easy to lose track of which file/marker you've already resolved partway through 
   resolved, it finds nothing and says so - it never re-opens or second-guesses prose it (or a human)
   already wrote.
 - There is now a second, programmatic resolver: `awesome-templates generate --resolve-markers` resolves
-  `TEMPLATE-INIT` markers across *all* generated Markdown (including `loops/`) via a single Anthropic
-  call per marker. This agent remains the agents-only, in-editor pass - use it when you want to review
-  and refine each agent file interactively rather than resolve the whole tree in one non-interactive shot.
+  `TEMPLATE-INIT` markers across *all* generated Markdown (including `loops/`) - via one headless
+  Claude Code session (`src/awesome_templates/headless.py`) when the `claude` CLI is installed, else
+  one Anthropic call per marker (`resolver.py`). The headless prompt re-embeds this file's research
+  method and hard rules as strings owned by `headless.py` (an installed package can't read this file
+  at runtime) - when editing the method or rules here, mirror the change there. This agent remains the
+  agents-only, in-editor pass - use it when you want to review and refine each agent file
+  interactively rather than resolve the whole tree in one non-interactive shot.
 
 ## Output format
 

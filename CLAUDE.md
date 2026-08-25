@@ -1,198 +1,204 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in the Awesome Templates repository.
 
-## What this repo is
+## Three things that are easy to confuse
 
-A generator (`awesome-templates` CLI, source in `src/awesome_templates`) that copies a project-specific
-*preset* — a complete, self-contained `.claude/` kit (`agents`, `hooks`, `loops`, `skills`,
-`settings.json`) plus its own starter `docs/` and `scripts/` trees — from a template catalog under
-`templates/`.
-Templates use flat `{{PLACEHOLDER}}` substitution (`PROJECT_NAME`, `PROJECT_PACKAGE`,
-`PROJECT_PURPOSE`, `PROJECT_SLUG_UPPER`) so a preset can be dropped into another project after a
-single find/replace.
+Hold this separation before touching anything - most confusion in this repo comes from
+collapsing these:
 
-A preset is a directory shaped exactly like what lands in the target project:
-`templates/<preset>/.claude/`, `templates/<preset>/docs/`, and `templates/<preset>/scripts/` as
-siblings. There are currently two: `python` and `java`. Generating one is *just* a recursive copy with
-substitution applied to every text file (see `presets.py`) — there is no runtime composition step, no
-category selection, no per-entity include/exclude *within the preset itself*. This is deliberate:
-`.claude/`, `docs/`, and `scripts/` must be generated together, because their references form one
-corpus. Baking all three trees into one preset, authored and reviewed together, makes missing
-generated dependencies structurally impossible instead of runtime-checked — see
-`docs/roadmap/0001-docs-claude-connectivity.md` for the fuller design history (that RFC's Phase 0 was
-a runtime `--strict` connectivity check; the preset-tree model superseded it with the same guarantee
-by construction).
+1. **`src/awesome_templates/`** - the generator's own Python code. This is what tests and
+   ruff apply to.
+2. **`templates/<preset>/`** - the *content* the generator distributes. It is Markdown, hook
+   scripts, and starter docs meant to land in someone else's project. Bugs here are
+   authoring bugs, not code bugs.
+3. **The repo root `.claude/`** - this repo's own maintainer tooling, distributed to nobody.
+   `create-from-template.md` is the one agent in it: the interactive sibling of
+   `generate --resolve-markers`, run from outside a target project to research it and fill
+   in markers.
 
-The one deliberate exception is the **specialization layer**: each preset may ship zero or more
-`templates/<preset>/specializations/<name>/.claude/` add-ons (e.g. `python`'s `django`,
-`webscraping`, `ml-ai`; `java`'s `spring`, `android`), each restricted to `agents/` and `skills/`
-only — never `hooks/`, `loops/`, or a `settings.json`, since a hook needs wiring in the base
-preset's own `settings.json` to do anything (see `specializations.py`'s module docstring). `generate
---specialization <name>` (repeatable) layers a specialization's agents/skills on top of the base
-preset's own after the normal copy; with no `--specialization` flags, generation is unchanged from
-the plain-preset behavior above. A specialization directory is discovered by pointing
-`catalog.discover` at it directly — it is the same "kind dirs nested one level under `.claude/`"
-shape a preset directory already is, so no separate discovery mechanism exists for it.
-
-Keep `src/awesome_templates` (the generator's own code) and `templates/` (the content it distributes)
-mentally separate — most bugs are in one or the other, rarely both.
-
-This repo also has its own `.claude/` at the root — that's this repo's *own* maintainer tooling, a
-third thing distinct from both of the above. `.claude/agents/create-from-template.md` is the one agent
-in it so far: some agents inside `templates/<preset>/.claude/agents/*.md` carry a
-`<!-- TEMPLATE-INIT: ... -->` marker — a fact that's project-specific in a way no `{{PLACEHOLDER}}`
-substitution could ever fill in (see `reference/aegis/` for a real, lived-in example of what those
-facts look like once filled). `create-from-template` is what closes that gap: given a target project's
-path (one `awesome-templates generate` already ran against), it deeply analyzes that target and edits
-*its* agent files in place. It is deliberately not shipped inside `templates/<preset>/` — it isn't a
-capability the generated project needs standing presence of; it's a one-time bootstrap step run from
-outside the target, not part of the target's own dev fleet.
+Most bugs live in exactly one of these. Say which one you are in before you start.
 
 ## Commands
 
 ```bash
-# one-time setup - creates .venv and uv.lock
-uv sync
+uv sync                                              # one-time setup
 
-# run the CLI
 uv run awesome-templates list
 uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
 uv run awesome-templates generate --preset python --name "Acme Sync" --specialization django --out .
-
-# with the optional 'ai' extra + ANTHROPIC_API_KEY: AI-resolve markers, draft the
-# tutorial, describe test conventions, and (only alongside --resolve-markers) replace
-# the example roadmap milestone with a real first one
 uv run awesome-templates generate --preset python --name "Acme Sync" --resolve-markers
 uv run awesome-templates generate --preset python --name "Acme Sync" --resolve-markers --seed-roadmap
 
-# maintainer-only: render this repo's own agent/hook/loop/skill reference graph
-uv run awesome-templates graph                      # every preset, side by side
-uv run awesome-templates graph templates/python      # one preset's own graph + doc connectivity
-uv run awesome-templates graph --inline --force
+uv run awesome-templates graph                       # maintainer-only reference graph
+uv run awesome-templates graph templates/python
+uv run awesome-templates graph --inline --force      # MUTATES templates/** in place
 uv run awesome-templates graph --remove
 
-# tests
-uv run pytest --cov=awesome_templates
-uv run pytest tests/test_catalog.py::test_name_here   # single test
-uv run pytest tests/test_integration_real_repo.py     # exercises the real templates/ tree
-
-# lint
+uv run pytest --cov=awesome_templates                # full suite
+uv run pytest tests/test_catalog.py::test_name_here  # single test
+uv run pytest tests/test_integration_real_repo.py    # exercises the real templates/ tree
 uv run ruff check src/ tests/
 ```
 
-`generate` also accepts `--config <file.json|file.toml>` (CLI flags override matching config values)
-and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets a
-`.claude/` and a `docs/` subdirectory (default: `.`); pass `--force` to overwrite existing content in
-either. `--specialization <name>` is repeatable and adds one specialization's agents/skills on top
-of the preset (see `awesome-templates list` for the choices each preset offers); passing any
-`--specialization` flag replaces a config file's `specializations` list wholesale rather than
-merging with it.
+**Ruff config note:** `ruff.toml` (repo root) and `pyproject.toml`'s `[tool.ruff]` section
+both exist and disagree - different `line-length` (120 vs 100), `target-version` (py312 vs
+py311), and `select`/`ignore` sets. `ruff.toml` wins when both are present in the same
+directory, so it is what `ruff check` actually applies. Notably it *disables* `UP007`, which
+is what keeps `Optional[T]` legal in this codebase.
 
-`--log-severity {error|warning|info|debug}` (default `warning`, matching the previous quiet-by-default
-output) controls live console tracing of `generate`'s own pipeline, written to stderr via
-`log_helper.LogHelper` so `--json` output on stdout stays parseable regardless of the level chosen:
-`info` narrates each step (preset copy start/end, each specialization layered, each doc written, each
-marker resolved, each Anthropic API call made under `--resolve-markers`); `debug` additionally traces
-every individual file copied. `warning`/`error` show only problems, at the same severity `generate` has
-always surfaced via its final `warnings` summary list.
+There is no `.github/` and no CI. There is no coverage floor (`pyproject.toml` sets no
+`fail_under`, no `addopts`, only `testpaths = ["tests"]`), so report coverage deltas but do
+not gate on a number.
 
-`generate` also always runs `docgen.py` (no flags, no API key, no `ai` extra needed): it regenerates
-`docs/agent/{agents,skills,hooks}.md` and appends an "Actual Test Layout" section to
-`docs/test/code_test_coverage.md` from what's actually on disk in the freshly generated tree (after
-any specialization layer). `--resolve-markers` (needs the `ai` extra + `ANTHROPIC_API_KEY`) does
-everything that flag has always done — AI-resolve `<!-- TEMPLATE-INIT: ... -->` markers, grounded in
-`resolver.gather_context`'s read of the target project — plus three more increments layered onto the
-same call: drafting `docs/agent/tutorial.md` (skipped if the user already customized it away from the
-shipped stub), appending one AI paragraph of observed test conventions to
-`docs/test/code_test_coverage.md` (from test file *names* only, never contents; skipped once already
-generated), and — only paired with `--seed-roadmap`, since it deletes example content — replacing
-`docs/roadmap/0001-working-implementation/`'s illustrative milestone with an AI-proposed real first
-one (skipped if the user already replaced `plan.md`'s own "replace this milestone" sentinel sentence).
-A second marker kind, `<!-- SME REVIEW NEEDED: ... -->` (used in `docs/security/README.md`), is never
-silently resolved away like `TEMPLATE-INIT` is — its output always stays flagged as an unreviewed AI
-draft regardless of the model's confidence.
+## Architecture map
 
-**Ruff config note:** both `ruff.toml` (repo root) and `pyproject.toml`'s `[tool.ruff]` section exist
-and disagree (different `line-length`, `target-version`, `select`/`ignore` sets). `ruff.toml` takes
-precedence when both are present in the same directory, so it — not the `pyproject.toml` block — is
-what `ruff check` actually applies.
+### Generator pipeline (`src/awesome_templates/`)
 
-## Architecture
+- **`workspace.py`** - `Workspace(root)`, a frozen dataclass wrapping the template tree root.
+  Every other module takes one instead of reading a global constant, so tests can point at a
+  synthetic `tmp_path` tree. `cli.py` constructs the real one once.
+- **`catalog.py`** - `list_presets` finds preset directories; `discover` walks one into a
+  `Catalog` (`category -> kind -> {name: path}`). `KINDS` is fixed at `agents`, `hooks`,
+  `loops`, `skills`. `skills` entities are directories containing a `SKILL.md`; every other
+  kind is a single `.md` or `.py` keyed by filename stem. `discover` resolves three tree
+  shapes through one function - see its docstring before adding a fourth.
+- **`presets.py`** - `copy_preset` is the entire generation mechanism: a recursive copy of
+  `{.claude,docs,scripts}` plus substitution, then zero or more specializations layered on
+  top. A name collision raises `ValueError` (an authoring bug in `templates/`, not a runtime
+  condition to warn-and-skip).
+- **`specializations.py`** - discovery for the opt-in add-on layer, restricted to `agents/`
+  and `skills/` via `ALLOWED_KINDS`. `disallowed_kinds_present` flags a specialization that
+  ships a `hooks/`, `loops/`, or `settings.json` it may not.
+- **`templating.py`** - the flat `PLACEHOLDER_RE` find/replace plus `slugify_package` /
+  `slugify_upper`. Leftovers warn rather than fail.
+- **`config.py`** - `--config` JSON/TOML loading, dispatched on file extension.
+- **`docgen.py`** - deterministic, no-network doc generation that runs on *every* `generate`.
+  Regenerates `docs/agent/{agents,skills,hooks}.md` and the "Actual Test Layout" section.
+  Must never import `anthropic`.
+- **`markers.py`** - the pure, network-free scan and splice of marker comments. `MARKER_KINDS`
+  is `TEMPLATE-INIT` and `SME REVIEW NEEDED`. `Marker` is frozen and carries character
+  offsets, so `apply_replacements` splices by exact position in descending order.
+- **`resolver.py`** - the business logic of resolution: prompts, `gather_context`'s bundle,
+  the confidence/TODO fallback, `render`'s exact output formats, and the three extra
+  AI-authored increments (tutorial, roadmap seed, test-conventions paragraph). Never imports
+  the SDK, so every model-calling function takes a `client` parameter and is unit-tested
+  against a fake one.
+- **`headless.py`** - the agentic backend: one `claude -p` session over the whole marker
+  manifest, tools hard-allowlisted, reconciled by a before/after scan diff. Takes `run=`
+  (defaulting to `subprocess.run`) so tests assert on argv and prompt with no real CLI.
+- **`ai/client.py`** - the only module allowed to import `anthropic`, and only lazily inside
+  its functions. It knows nothing about markers or prose; it places one request and returns
+  parsed JSON.
+- **`log_helper.py`** - `LogSeverity` and `LogHelper`, threaded as an optional `log=` keyword
+  (defaulting to `NULL_LOG`) through every writing function, the same way `warnings:
+  list[str]` already is. Writes to stderr.
+- **`dependencies.py`** - maintainer-only graph tool for this repo's own catalog. Not part of
+  `generate`; never invoke it implicitly from another command.
+- **`cli.py`** - the Typer app. Commands: `list`, `graph`, `generate`.
+
+`src/flake8_project_rules/` is a separate, standalone package: a flake8 plugin implementing
+custom AST rules X001-X011, covered by `tests/flake8_lint/`. It is unrelated to the generator
+pipeline.
 
 ### The template catalog (`templates/`)
 
-Fixed shape: `templates/<preset>/.claude/<agents|hooks|loops|skills>/` and `templates/<preset>/docs/`.
-A preset is *any* immediate subdirectory of `templates/` with both a `.claude/` and a `docs/` child —
-`catalog.list_presets` discovers them dynamically, so adding a third preset (e.g. a `node` set) is a
-matter of dropping a new tree in, not a code change. `skills` entities are directories (containing
-`SKILL.md` + assets); every other kind is a single `.md` or `.py` file, keyed by filename stem.
+The two presets are **independent, self-contained copies, not two views onto shared source**.
+Each has its own `settings.json`, already trimmed to wire only hooks that exist in that preset
+(`java`'s has no pytest/ruff permissions and no `post_edit_format`/`style_fixes`/`dep_audit`/
+`run_tests` wiring, since those hooks are Python-only), and its own copy of anything both need
+(`_common.py`, `session_start.py`, the `pr-review` skill). The same file may legitimately
+differ between presets - do **not** "deduplicate" `python/.claude/hooks/_common.py` and its
+`java` twin into a shared location without first checking whether they have diverged.
 
-The two presets are independent and self-contained by design, not two views onto shared source: each
-has its own `settings.json` (already trimmed to reference only hooks that exist in that preset — e.g.
-`java`'s has no `pytest`/`ruff` permissions or `post_edit_format`/`style_fixes`/`dep_audit`/`run_tests`
-wiring, since those hooks are Python-only) and its own copy of anything both presets need (e.g.
-`_common.py`, `session_start.py`, the `pr-review` skill). This means the same content can legitimately
-differ between presets — `python/.claude/hooks/_common.py` and `java/.claude/hooks/_common.py` are not
-required to be identical — so don't "deduplicate" them back into a shared location without checking
-whether they've actually diverged.
+#### `.claude/hooks/` vs `scripts/` - two tiers, one rule each
 
-#### Executable tooling: `.claude/hooks/` vs `scripts/` (two tiers, one rule each)
+Which tier an executable belongs in is decided by **what triggers it**, not by what it does.
 
-A preset ships executables in exactly two places, and which one a file belongs in is decided by
-**what triggers it**, not by what it does. `presets.py` copies the whole preset tree, so a top-level
-`scripts/` directory lands in the generated project as a sibling of `.claude/` and `docs/`.
-
-|                  | `.claude/hooks/`                                                                                     | `scripts/`                                                     |
-|------------------|------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| **Trigger**      | Wired in `settings.json` - the harness runs it automatically on a matching tool call / session event | Invoked by explicit path from an agent, skill, or loop's prose |
-| **Contract**     | Hook protocol: event JSON on stdin, exit `0` allow / `2` block                                       | Ordinary CLI: argv in, exit code out (must support `--help`)   |
-| **Cost budget**  | Must stay cheap - it runs on *every* matching call                                                   | May be slow; it runs when someone asks for it                  |
-| **Dependencies** | Stdlib + `_common.py` only. **Never** imports from `scripts/`                                        | Stdlib only; independent of `_common.py`                       |
+|                  | `.claude/hooks/`                                              | `scripts/`                                          |
+|------------------|---------------------------------------------------------------|------------------------------------------------------|
+| **Trigger**      | Wired in `settings.json`; runs automatically on a matching event | Invoked by explicit path from agent/skill/loop prose |
+| **Contract**     | Event JSON on stdin, exit `0` allow / `2` block               | Ordinary CLI: argv in, exit code out; must have `--help` |
+| **Cost budget**  | Must stay cheap - runs on *every* matching call               | May be slow; runs on request                         |
+| **Dependencies** | Stdlib + `_common.py` only. **Never** imports from `scripts/`  | Stdlib only; independent of `_common.py`             |
 
 Two consequences that are easy to get wrong:
 
-1. **A hook may also expose a CLI escape hatch** (`doc_link_check.py --check`, `style_fixes.py
-   --check`, `secret_scan.py <paths>`) so a skill can re-run the same gate on demand. That does *not*
-   make it a `scripts/` tool - `settings.json` still owns its trigger, so it stays a hook.
-2. **A fast hook and a thorough `scripts/` tool may deliberately overlap** - `doc_link_check.py`
-   (per-edit, inline) and `scripts/check_doc_links.py` (whole-corpus, on-demand) are complementary,
-   not duplicates. Because the hook can't import from `scripts/`, the shared logic is genuinely
-   duplicated, so **`_common.slugify` and `check_doc_links.slugify` must stay behaviourally
-   identical** - otherwise the auto-gate and `/link-check` return contradictory verdicts for the same
-   anchor. `tests/test_integration_tooling_tiers.py` pins that parity.
+1. A hook may also expose a CLI escape hatch (`doc_link_check.py --check`, `style_fixes.py
+   --check`, `secret_scan.py <paths>`) so a skill can re-run the same gate on demand. That
+   does not make it a `scripts/` tool - `settings.json` still owns its trigger.
+2. A fast hook and a thorough `scripts/` tool may deliberately overlap. Because the hook
+   cannot import from `scripts/`, that logic is genuinely duplicated, so `_common.slugify`
+   and `check_doc_links.slugify` **must stay behaviourally identical** - otherwise the
+   auto-gate and `/link-check` return contradictory verdicts for the same anchor.
 
-What is *not* allowed, and why each rule exists (every one of these has shipped as a bug here):
+What is not allowed - every one of these has shipped here as a real bug: a hook and a script
+implementing the same job under different names with no documented split; prose naming a tool
+the preset does not ship; a hook importing a name its `_common.py` does not define.
 
-- A `.claude/hooks/*.py` and a `scripts/*.py` implementing the *same job* under different names with no
-  documented split. The deleted `hooks/doc_registry.py` / `hooks/linkify_doc_mentions.py` were dead
-  duplicates of the `scripts/` tools every skill actually invoked - unwired, unreferenced, and
-  divergent (the hook `linkify_doc_mentions.py` was a needle-search tool; the `scripts/` one is a
-  corpus rewriter - same name, different behaviour).
-- Prose naming a tool the preset doesn't ship. `update-docs.md` invoked
-  `.claude/hooks/doc_registry.py` for five iterations after that file was deleted, and the `java`
-  preset's loop invoked `style_fixes.py`, which only exists in `python`.
-- A hook importing a name `_common.py` doesn't define. `python`'s `doc_link_check.py` was wired for two
-  events while importing four helpers its `_common.py` lacked - an `ImportError` on every edit.
+## Invariants a change must not break
 
-Before adding or moving anything in either tier, run `uv run pytest
-tests/test_integration_tooling_tiers.py`: it checks every `hooks/`/`scripts/` mention in every preset's
-Markdown resolves, that `settings.json` wires only hooks that exist (and never a `scripts/` tool), that
-every hook imports cleanly, that every script's `--help` works, and that the slug implementations agree.
+- **Non-destructiveness.** `generate` refuses to write into a non-empty `.claude/`, `docs/`,
+  or `scripts/` without `--force`; `_copy_tree` skips existing files unless forced; every
+  AI-authored increment has an idempotency guard (a stub comparison or a sentinel string) so
+  a repeat run never clobbers user edits. `seed_first_milestone` is the one function that
+  calls `shutil.rmtree`, which is why it is gated behind its own separate flag.
+- **Corpus completeness.** `.claude/`, `docs/`, and `scripts/` are always generated together,
+  so a generated file never references something that was not generated.
+- **No leftovers.** No unsubstituted placeholder token and no unresolved marker comment may
+  survive into a generated tree.
+- **The offline path stays offline.** `anthropic` is imported only from `ai/client.py`, only
+  lazily; `cli.py` imports `resolver`/`headless` lazily inside the `--resolve-markers` branch.
+  Pinned by `tests/test_markers.py::test_cli_import_does_not_pull_anthropic` and
+  `::test_docgen_import_does_not_pull_anthropic`.
+- **`SME REVIEW NEEDED` is never silently resolved.** `resolver.render` emits the unreviewed
+  draft blockquote regardless of the model's confidence, and counts it under
+  `ResolveSummary.human_review` rather than `resolved`/`todos`.
+- **The two resolution backends stay equivalent.** They must return the same `ResolveSummary`
+  shape and emit byte-identical TODO / SME-draft fallbacks, because `headless._TODO_RE` and
+  `_SME_RE` parse exactly what `resolver.render` writes.
+- **Idempotent regeneration.** A second `generate --force` produces byte-identical output;
+  `docgen`'s writers and `dependencies.upsert_marked_block` are pure functions of the current
+  tree for exactly this reason.
 
-### Generator pipeline (`src/awesome_templates`)
+## Conventions
 
-See [`src/awesome_templates/CLAUDE.md`](src/awesome_templates/CLAUDE.md) — the per-module map loads
-automatically when working in that directory.
+- Python `>= 3.11`. `Optional[T]` and `Union[...]`, never the `X | None` shorthand - `UP007`
+  is disabled in `ruff.toml` deliberately.
+- `from __future__ import annotations` at the top of every module.
+- Every module carries a docstring stating its purpose *and its rationale* - why it is
+  separate from its neighbours. This is the dominant documentation style here; match it. The
+  cross-module map that individual docstrings cannot provide lives in
+  `src/awesome_templates/CLAUDE.md`, which loads automatically when working in that directory.
+- Threading, not globals: `Workspace`, `warnings: list[str]`, and `log: LogHelper` are all
+  passed as parameters. Do not introduce module-level state.
+- Testability at the boundary: `resolver.py` takes a `client`, `headless.py` takes a `run=`.
+  Preserve that pattern when adding anything that reaches outside the process.
+- Conventional Commits. Never push directly to `master`.
 
-### Tests
+## Tests
 
-`tests/conftest.py`'s `fixture_workspace` builds two tiny synthetic presets ("demo" and "other") under
-`tmp_path`, each shaped like a real preset (`<preset>/.claude/<kind>/`, `<preset>/docs/`), for most
-unit tests. `real_workspace` points at this repo's actual `templates/`, used by
-`test_integration_real_repo.py` to catch real breakage a synthetic fixture can't — including a
-parametrized regression test that generates each real preset and asserts zero dangling `@docs/`
-references in the result. `test_dependencies.py` hand-builds a `Catalog` directly (bypassing
-`catalog.discover()`'s filesystem walk) for its graph-matching-logic tests, since those exercise
-`build_dependency_graph` against an arbitrary multi-category layout that isn't meant to model a real
-preset.
+The suite is flat under `tests/` - there is **no** `tests/unit/` directory, so any instruction
+mentioning one is stale. `tests/conftest.py` provides two fixtures: `fixture_workspace` builds
+two tiny synthetic presets ("demo" and "other") under `tmp_path` for most unit tests, and
+`real_workspace` points at this repo's actual `templates/`.
+
+`tests/test_integration_real_repo.py` is the load-bearing file: it generates each real preset
+and asserts zero dangling `@docs/` references, no links outside the preset's own tree, no
+unresolved placeholders when generating from the example config, and that the generated agent
+docs list every real agent file. Changes to `templates/` should run it even when no Python
+changed.
+
+## Design documents
+
+This repo has **no `docs/adr/` directory** - `docs/adr/` exists only inside the presets it
+distributes. Design rationale lives in `docs/roadmap/{NNNN}-{slug}/`, in two shapes:
+`0001-ai-assisted-generation/` is a set of numbered documents named
+`{NN}.{Title_With_Underscores}.md`, while `0002-api-based-marker-research/` uses a `plan.md` +
+`status.md` pair. A rejected alternative is preserved as its own deferred milestone rather
+than deleted - milestone `0002` exists solely to keep the in-house research-harness design
+buildable should the `claude`-CLI dependency ever become unacceptable. Cite these as
+`path#heading-slug`, never the file alone.
+
+The root `AGENTS.md` is a near-duplicate of an older revision of this file; prefer `CLAUDE.md`
+where they differ.

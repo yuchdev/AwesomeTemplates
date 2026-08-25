@@ -307,6 +307,12 @@ def generate(
         help="replace the example roadmap milestone with an AI-proposed first milestone for "
         "this project - requires --resolve-markers; deletes the example milestone's content",
     ),
+    update_guidelines: bool = typer.Option(
+        False,
+        "--update-guidelines",
+        help="create or update README.md, CLAUDE.md, and AGENTS.md at the output root from "
+        "the marker-research session - requires --resolve-markers and the `claude` CLI",
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="print the plan without writing anything"
     ),
@@ -358,6 +364,9 @@ def generate(
     specializations_value = _resolve_specializations(workspace, preset_value, specializations_value)
     if seed_roadmap and not resolve_value:
         _fail("--seed-roadmap requires --resolve-markers (it needs the same project context/API key)")
+        return
+    if update_guidelines and not resolve_value:
+        _fail("--update-guidelines requires --resolve-markers (it rides the same research session)")
         return
 
     subs = {
@@ -425,36 +434,99 @@ def generate(
     }
 
     if resolve_value:
-        try:
-            from awesome_templates import resolver
-            from awesome_templates.ai import client as ai_client
-        except ModuleNotFoundError:
-            _fail("--resolve-markers needs the 'ai' extra: pip install awesome_templates[ai]")
-            return
+        from awesome_templates import headless, resolver
+
         api_key = resolver.load_api_key(Path.cwd())
-        if not api_key:
-            _fail("--resolve-markers needs ANTHROPIC_API_KEY (in the environment or a .env in the cwd)")
-            return
-        client = ai_client.build_client(api_key)
-        rsum = resolver.resolve_tree(
-            out_dir, api_key=api_key, warnings=warnings, make_client=lambda: client, log=log,
-        )
+        claude_bin = headless.find_claude()
+
+        if claude_bin:
+            rsum, guidelines_updated = headless.resolve_tree_headless(
+                out_dir,
+                api_key=api_key,
+                warnings=warnings,
+                claude_bin=claude_bin,
+                update_guidelines=update_guidelines,
+                log=log,
+            )
+            if update_guidelines:
+                summary["guidelines_updated"] = guidelines_updated
+        else:
+            if update_guidelines:
+                _fail(
+                    "--update-guidelines needs the `claude` CLI on PATH "
+                    "(it runs a headless Claude Code research session)"
+                )
+                return
+            if not api_key:
+                _fail(
+                    "--resolve-markers needs the `claude` CLI on PATH, or ANTHROPIC_API_KEY "
+                    "(in the environment or a .env in the cwd) for the one-shot API fallback"
+                )
+                return
+            message = (
+                "claude CLI not found on PATH - falling back to one-shot API marker "
+                "resolution (weaker research); install Claude Code for the full research pass"
+            )
+            warnings.append(message)
+            log.warning(message)
+            try:
+                from awesome_templates.ai import client as ai_client
+
+                fallback_client = ai_client.build_client(api_key)
+            except ModuleNotFoundError:
+                _fail("--resolve-markers needs the 'ai' extra: pip install awesome_templates[ai]")
+                return
+            rsum = resolver.resolve_tree(
+                out_dir, api_key=api_key, warnings=warnings,
+                make_client=lambda: fallback_client, log=log,
+            )
         summary["markers_resolved"] = rsum.resolved
         summary["markers_todo"] = rsum.todos
         summary["markers_human_review"] = rsum.human_review
         summary["markers_failed"] = rsum.failed
 
-        context_bundle = resolver.gather_context(out_dir)
-        summary["tutorial_written"] = resolver.maybe_write_tutorial(
-            out_dir, client, context_bundle, warnings, log=log,
-        )
+        # The remaining increments are still one-shot Messages API calls (see
+        # the design doc's follow-up note) - they need an explicit API key and
+        # the 'ai' extra, and are skipped softly without them since the
+        # research pass above already did the load-bearing work.
+        summary["tutorial_written"] = False
+        summary["test_conventions_described"] = False
         if seed_roadmap:
-            summary["roadmap_seeded"] = resolver.seed_first_milestone(
+            summary["roadmap_seeded"] = False
+        client = None
+        if api_key:
+            try:
+                from awesome_templates.ai import client as ai_client
+
+                client = ai_client.build_client(api_key)
+            except ModuleNotFoundError:
+                message = (
+                    "the 'ai' extra is not installed - skipped the tutorial/test-conventions"
+                    + ("/roadmap" if seed_roadmap else "")
+                    + " increments (pip install awesome_templates[ai])"
+                )
+                warnings.append(message)
+                log.warning(message)
+        else:
+            message = (
+                "ANTHROPIC_API_KEY not set - skipped the tutorial/test-conventions"
+                + ("/roadmap" if seed_roadmap else "")
+                + " increments (they call the Messages API directly)"
+            )
+            warnings.append(message)
+            log.warning(message)
+        if client is not None:
+            context_bundle = resolver.gather_context(out_dir)
+            summary["tutorial_written"] = resolver.maybe_write_tutorial(
                 out_dir, client, context_bundle, warnings, log=log,
             )
-        summary["test_conventions_described"] = resolver.maybe_describe_test_conventions(
-            out_dir, client, warnings, log=log,
-        )
+            if seed_roadmap:
+                summary["roadmap_seeded"] = resolver.seed_first_milestone(
+                    out_dir, client, context_bundle, warnings, log=log,
+                )
+            summary["test_conventions_described"] = resolver.maybe_describe_test_conventions(
+                out_dir, client, warnings, log=log,
+            )
 
     if json_out:
         typer.echo(json.dumps(summary, indent=2))
@@ -473,6 +545,10 @@ def generate(
                 console.print("Wrote docs/agent/tutorial.md")
             if seed_roadmap and summary.get("roadmap_seeded"):
                 console.print("Seeded the first roadmap milestone")
+            if update_guidelines and summary.get("guidelines_updated"):
+                console.print(
+                    f"Guideline docs created/updated: {', '.join(summary['guidelines_updated'])}"
+                )
         if warnings:
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:

@@ -84,6 +84,28 @@ def test_bare_todo_comment_is_left_untouched():
     assert find_markers(text, Path("a.md")) == []
 
 
+def test_marker_syntax_in_backtick_code_span_is_not_a_marker():
+    # Documentation that mentions the convention (e.g. the README written by
+    # --update-guidelines) must not be resolved as if it carried real markers.
+    text = "Markers look like `<!-- TEMPLATE-INIT: ... -->` and are filled by AI.\n"
+    assert find_markers(text, Path("a.md")) == []
+
+
+def test_marker_syntax_in_fenced_code_block_is_not_a_marker():
+    text = (
+        "A real one first:\n\n"
+        "<!-- TEMPLATE-INIT: real instruction -->\n\n"
+        "```\n<!-- TEMPLATE-INIT: quoted example -->\n```\n"
+    )
+    (marker,) = find_markers(text, Path("a.md"))
+    assert marker.instruction == "real instruction"
+
+
+def test_marker_in_unclosed_fence_is_not_a_marker():
+    text = "```\n<!-- TEMPLATE-INIT: quoted in a dangling fence -->\n"
+    assert find_markers(text, Path("a.md")) == []
+
+
 def test_apply_replacements_reverse_splices_multiple_markers():
     text = "A <!-- TEMPLATE-INIT: one --> B <!-- TEMPLATE-INIT: two --> C"
     m1, m2 = find_markers(text, Path("a.md"))

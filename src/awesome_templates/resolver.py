@@ -52,17 +52,32 @@ gives you one TEMPLATE-INIT instruction from a generated Markdown file plus the
 prose surrounding it, and a bundle describing the target project the kit was
 generated into.
 
-Write concise prose that answers the instruction, grounded ONLY in the project
-bundle below - never invent architecture, domain terms, or risk categories that
-aren't evidenced there. Match the voice and format of the surrounding prose. If
-the marker is inline in a sentence, return a fragment that reads naturally where
-the comment sat; if it stands alone, you may return one or more sentences or a
-short list.
+Treat the target as a real, existing project - the bundle's README/CLAUDE.md,
+manifest, and source tree describe a codebase that is already there. Write
+declarative, present-tense prose that states the project's actual facts:
+name its real modules, files, schemas, entry points, and data flows exactly
+as the bundle spells them (`core/orchestrator.py`-style paths, class and
+schema names in backticks). Extract aggressively: an architecture summary in
+the README or CLAUDE.md, a dependency in the manifest, or a directory name in
+the source tree is evidence you are expected to use, not merely permitted to.
+
+Never restate, paraphrase, or summarize the instruction itself - the reader
+must see project facts, not a description of what ought to be researched.
+Prose containing phrases like "this project's actual ...", "identify the ...",
+or "once the codebase ..." is a failure. Ground every claim in the bundle;
+do not invent architecture, domain terms, or risk categories that aren't
+evidenced there.
+
+Match the voice and format of the surrounding prose. If the marker is inline
+in a sentence, return a fragment that reads naturally where the comment sat;
+if it stands alone, you may return one or more sentences or a short list.
 
 Return prose only: no `<!-- ... -->` comment syntax and no `{{PLACEHOLDER}}`
-tokens. If the bundle genuinely lacks the signal to answer confidently (e.g. a
-skeletal project with no real code yet), set confident=false and put your best
-partial guidance in prose - do not fabricate specifics to sound confident.
+tokens. Set confident=true whenever the bundle names the concrete things the
+instruction asks about, even if you'd learn more from reading full source
+files. Reserve confident=false for a genuinely skeletal target (no real code
+or design docs yet) - and even then put your best partial, bundle-grounded
+guidance in prose rather than restating the instruction.
 """
 
 _SME_REVIEW_ADDENDUM = """
@@ -163,7 +178,7 @@ def gather_context(target: Path, *, char_budget: int = 40_000) -> str:
     is labelled and truncated so the whole bundle stays within char_budget."""
     sections: list[str] = []
 
-    for name in ("README.md", "CLAUDE.md", "AGENTS.md"):
+    for name in ("README.md", "CLAUDE.md", "AGENTS.md", "ARCHITECTURE.md", "docs/README.md"):
         body = _read_head(target / name, 6_000)
         if body.strip():
             sections.append(f"## {name}\n{body}")

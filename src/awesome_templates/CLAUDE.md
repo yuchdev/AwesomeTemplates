@@ -81,6 +81,19 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   branch imports `resolver` (and `ai.client`, to build one client instance shared across all of these
   calls) lazily too, so the offline `generate` path stays free of the `ai` extra (pinned by
   `tests/test_markers.py::test_cli_import_does_not_pull_anthropic`).
+- `headless.py` — the agentic half of `--resolve-markers` (design:
+  `docs/roadmap/0001-ai-assisted-generation/03.Agentic_marker_research.md`): when the `claude` CLI is
+  installed, runs ONE headless Claude Code session (`claude -p --bare`, tools hard-allowlisted to
+  Read/Grep/Glob/Edit/TodoWrite, `+Write` only under `--update-guidelines`) over the whole marker
+  manifest rendered from `markers.scan_tree`, with cwd set to `detect_project_root`'s answer (out_dir
+  when it holds a real project, else the `generate` invocation's cwd — the generate-into-a-scratch-dir
+  case). Results are reconciled by a before/after `scan_tree` diff plus TODO/SME-draft pattern counts,
+  never the model's self-report, into the same `ResolveSummary` shape `resolver.resolve_tree` returns.
+  The research method/rules are a deliberate re-embed of `.claude/agents/create-from-template.md` (a
+  pip-installed package can't read that file at runtime) — keep the two aligned. Takes `run=`
+  (defaulting to `subprocess.run`) so `tests/test_headless.py` asserts on argv/prompt and simulates
+  session edits with no real CLI. `resolver.resolve_tree` stays as the warned fallback when `claude`
+  isn't on `PATH`; the tutorial/roadmap/test-conventions increments stay on the one-shot API path.
 - `cli.py` — Typer app; command tree is `list`, `graph`, `generate`. Each `generate` flag has a
   config-file fallback (`--config file.json|.toml`) merged before CLI flags, which always win. The
   repeatable `--specialization` flag is the one list-valued exception to "flag wins": passing it at

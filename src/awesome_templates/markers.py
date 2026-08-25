@@ -49,6 +49,38 @@ MARKER_RE = re.compile(
 # signature of a block marker that owns its line(s).
 _PREFIX_RE = re.compile(r"(?P<indent>[ \t]*)(?P<bullet>[-*]\s+)?\Z")
 
+
+def _fenced_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans of ``` fenced code blocks, an unclosed fence running to
+    the end of the text."""
+    spans: list[tuple[int, int]] = []
+    open_start: int | None = None
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        if line.lstrip().startswith("```"):
+            if open_start is None:
+                open_start = offset
+            else:
+                spans.append((open_start, offset + len(line)))
+                open_start = None
+        offset += len(line)
+    if open_start is not None:
+        spans.append((open_start, len(text)))
+    return spans
+
+
+def _is_quoted(text: str, start: int, end: int, fenced: list[tuple[int, int]]) -> bool:
+    """True when the matched comment is *mentioned*, not *placed*: enclosed in
+    backticks as an inline code span, or inside a fenced code block. Docs that
+    document the marker convention itself (a generated README, this repo's own
+    docs) legitimately quote marker syntax that way, and resolving those
+    mentions would corrupt the documentation - a real shipped bug: the README
+    that `--update-guidelines` writes describes the marker kinds, and the next
+    `--resolve-markers` run then tried to resolve the description."""
+    if start > 0 and text[start - 1] == "`" and end < len(text) and text[end] == "`":
+        return True
+    return any(fs <= start < fe for fs, fe in fenced)
+
 # How much surrounding prose to hand the model as context for each marker.
 _CONTEXT_CHARS = 600
 
@@ -88,8 +120,11 @@ def find_markers(text: str, path: Path) -> list[Marker]:
     reproduce that prefix. An inline marker keeps its span on the comment alone,
     so surrounding sentence spacing is preserved on replacement."""
     markers: list[Marker] = []
+    fenced = _fenced_spans(text)
     for m in MARKER_RE.finditer(text):
         cstart, end = m.start(), m.end()
+        if _is_quoted(text, cstart, end, fenced):
+            continue
         line_start = text.rfind("\n", 0, cstart) + 1
         prefix = _PREFIX_RE.fullmatch(text[line_start:cstart])
         if prefix is not None:  # block: nothing but indent/bullet precedes it
