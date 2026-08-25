@@ -33,9 +33,9 @@ with `{{PLACEHOLDER}}` substitution applied to every text file. `.claude/`, `doc
 always land together, from the same source tree, so agents and scripts cannot reference template
 content that was not generated.
 
-3. Markdown files contain multiple document links. Rather than introducing templates, create `MIGRATION_REPORT.md` per each entitiy with all document references. Perhaps will be introduced templates for documents, or special documents conventions accross projects, e.g. `docs/adr` and `docs/roadmap`. The following design will be the subject of further design steps
+1. Markdown files contain multiple document links. Rather than introducing templates, create `MIGRATION_REPORT.md` per each entity with all document references. Perhaps will be introduced templates for documents, or special documents conventions across projects, e.g. `docs/adr` and `docs/roadmap`. The following design will be the subject of further design steps
 
-4. Analyze any project or technology-dependent entities aside from names and links and provide then in each `MIGRATION_REPORT.md`
+2. Analyze any project or technology-dependent entities aside from names and links and provide then in each `MIGRATION_REPORT.md`
 
 This would be the gate for the next design round or the first implementation round.
 
@@ -68,7 +68,7 @@ uv run awesome-templates generate --preset python --name "Acme Sync" --specializ
 # Plain preview, no specialization (originally into /tmp; now into the in-project .scratch/)
 uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/plain
 
-# Preview with a specialization layered on top — verifies it merges into .claude/, no stray top-level folder
+# Preview with a specialization layered on top - verifies it merges into .claude/, no stray top-level folder
 uv run awesome-templates generate --preset python --name "Awesome Templates" --package awesome_templates --out .scratch/django --specialization django
 
 # Full AI-resolution pass: markers, tutorial.md, test-conventions paragraph (needs ANTHROPIC_API_KEY; makes real, billed API calls)
@@ -80,10 +80,10 @@ uv run pytest tests/test_specializations.py tests/test_integration_real_repo.py 
 
 A few things worth knowing before you run these yourself:
 
-* `--out .scratch/...` works because `.scratch/` is now in `.gitignore` — anything you generate there won't show up in the git status clutter.
-* Add `--specialization <name>` more than once to layer several (awesome-templates list shows valid choices per preset — `django`, `ml-ai`, `webscraping` for python; `spring`, `android` for java).
-* Command 3 costs real API usage every time you run it — each `<!-- TEMPLATE-INIT -->/<!-- SME REVIEW NEEDED -->` marker, plus the calls are `tutorial/test-conventions` a separate request. Skip `--resolve-markers` if you just want to inspect the deterministic output.
-* Rerunning any of these into an existing `.scratch/{name}` will fail unless you also pass `--force` (or delete the directory first) — generate refuses to overwrite non-empty output by default.
+* `--out .scratch/...` works because `.scratch/` is now in `.gitignore` - anything you generate there won't show up in the git status clutter.
+* Add `--specialization <name>` more than once to layer several (awesome-templates list shows valid choices per preset - `django`, `ml-ai`, `webscraping` for python; `spring`, `android` for java).
+* Command 3 costs real API usage every time you run it - each `<!-- TEMPLATE-INIT -->/<!-- SME REVIEW NEEDED -->` marker, plus the calls are `tutorial/test-conventions` a separate request. Skip `--resolve-markers` if you just want to inspect the deterministic output.
+* Rerunning any of these into an existing `.scratch/{name}` will fail unless you also pass `--force` (or delete the directory first) - generate refuses to overwrite non-empty output by default.
 * `generate` also accepts `--config {file.json|file.toml}` (any flag passed alongside overrides the matching config value) and `--dry-run --json` for a machine-readable preview. `--out` is the project root that gets `.claude/`, `docs/`, and `scripts/` subdirectories (default: `.`); pass `--force` to overwrite existing content in any of them. `--specialization {name}` is repeatable and passing it at all replaces a config file's `specializations` list wholesale rather than merging with it. Run `uv run awesome-templates generate --help` for the full flag reference.
 
 ### Config file
@@ -112,17 +112,17 @@ JSON works the same way (picked by file extension); the schema is the same shape
 }
 ```
 
-| Field                | Substitutes              | Default if omitted                                    |
-|----------------------|--------------------------|-------------------------------------------------------|
-| `preset`             | —                        | none - required (or pass `--preset`)                  |
-| `out`                | —                        | `.`                                                   |
-| `force`              | —                        | `false`                                               |
-| `specializations`    | —                        | `[]` - see `uv run awesome-templates list` for choices |
-| `project.name`       | `{{PROJECT_NAME}}`       | none - required (or pass `--name`)                    |
-| `project.package`    | `{{PROJECT_PACKAGE}}`    | slugified `project.name`                              |
-| `project.purpose`    | `{{PROJECT_PURPOSE}}`    | a `TODO: describe what this project does` placeholder |
-| `project.slug_upper` | `{{PROJECT_SLUG_UPPER}}` | upper-slugified `project.name`                        |
-| `resolve_markers`    | —                        | `false` (or pass `--resolve-markers`)                 |
+| Field                | Substitutes              | Default if omitted                                     |
+|----------------------|--------------------------|--------------------------------------------------------|
+| `preset`             | -                        | none - required (or pass `--preset`)                   |
+| `out`                | -                        | `.`                                                    |
+| `force`              | -                        | `false`                                                |
+| `specializations`    | -                        | `[]` - see `uv run awesome-templates list` for choices |
+| `project.name`       | `{{PROJECT_NAME}}`       | none - required (or pass `--name`)                     |
+| `project.package`    | `{{PROJECT_PACKAGE}}`    | slugified `project.name`                               |
+| `project.purpose`    | `{{PROJECT_PURPOSE}}`    | a `TODO: describe what this project does` placeholder  |
+| `project.slug_upper` | `{{PROJECT_SLUG_UPPER}}` | upper-slugified `project.name`                         |
+| `resolve_markers`    | -                        | `false` (or pass `--resolve-markers`)                  |
 
 Any CLI flag passed alongside `--config` overrides the matching value from the file.
 
@@ -132,7 +132,7 @@ Any CLI flag passed alongside `--config` overrides the matching value from the f
 kind: `<!-- TEMPLATE-INIT: <instruction> -->` markers describing a project-specific fact no find/replace
 can supply. Pass `--resolve-markers` (or `resolve_markers = true` in the config) to have `generate`
 resolve every such marker across the generated Markdown by calling Anthropic against the target
-project's own code and docs — writing grounded prose, or a visible `> **TODO (fill in ...)**` blockquote
+project's own code and docs - writing grounded prose, or a visible `> **TODO (fill in ...)**` blockquote
 when it can't answer confidently.
 
 This is opt-in: plain `generate` stays fully offline. It needs the optional `ai` extra and an API key:
