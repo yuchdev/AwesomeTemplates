@@ -108,7 +108,7 @@ for point-in-time reviews.
 > integrity pin or explicit-path option for the `claude` binary; no redaction filter on the
 > stderr tail appended to `warnings`; no gate on model output before it is spliced to disk
 > (a detector for this is designed but deferred - see
-> `docs/roadmap/0002-api-based-marker-research/plan.md`, "Quality gate on the output").
+> `../roadmap/0003-api-based-marker-research/plan.md`, "Quality gate on the output").
 > 
 > ### 6. Verdict
 > 

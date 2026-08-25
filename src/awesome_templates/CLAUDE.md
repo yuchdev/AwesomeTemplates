@@ -82,7 +82,7 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   calls) lazily too, so the offline `generate` path stays free of the `ai` extra (pinned by
   `tests/test_markers.py::test_cli_import_does_not_pull_anthropic`).
 - `headless.py` — the agentic half of `--resolve-markers` (design:
-  `docs/roadmap/0001-ai-assisted-generation/03.Agentic_marker_research.md`): when the `claude` CLI is
+  `../../docs/roadmap/0001-ai-assisted-generation/01.0-working-implementation/03.Agentic_marker_research.md`): when the `claude` CLI is
   installed, runs ONE headless Claude Code session (`claude -p --bare`, tools hard-allowlisted to
   Read/Grep/Glob/Edit/TodoWrite, `+Write` only under `--update-guidelines`) over the whole marker
   manifest rendered from `markers.scan_tree`, with cwd set to `detect_project_root`'s answer (out_dir

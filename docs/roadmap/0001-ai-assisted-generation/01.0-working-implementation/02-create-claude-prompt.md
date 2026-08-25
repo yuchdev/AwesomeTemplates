@@ -5,13 +5,13 @@
 After deterministic `{{PLACEHOLDER}}` replacement, call the Claude API to (in addition to existing
 actions):
 
-* Deeply research the project via `CLAUDE.md`, `README.md`, `AGENTS.md`
+* Deeply research the project via `../../../../CLAUDE.md`, `../../../../README.md`, `../../../../AGENTS.md`
 * Replace tags in Markdown such as `<!-- TEMPLATE-INIT: ... -->`, `<!-- SME REVIEW NEEDED: ... -->`
   and others
-* Update the list of actual agents in `docs/agent/agents.md`
-* Update the list of actual skills in `docs/agent/skills.md`
-* Update the list of actual hooks in `docs/agent/hooks.md`
-* Create a project tutorial in `docs/agent/tutorial.md`
+* Update the list of actual agents in `../../../agent/agents.md`
+* Update the list of actual skills in `../../../agent/skills.md`
+* Update the list of actual hooks in `../../../agent/hooks.md`
+* Create a project tutorial in `../../../agent/tutorial.md`
 * Replace the roadmap example with a "good first task"
 * Describe the actual test structure in `docs/test/*.md`
 
@@ -20,16 +20,16 @@ actions):
 Before designing new work, it's worth being precise about what's already shipped, because two of
 the eight bullets above are **done**, and a third is **half done**:
 
-* `src/awesome_templates/markers.py` scans generated Markdown for `<!-- TEMPLATE-INIT: ... -->`
+* `../../../../src/awesome_templates/markers.py` scans generated Markdown for `<!-- TEMPLATE-INIT: ... -->`
   and knows how to splice a replacement back in (inline vs. block, list-bullet vs. plain).
-* `src/awesome_templates/resolver.py::gather_context` **already** reads `README.md`, `CLAUDE.md`,
-  and `AGENTS.md` from the target project (plus a dependency manifest, the `src/`/`tests/` tree,
+* `src/awesome_templates/resolver.py::gather_context` **already** reads `../../../../README.md`, `../../../../CLAUDE.md`,
+  and `../../../../AGENTS.md` from the target project (plus a dependency manifest, the `../../../../src`/`../../../../tests` tree,
   and any `docs/adr/*.md` / `docs/specs/*.md`), all folded into one budgeted context bundle. The
   first bullet above is satisfied today.
-* `src/awesome_templates/ai/client.py` is the one module allowed to import `anthropic`, lazily.
+* `../../../../src/awesome_templates/ai/client.py` is the one module allowed to import `anthropic`, lazily.
 * `resolver.resolve_tree` drives the whole thing end-to-end, wired to `generate --resolve-markers`
   in `cli.py`, gated behind the optional `ai` extra and `ANTHROPIC_API_KEY` — fully covered by
-  `tests/test_resolver.py` against a fake client (no real network call in the suite).
+  `../../../../tests/test_resolver.py` against a fake client (no real network call in the suite).
 
 So this task is **not** "build an AI-resolution feature from scratch" — it's five additions on top
 of an existing, tested pipeline, plus one generalization. Each is scoped below with a concrete
@@ -38,7 +38,7 @@ design, code sketch, and its own acceptance criteria, so they can land as five s
 
 `★ Insight ─────────────────────────────────────`
 `resolver.py`'s own docstring already calls it "the programmatic sibling of
-`.claude/agents/create-from-template.md`" — the interactive agent and this CLI pipeline solve the
+`../../../../.claude/agents/create-from-template.md`" — the interactive agent and this CLI pipeline solve the
 same problem (fill in project-specific facts a template can't know) for two different audiences:
 someone driving Claude Code interactively vs. someone scripting `generate` in CI. Every prompt
 designed below should stay consistent with what that agent already does, not invent a second voice.
@@ -57,7 +57,7 @@ something no file states outright (a tutorial narrative, a first milestone, a th
 
 ## Increment A — generalize markers beyond `TEMPLATE-INIT`
 
-### What's in `templates/` today
+### What's in `../../../../templates` today
 
 ```
 $ grep -rhoE '<!--\s*[A-Z][A-Z -]+:' templates/ | sort -u
@@ -72,7 +72,7 @@ fill in) but with **opposite resolution policy**:
 * `TEMPLATE-INIT` (12 occurrences across both presets' agents/loops) — safe to auto-fill with
   confident AI prose; low-confidence already falls back to a `> **TODO (fill in): ...**`
   blockquote via `resolver.render`.
-* `SME REVIEW NEEDED` (`docs/security/README.md`, both presets) — this one marks a spot that
+* `SME REVIEW NEEDED` (`../../../security/README.md`, both presets) — this one marks a spot that
   **needs a human security reviewer**, e.g. "populate with this project's first real threat
   model." Auto-resolving this the same way `TEMPLATE-INIT` is resolved would be actively harmful:
   it would replace a visible "a human hasn't looked at this yet" flag with fabricated-sounding
@@ -80,10 +80,10 @@ fill in) but with **opposite resolution policy**:
   model may *draft* a starting point, but the output must stay flagged as unreviewed regardless of
   the model's own confidence score.
 
-The bare `<!-- TODO: describe ruff, mypy, Flake8 -->` in `docs/dev/python_language_rules.md` is a
+The bare `<!-- TODO: describe ruff, mypy, Flake8 -->` in `../../../dev/python_language_rules.md` is a
 **third, unrelated thing** — an ordinary authoring TODO, not a `<!-- KIND: instruction -->`-shaped
 marker at all, and its content (describe the *lint tool config*) is answerable by reading
-`pyproject.toml`/`ruff.toml` directly rather than asking a model to guess. **Out of scope for this
+`../../../../pyproject.toml`/`../../../../ruff.toml` directly rather than asking a model to guess. **Out of scope for this
 task** — flagging it here only so "and others" in the original task isn't read as "sweep every
 HTML comment that looks TODO-ish," which this design deliberately does not do.
 
@@ -142,7 +142,7 @@ separately — a caller scripting CI can treat "N markers still need a human" ve
       the existing `markers_resolved` / `markers_todo` / `markers_failed`.
 
 **Tests**
-- [ ] `tests/test_markers.py`: extend existing marker-shape tests (block/inline/list-bullet/
+- [ ] `../../../../tests/test_markers.py`: extend existing marker-shape tests (block/inline/list-bullet/
       multiline) to also assert `.kind == "TEMPLATE-INIT"` — these must keep passing unmodified in
       spirit, only gaining an assertion.
 - [ ] `tests/test_markers.py::test_find_markers_recognizes_sme_review_needed_kind`
@@ -163,7 +163,7 @@ Runs unconditionally on every `generate` (no `--resolve-markers`, no API key, no
 is plain filesystem introspection over what `copy_preset` just wrote, in the same spirit as
 `markers.py` being "the pure, network-free half" of the marker feature.
 
-### New module: `src/awesome_templates/docgen.py`
+### New module: `../../../../src/awesome_templates/docgen.py`
 
 ```python
 """Deterministic 'what actually shipped' doc generation - no network, no AI.
@@ -234,11 +234,11 @@ def render_hooks_doc(hooks: list[HookInfo]) -> str: ...
 
 `list_hooks` is the one non-trivial case: a hook `.py` file has no frontmatter, only a module
 docstring, and doesn't say *what triggers it* — that's `settings.json`'s `hooks` section (event +
-matcher). `list_hooks` reads `.claude/settings.json`, walks `hooks.<Event>[].hooks[].command`,
+matcher). `list_hooks` reads `../../../../.claude/settings.json`, walks `hooks.<Event>[].hooks[].command`,
 extracts the filename (`.../hooks/dep_audit.py` → `dep_audit`), and pairs it with that hook file's
 first module-docstring line for the description. A hook file present but not wired in
 `settings.json` (which should never happen in a shipped preset — that's exactly the dead-hook bug
-class root `CLAUDE.md` documents) surfaces as `trigger: "(unwired)"` rather than being silently
+class root `../../../../CLAUDE.md` documents) surfaces as `trigger: "(unwired)"` rather than being silently
 dropped, so it's visible in the generated docs instead of only in a maintainer test.
 
 ### Wiring into `cli.py`
@@ -258,15 +258,15 @@ just regenerates the same three files from the current tree, no drift, no marker
 ### Acceptance criteria
 
 **Code**
-- [ ] `src/awesome_templates/docgen.py` as sketched: `list_agents`/`list_skills`/`list_hooks`,
+- [ ] `../../../../src/awesome_templates/docgen.py` as sketched: `list_agents`/`list_skills`/`list_hooks`,
       `render_*_doc`, and a `write_agent_docs(project_dir, warnings)` orchestrator.
 - [ ] `cli.py`'s `generate` calls `docgen.write_agent_docs` unconditionally after `copy_preset`
       (works with zero flags, zero API key, zero `ai` extra).
-- [ ] `src/awesome_templates/CLAUDE.md` module map gets a `docgen.py` entry.
+- [ ] `../../../../src/awesome_templates/CLAUDE.md` module map gets a `docgen.py` entry.
 
 **Tests**
 
-New `tests/test_docgen.py` (using `fixture_workspace`'s `demo` preset — it already has
+New `../../../../tests/test_docgen.py` (using `fixture_workspace`'s `demo` preset — it already has
 `widget-verifier.md` with `name: widget-verifier` frontmatter, `_common.py` + `guard.py` hooks
 wired to `PreToolUse: Bash` in its `settings.json`, and an `adr-write` skill directory):
 
@@ -278,18 +278,18 @@ wired to `PreToolUse: Bash` in its `settings.json`, and an `adr-write` skill dir
       since this is pure rendering)
 - [ ] `test_write_agent_docs_preserves_existing_h1_heading`
 
-`tests/test_cli.py` addition:
+`../../../../tests/test_cli.py` addition:
 - [ ] `test_generate_populates_agents_doc_without_resolve_markers_flag` — run plain `generate`
-      (no `--resolve-markers`, no API key set), assert `docs/agent/agents.md` contains
+      (no `--resolve-markers`, no API key set), assert `../../../agent/agents.md` contains
       `widget-verifier` and is no longer just the stub header.
 
-`tests/test_integration_real_repo.py` addition:
+`../../../../tests/test_integration_real_repo.py` addition:
 - [ ] `test_real_preset_agents_doc_lists_every_real_agent_file` — generate the real `python`
-      preset, assert `docs/agent/agents.md` mentions all 12 real agent stems (regression pin, same
+      preset, assert `../../../agent/agents.md` mentions all 12 real agent stems (regression pin, same
       style as the existing zero-dangling-reference test).
 
 **Docs**
-- [ ] This *is* the docs deliverable: `docs/agent/agents.md` / `skills.md` / `hooks.md` go from a
+- [ ] This *is* the docs deliverable: `../../../agent/agents.md` / `skills.md` / `hooks.md` go from a
       one-line stub header to real, generated content in every project `generate` produces, for
       **every** preset (no `--resolve-markers` required).
 - [ ] If task 01 has landed, specialization-provided agents/skills appear in the same listing
@@ -297,9 +297,9 @@ wired to `PreToolUse: Bash` in its `settings.json`, and an `adr-write` skill dir
       specialization merge — no extra code needed here, since increment B runs after the full copy
       including any specialization layer).
 
-## Increment C — AI-assisted tutorial (`docs/agent/tutorial.md`)
+## Increment C — AI-assisted tutorial (`../../../agent/tutorial.md`)
 
-`docs/agent/tutorial.md` currently ships as literally `# Agentic Tutorial\n` — a stub for this
+`../../../agent/tutorial.md` currently ships as literally `# Agentic Tutorial\n` — a stub for this
 increment to fill in. This genuinely needs the model: "how does someone new to this project
 actually use the agents/skills/hooks that shipped" is a synthesis task, not a fact lookup.
 
@@ -352,13 +352,13 @@ already customized - left as-is"`.
 - [ ] `tests/test_resolver.py::test_maybe_write_tutorial_overwrites_the_stub`
 
 **Docs**
-- [ ] `docs/agent/tutorial.md` acceptance is the generated output itself — reviewed manually once
+- [ ] `../../../agent/tutorial.md` acceptance is the generated output itself — reviewed manually once
       against the real `python` preset generated for a small sample project, since prose quality
       isn't something a unit test can assert beyond "isn't the stub" and "mentions real names."
 
 ## Increment D — replace the roadmap example with a "good first task"
 
-`templates/python/docs/roadmap/0001-working-implementation/plan.md` already says outright:
+`../../../../templates/python/docs/roadmap/0001-working-implementation/plan.md` already says outright:
 
 > Replace this whole milestone with your own project's first real milestone once you adopt this
 > template — it exists to show the shape, not to be extended.
@@ -444,7 +444,7 @@ def render_milestone(plan: dict) -> dict[str, str]:
 
 ## Increment E — describe the actual test structure (`docs/test/*.md`)
 
-`docs/test/code_test_coverage.md` is already mostly deterministic today (its `{{PROJECT_PACKAGE}}`
+`../../../test/code_test_coverage.md` is already mostly deterministic today (its `{{PROJECT_PACKAGE}}`
 placeholders resolve at copy time via the existing `templating.py` pass, with zero new code). What
 it's missing is the actual test-directory *shape* of the target project, since it currently only
 gives generic pip/pytest instructions.
@@ -453,13 +453,13 @@ gives generic pip/pytest instructions.
 
 Deterministic first, thin AI layer second — same split as increment B vs. C:
 
-* `docgen.py` gains `list_test_files(project_dir) -> list[str]`, reusing the same `tests/` glob
+* `docgen.py` gains `list_test_files(project_dir) -> list[str]`, reusing the same `../../../../tests` glob
   `resolver.gather_context` already builds internally (extract that walk into a shared helper
   both modules call, rather than duplicating it).
 * Append a "## Actual Test Layout" section listing the real files/dirs — no API call needed for
   this part.
 * Optionally (still under `--resolve-markers`), one short AI-drafted paragraph summarizing
-  conventions *observed from file names only* (e.g. "tests mirror `src/` package structure;
+  conventions *observed from file names only* (e.g. "tests mirror `../../../../src` package structure;
   fixtures centralized in `conftest.py`") — deliberately fed only the file-name listing, not file
   contents, keeping this prompt cheap and fast regardless of project size.
 
@@ -482,23 +482,23 @@ Deterministic first, thin AI layer second — same split as increment B vs. C:
       files' actual source text.
 
 **Docs**
-- [ ] `docs/test/code_test_coverage.md` gains a real "Actual Test Layout" section per generated
+- [ ] `../../../test/code_test_coverage.md` gains a real "Actual Test Layout" section per generated
       project; this is the deliverable.
 
 ## Cross-cutting acceptance criteria (apply to all five increments)
 
 - [ ] `uv run pytest tests/test_integration_tooling_tiers.py` keeps passing untouched — none of
-      this introduces a new hook/script-tier violation (all new code lives in `src/awesome_templates/`,
-      not `.claude/hooks/` or `scripts/`).
+      this introduces a new hook/script-tier violation (all new code lives in `../../../../src/awesome_templates`,
+      not `../../../../.claude/hooks` or `../../../../scripts`).
 - [ ] `uv run ruff check src/ tests/` clean.
 - [ ] `tests/test_markers.py::test_cli_import_does_not_pull_anthropic` (or an equivalent new test)
       confirms `docgen.py` (increment B) never imports `anthropic`, directly or transitively — it
       must stay usable with zero `ai` extra installed, since it now runs unconditionally on every
       `generate`.
 - [ ] `awesome-templates generate --help` documents every new flag (`--specialization` from task
-      01, `--seed-roadmap` from increment D) — covered by root `CLAUDE.md`'s "Commands" section
+      01, `--seed-roadmap` from increment D) — covered by root `../../../../CLAUDE.md`'s "Commands" section
       needing a one-line update once these land.
 - [ ] `uv run pytest --cov=awesome_templates` — new modules (`docgen.py`, and the new functions in
       `resolver.py`) held to the same coverage discipline the existing modules already meet (no
-      numeric threshold is enforced in `pyproject.toml` today; match what's already there rather
+      numeric threshold is enforced in `../../../../pyproject.toml` today; match what's already there rather
       than introduce a new gate as part of this task).

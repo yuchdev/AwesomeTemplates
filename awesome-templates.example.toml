@@ -23,8 +23,10 @@ preset = "python"
 # rather than merging with it. Commented out by default (no specializations).
 # specializations = ["django"]
 
-# Project root to generate into: gets .claude/, docs/, and scripts/ subdirectories.
-# Defaults to "." (the current directory) if omitted.
+# Project root to analyze and generate into: gets .claude/, docs/, and
+# scripts/ subdirectories. Required - either here or as the CLI's positional
+# TARGET_DIR argument (e.g. `awesome-templates generate .`), which overrides
+# this value if both are given.
 out = "."
 
 # Overwrite existing .claude/ or docs/ content instead of failing. Defaults

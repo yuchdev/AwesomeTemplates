@@ -13,21 +13,21 @@ For Java, add specialization agents/skills for:
 * Spring
 * Android
 
-Specializations must be **independent from the core preset** (`templates/python`,
-`templates/java`) — a preset generates correctly with zero specializations selected, exactly as
+Specializations must be **independent from the core preset** (`../../../../templates/python`,
+`../../../../templates/java`) — a preset generates correctly with zero specializations selected, exactly as
 it does today. `generate` gets a new optional, repeatable flag to select zero or more
-specializations; the entities they add are listed in `docs/agent/agents.md` /
-`docs/agent/skills.md` (see task 02, which owns *how* those docs get populated).
+specializations; the entities they add are listed in `../../../agent/agents.md` /
+`../../../agent/skills.md` (see task 02, which owns *how* those docs get populated).
 
 ## Why this isn't just "add more agents to templates/python"
 
-Root `CLAUDE.md` currently states the generation model as a hard invariant:
+Root `../../../../CLAUDE.md` currently states the generation model as a hard invariant:
 
 > Generating one is *just* a recursive copy with substitution applied to every text file
 > (see `presets.py`) — there is no runtime composition step, no category selection, no
 > per-entity include/exclude. This is deliberate.
 
-That invariant is about the **preset itself** — `.claude/` + `docs/` + `scripts/` must stay one
+That invariant is about the **preset itself** — `../../../../.claude` + `../../..` + `../../../../scripts` must stay one
 corpus authored and reviewed together (its `hooks` reference only what its `settings.json` wires,
 its docs reference only what actually ships). Specializations don't touch that: they are a
 **second, separate opt-in layer** that sits beside a preset, not inside it. This task adds that
@@ -36,8 +36,8 @@ flags must be byte-for-byte what `generate` produces today (this is a regression
 design goal — see Acceptance Criteria).
 
 `★ Insight ─────────────────────────────────────`
-This is the same shape as `create-from-template` in the repo's own `.claude/agents/` (per root
-`CLAUDE.md`): a capability that is deliberately kept *outside* the preset tree because it isn't
+This is the same shape as `create-from-template` in the repo's own `../../../../.claude/agents` (per root
+`../../../../CLAUDE.md`): a capability that is deliberately kept *outside* the preset tree because it isn't
 something every generated project needs standing presence of. Specializations are the mirror
 image — content the *target* project needs, but only some target projects, so it can't be baked
 into the one tree every project gets.
@@ -94,22 +94,22 @@ under the owning preset makes an invalid pairing structurally impossible instead
 `generate` has to validate at runtime.
 
 **Why this is invisible to existing catalog/graph code, unchanged:**
-`catalog.list_presets` only inspects *immediate* children of `templates/` that have both `.claude/`
-and `docs/` — `templates/python/specializations/` is two levels too deep and has no `docs/`, so it
+`catalog.list_presets` only inspects *immediate* children of `../../../../templates` that have both `../../../../.claude`
+and `../../..` — `../../../../templates/python/specializations` is two levels too deep and has no `../../..`, so it
 is never mistaken for a third preset. `catalog.discover(Workspace(root=templates/python))` finds
-`.claude/` at that root and returns immediately — it never looks at `specializations/` at all.
+`../../../../.claude` at that root and returns immediately — it never looks at `specializations/` at all.
 Both are existing behaviors, not new code; this must stay true (see Acceptance Criteria).
 
 **Why only `agents/` and `skills/`, never `hooks/`, `loops/`, or `settings.json`:** a hook is inert
 until something wires it in `settings.json`, and `settings.json` is owned by the core preset (root
-`CLAUDE.md`: "already trimmed to reference only hooks that exist in that preset"). Letting a
+`../../../../CLAUDE.md`: "already trimmed to reference only hooks that exist in that preset"). Letting a
 specialization ship a hook with no wiring path would recreate exactly the dead-file class of bug
-root `CLAUDE.md` already documents as having shipped before (`hooks/doc_registry.py`,
+root `../../../../CLAUDE.md` already documents as having shipped before (`hooks/doc_registry.py`,
 `hooks/linkify_doc_mentions.py`). Agents and skills are self-contained Markdown that the user
 invokes directly or Claude Code discovers by directory listing — no third file has to agree to
 wire them in, so they're the only two kinds safe to add out-of-band.
 
-### New module: `src/awesome_templates/specializations.py`
+### New module: `../../../../src/awesome_templates/specializations.py`
 
 Pure filesystem code, no network, following the same "one focused module per concern" style as
 `markers.py`:
@@ -170,13 +170,13 @@ def disallowed_kinds_present(workspace: Workspace, preset: str, name: str) -> li
 
 `list_specializations` deliberately reuses `catalog.discover` rather than hand-rolling a second
 directory walk — `templates/<preset>/specializations/<name>/` is exactly the "preset directory
-with kind dirs nested one level under `.claude/`" shape `catalog.discover` already documents and
+with kind dirs nested one level under `../../../../.claude`" shape `catalog.discover` already documents and
 handles, so no new discovery logic is needed, only a new *place* to point it at.
 
 ### `presets.py`: merging a specialization into the copy
 
 `copy_preset` gains an optional `specializations` parameter. After copying the base preset tree,
-each selected specialization's `.claude/` is copied into the same destination `.claude/`, reusing
+each selected specialization's `../../../../.claude` is copied into the same destination `../../../../.claude`, reusing
 the existing `_copy_tree` helper (same substitution, same force semantics):
 
 ```python
@@ -210,10 +210,10 @@ def copy_preset(
 ```
 
 `_entity_names` is a small new helper (`{(kind, stem) for kind in KINDS for stem in ...}`) built on
-the same `_discover_kind`-shaped walk `catalog.py` already has — collisions are a `templates/`
+the same `_discover_kind`-shaped walk `catalog.py` already has — collisions are a `../../../../templates`
 authoring bug that should fail a test long before a user hits it (see Acceptance Criteria), so
 raising here (rather than a soft warning) is intentional: it's the same posture the "no dead
-hook/script pairs" rule in root `CLAUDE.md` takes toward other cross-tree authoring mistakes.
+hook/script pairs" rule in root `../../../../CLAUDE.md` takes toward other cross-tree authoring mistakes.
 
 ### `cli.py`: `--specialization` (repeatable)
 
@@ -242,7 +242,7 @@ specialization: Optional[list[str]] = typer.Option(
 
 * `awesome-templates graph` does **not** learn about `specializations/` in this task. It answers
   "does this authored corpus's cross-references resolve", which is a maintainer question about
-  `templates/` itself; a specialization selected at generate time isn't part of that corpus's
+  `../../../../templates` itself; a specialization selected at generate time isn't part of that corpus's
   authored graph. Worth revisiting later, not blocking this task.
 * No specialization ships a hook, loop, or `settings.json` — enforced structurally (Acceptance
   Criteria), not just by convention.
@@ -252,34 +252,34 @@ specialization: Optional[list[str]] = typer.Option(
 
 ### Code
 
-- [ ] `src/awesome_templates/specializations.py`: `specialization_root`, `list_specializations`,
+- [ ] `../../../../src/awesome_templates/specializations.py`: `specialization_root`, `list_specializations`,
       `disallowed_kinds_present` (or equivalent structural check), as sketched above.
-- [ ] `src/awesome_templates/presets.py`: `copy_preset` accepts `specializations: Sequence[str] =
+- [ ] `../../../../src/awesome_templates/presets.py`: `copy_preset` accepts `specializations: Sequence[str] =
       ()`, layers each on top after the base copy, raises `ValueError` on entity-name collision.
-- [ ] `src/awesome_templates/cli.py`: `generate` gains repeatable `--specialization`; validates
+- [ ] `../../../../src/awesome_templates/cli.py`: `generate` gains repeatable `--specialization`; validates
       against `list_specializations`; threads through to `copy_preset`; dry-run JSON/console output
       updated; `list_cmd` (table + `--json`) surfaces available specializations per preset.
 - [ ] New template content (each file with real frontmatter matching the existing style of
-      `templates/python/.claude/agents/python-expert.md` / `templates/java/.claude/agents/java-expert.md`
+      `../../../../templates/python/.claude/agents/python-expert.md` / `../../../../templates/java/.claude/agents/java-expert.md`
       — `name`, `description`, `model`, `tools`/`allowed-tools` — and using the same
       `{{PROJECT_NAME}}` / `{{PROJECT_PACKAGE}}` placeholders so zero new code in `templating.py`
       is needed):
-  - [ ] `templates/python/specializations/django/.claude/agents/django-expert.md`
-  - [ ] `templates/python/specializations/django/.claude/skills/django-migrations/SKILL.md`
-  - [ ] `templates/python/specializations/webscraping/.claude/agents/scraping-expert.md`
-  - [ ] `templates/python/specializations/ml-ai/.claude/agents/ml-expert.md`
-  - [ ] `templates/java/specializations/spring/.claude/agents/spring-expert.md`
-  - [ ] `templates/java/specializations/android/.claude/agents/android-expert.md`
-- [ ] `src/awesome_templates/CLAUDE.md` module map gets a `specializations.py` entry, written in
+  - [ ] `../../../../templates/python/specializations/django/.claude/agents/django-expert.md`
+  - [ ] `../../../../templates/python/specializations/django/.claude/skills/django-migrations/SKILL.md`
+  - [ ] `../../../../templates/python/specializations/webscraping/.claude/agents/scraping-expert.md`
+  - [ ] `../../../../templates/python/specializations/ml-ai/.claude/agents/ml-expert.md`
+  - [ ] `../../../../templates/java/specializations/spring/.claude/agents/spring-expert.md`
+  - [ ] `../../../../templates/java/specializations/android/.claude/agents/android-expert.md`
+- [ ] `../../../../src/awesome_templates/CLAUDE.md` module map gets a `specializations.py` entry, written in
       the same voice as the existing entries.
-- [ ] Root `CLAUDE.md`'s "What this repo is" paragraph is updated to mention the specialization
+- [ ] Root `../../../../CLAUDE.md`'s "What this repo is" paragraph is updated to mention the specialization
       layer as an explicit, bounded exception alongside the "no composition" sentence — leaving
-      that sentence unqualified after this ships would make `CLAUDE.md` actively wrong, and this
+      that sentence unqualified after this ships would make `../../../../CLAUDE.md` actively wrong, and this
       file is instructions Claude Code itself loads every session.
 
 ### Tests
 
-New `tests/test_specializations.py` (using `fixture_workspace` from `conftest.py`; extend that
+New `../../../../tests/test_specializations.py` (using `fixture_workspace` from `conftest.py`; extend that
 fixture with a `demo/specializations/widgets/.claude/agents/widget-specialist.md` add-on so these
 tests don't need their own from-scratch tree):
 
@@ -297,7 +297,7 @@ tests don't need their own from-scratch tree):
 - [ ] `test_copy_preset_specialization_name_collision_raises` — add a second synthetic
       specialization to the fixture that redefines `widget-verifier`, assert `ValueError`.
 
-`tests/test_cli.py` additions (mirroring `test_generate_rejects_unknown_preset` /
+`../../../../tests/test_cli.py` additions (mirroring `test_generate_rejects_unknown_preset` /
 `test_generate_dry_run_...` exactly):
 
 - [ ] `test_generate_rejects_unknown_specialization`
@@ -305,7 +305,7 @@ tests don't need their own from-scratch tree):
 - [ ] `test_generate_with_specialization_writes_addon_agent` (end-to-end, `--out tmp_path`)
 - [ ] `test_list_cmd_json_includes_specializations_per_preset`
 
-`tests/test_integration_real_repo.py` additions (parametrized over the *real* `templates/`, like
+`../../../../tests/test_integration_real_repo.py` additions (parametrized over the *real* `../../../../templates`, like
 the existing zero-dangling-`@docs/`-reference test):
 
 - [ ] `test_real_preset_specializations_have_no_placeholder_leftovers` — for every
@@ -319,14 +319,14 @@ the existing zero-dangling-`@docs/`-reference test):
 
 ### Docs
 
-- [ ] `docs/agent/agents.md` / `docs/agent/skills.md` in each preset show specialization-provided
+- [ ] `../../../agent/agents.md` / `../../../agent/skills.md` in each preset show specialization-provided
       entities *when selected* — this is task 02's deterministic doc-listing feature; this task's
       job is only to make sure the entities it needs to list are discoverable
       (`specializations.list_specializations` + `catalog.discover` on the specialization root), not
       to render the docs itself. Cross-reference, don't duplicate, task 02's acceptance criteria.
-- [ ] Repo root `README.md` (if it documents `generate` usage) gets one `--specialization` example,
+- [ ] Repo root `../../../../README.md` (if it documents `generate` usage) gets one `--specialization` example,
       e.g. `awesome-templates generate --preset python --name Acme --specialization django`.
 - [ ] A new ADR, `docs/adr/000N-specialization-layer.md` (next available number under
-      `docs/adr/`), recording this composition-model decision using the repo's existing MADR
-      template (see `docs/adr/0001-config-loading-via-layered-settings.md` for the shape) — this is
-      exactly the kind of design decision root `CLAUDE.md` already points to ADRs for.
+      `../../../adr`), recording this composition-model decision using the repo's existing MADR
+      template (see `../../../adr/0001-config-loading-via-layered-settings.md` for the shape) — this is
+      exactly the kind of design decision root `../../../../CLAUDE.md` already points to ADRs for.

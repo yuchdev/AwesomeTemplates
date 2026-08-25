@@ -58,20 +58,21 @@ uv sync
 # see every preset and what it contains, including its specializations
 uv run awesome-templates list
 
-# generate a preset into a target project root
-uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
+# generate a preset into (and analyze) a target project root
+uv run awesome-templates generate . --preset python --name "Acme Sync" --package acme_sync
 
 # layer one or more specializations' agents/skills on top (repeatable)
-uv run awesome-templates generate --preset python --name "Acme Sync" --specialization django --out .
+uv run awesome-templates generate . --preset python --name "Acme Sync" --specialization django
 
 # preview without writing anything
-uv run awesome-templates generate --preset python --name "Acme Sync" --dry-run --json
+uv run awesome-templates generate . --preset python --name "Acme Sync" --dry-run --json
 ```
 
-`--out` is the project root that receives the `.claude/`, `docs/`, and `scripts/`
-subdirectories (default `.`). Generation refuses to overwrite non-empty output unless
-`--force` is passed. `--specialization` is repeatable, and passing it at all *replaces* a
-config file's `specializations` list wholesale rather than merging with it.
+The `TARGET_DIR` positional argument (e.g. `.`) is required: it is the project root that both
+gets analyzed and receives the `.claude/`, `docs/`, and `scripts/` subdirectories. Generation
+refuses to overwrite non-empty output unless `--force` is passed. `--specialization` is
+repeatable, and passing it at all *replaces* a config file's `specializations` list wholesale
+rather than merging with it.
 
 `--log-severity {error|warning|info|debug}` (default `warning`) controls live pipeline
 tracing, written to stderr so `--json` output on stdout stays parseable at any level.
@@ -97,7 +98,7 @@ slug_upper = "ACME_SYNC"
 | Field                | Substitutes         | Default if omitted                                    |
 |----------------------|---------------------|-------------------------------------------------------|
 | `preset`             | -                   | none - required (or pass `--preset`)                  |
-| `out`                | -                   | `.`                                                   |
+| `out`                | -                   | none - required (or pass `TARGET_DIR`)                |
 | `force`              | -                   | `false`                                               |
 | `specializations`    | -                   | `[]`                                                  |
 | `project.name`       | `PROJECT_NAME`      | none - required (or pass `--name`)                    |

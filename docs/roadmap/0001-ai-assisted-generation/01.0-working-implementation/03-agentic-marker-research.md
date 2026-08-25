@@ -3,12 +3,12 @@
 ## Problem
 
 `generate --resolve-markers` was run against a mature, well-documented project (Aegis SWR:
-full `src/` tree, rich `CLAUDE.md`, `README.md`, `ARCHITECTURE.md`, docs index) and still
+full `../../../../src` tree, rich `../../../../CLAUDE.md`, `../../../../README.md`, `ARCHITECTURE.md`, docs index) and still
 produced instruction-echo instead of facts:
 
 - `agents/app-architect.md` - the "Domain model you must hold in your context" section came out
   as `> **TODO (fill in): Research this project's actual architecture ...**` even though that
-  domain model is fully spelled out in the target's `CLAUDE.md` and `README.md`.
+  domain model is fully spelled out in the target's `../../../../CLAUDE.md` and `../../../../README.md`.
 - `agents/background-reviewer.md` - the hot-paths marker resolved to a restatement
   ("Identify this project's actual performance-sensitive hot paths ... and name the concrete
   modules/files to watch here") instead of naming any module.
@@ -18,7 +18,7 @@ produced instruction-echo instead of facts:
 
 ## Root cause
 
-Three compounding causes, all in `src/awesome_templates/resolver.py`:
+Three compounding causes, all in `../../../../src/awesome_templates/resolver.py`:
 
 1. **The model cannot research.** `resolve_one` is a single Messages API call. Its only
    evidence is `gather_context`'s static bundle: heads of README/CLAUDE.md/AGENTS.md, one
@@ -46,7 +46,7 @@ Cause 1 is architectural and is what this document proposes to fix.
   codebase ..." are named as failures); `confident=true` whenever the bundle names the
   concrete things asked about; even `confident=false` output must be partial facts, never
   a restatement.
-- `gather_context` now also reads `ARCHITECTURE.md` and `docs/README.md`.
+- `gather_context` now also reads `ARCHITECTURE.md` and `../../../README.md`.
 
 These make the one-shot path much better on documentation-rich targets, but they cannot make
 it *research*. Cause 1 is still open: `resolve_one` has no way to open a file it wasn't
@@ -58,7 +58,7 @@ The earlier draft of this document proposed hand-rolling a research harness: a b
 Messages-API tool-use loop (`read_file`/`grep`/`list_tree`) that would produce a structured
 "fact sheet," consumed by a second, cheaper one-shot pass per marker. That is real,
 buildable work, but it is also reinventing something that already exists and already does
-this job well: `.claude/agents/create-from-template.md`, run inside a real Claude Code
+this job well: `../../../../.claude/agents/create-from-template.md`, run inside a real Claude Code
 session, genuinely researches a target project (`Read`/`Grep`/`Glob`, no fixed bundle) and
 writes grounded prose directly into the marker's location - because it runs inside an actual
 harness instead of a single stateless call. Its own module docstring already contrasts the
@@ -105,9 +105,9 @@ prompt embeds verbatim, e.g.:
 
 | # | File | Kind | Instruction |
 |---|------|------|-------------|
-| 1 | `.claude/agents/app-architect.md` | TEMPLATE-INIT | Research this project's actual domain model ... |
-| 2 | `.claude/agents/background-reviewer.md` | TEMPLATE-INIT | Identify this project's actual performance-sensitive hot paths ... |
-| 3 | `.claude/loops/implement-milestone.md` | TEMPLATE-INIT | list this project's own milestone exit gates ... |
+| 1 | `../../../../.claude/agents/app-architect.md` | TEMPLATE-INIT | Research this project's actual domain model ... |
+| 2 | `../../../../.claude/agents/background-reviewer.md` | TEMPLATE-INIT | Identify this project's actual performance-sensitive hot paths ... |
+| 3 | `../../../../.claude/loops/implement-milestone.md` | TEMPLATE-INIT | list this project's own milestone exit gates ... |
 
 Handing the model the *complete* scope of work up front, in one session, is what the user
 request behind this document calls "sharing information between generated text pieces": the
@@ -151,7 +151,7 @@ Requiring the `claude` CLI is a real new dependency for `--resolve-markers`, on 
 `ai` extra + `ANTHROPIC_API_KEY` the feature documents today. `resolve_tree` should detect
 its absence up front (`shutil.which("claude")`) and fail with one actionable message, the
 same posture the existing auth-error path already has - not a bare subprocess `FileNotFoundError`.
-Root `CLAUDE.md`'s `generate --resolve-markers` documentation needs a one-line update once
+Root `../../../../CLAUDE.md`'s `generate --resolve-markers` documentation needs a one-line update once
 this ships, so the dependency isn't a silent surprise.
 
 **Decision (as implemented):** the older one-shot `resolve_one` path survives as an
@@ -164,7 +164,7 @@ and are skipped with a warning rather than failing the run when the key or extra
 ## Testability
 
 A real subprocess call obviously can't run in unit tests. The existing fake-client pattern
-(`make_client=` on `resolve_tree`, `tests/test_resolver.py`) has a subprocess-boundary
+(`make_client=` on `resolve_tree`, `../../../../tests/test_resolver.py`) has a subprocess-boundary
 equivalent: point `PATH` at a tiny fake `claude` script for tests, and inject the command
 used to invoke it (e.g. a `run=` parameter defaulting to `subprocess.run`) so tests can assert
 on the constructed argv/prompt without executing anything. A `--dry-run` mode that prints the
@@ -183,7 +183,7 @@ rather than nice-to-haves:
   The allowlist is the *only* guard, found the hard way: the CLI's permission layer blocks
   `Edit` on `.claude/**` as "sensitive files" even under `acceptEdits` and even with an
   explicit `--allowedTools "Edit(<kit>/**)"` rule - and the kit's agent/loop files all live
-  under `.claude/`. The session therefore runs `--permission-mode bypassPermissions`, and the
+  under `../../../../.claude`. The session therefore runs `--permission-mode bypassPermissions`, and the
   security posture rests entirely on the tool allowlist plus the closed file set below.
 - The prompt states the manifest's file list as a closed set the session may edit - not "scan
   for markers yourself," even though the model could rediscover them by grepping. Handing it
@@ -192,8 +192,8 @@ rather than nice-to-haves:
 
 ## Other improvements to fold in
 
-- **Packaging gap.** `.claude/agents/create-from-template.md` is this *repo's own* maintainer
-  tooling - per root `CLAUDE.md` it is "deliberately not shipped inside `templates/<preset>/`."
+- **Packaging gap.** `../../../../.claude/agents/create-from-template.md` is this *repo's own* maintainer
+  tooling - per root `../../../../CLAUDE.md` it is "deliberately not shipped inside `templates/<preset>/`."
   A `pip install`ed `awesome-templates` has no clone of this repo on disk, so `resolver.py`
   cannot read that file by path at runtime. Re-embed the research method and hard rules as a
   prompt string owned by `resolver.py` (the same way `_SYSTEM` is a string today), not a
@@ -240,7 +240,7 @@ rather than nice-to-haves:
    per-call `confident` bookkeeping `resolve_one` uses today.
 5. Fake-`claude`-on-`PATH` test harness; unit tests for manifest rendering, prompt assembly,
    and reconciliation logic independent of any real subprocess.
-6. Update root `CLAUDE.md`'s `generate --resolve-markers` docs and
+6. Update root `../../../../CLAUDE.md`'s `generate --resolve-markers` docs and
    `create-from-template.md`'s "second, programmatic resolver" note for the new prerequisite
    and the loops-scope difference.
 7. Integration test: run the full pass against a documentation-rich fixture repo (with a real
@@ -271,4 +271,4 @@ resolution pass) as an alternative to depending on the `claude` CLI. That design
 may still be worth building - e.g. if the `claude`-CLI dependency this document now assumes
 turns out to be unacceptable for some deployment of `generate` - but it is not what ships
 first. It has been moved, content intact, to its own milestone:
-[`0002-api-based-marker-research/plan.md`](../0002-api-based-marker-research/plan.md).
+[`0002-api-based-marker-research/plan.md`](../../0003-api-based-marker-research/plan.md).

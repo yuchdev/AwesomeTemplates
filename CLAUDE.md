@@ -25,10 +25,10 @@ Most bugs live in exactly one of these. Say which one you are in before you star
 uv sync                                              # one-time setup
 
 uv run awesome-templates list
-uv run awesome-templates generate --preset python --name "Acme Sync" --package acme_sync --out .
-uv run awesome-templates generate --preset python --name "Acme Sync" --specialization django --out .
-uv run awesome-templates generate --preset python --name "Acme Sync" --resolve-markers
-uv run awesome-templates generate --preset python --name "Acme Sync" --resolve-markers --seed-roadmap
+uv run awesome-templates generate . --preset python --name "Acme Sync" --package acme_sync
+uv run awesome-templates generate . --preset python --name "Acme Sync" --specialization django
+uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers
+uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers --seed-roadmap
 
 uv run awesome-templates graph                       # maintainer-only reference graph
 uv run awesome-templates graph templates/python

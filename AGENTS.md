@@ -29,7 +29,7 @@ Three separate bodies of content share this repo. Identify which one your task i
 ```bash
 uv sync
 uv run awesome-templates list
-uv run awesome-templates generate --preset python --name "Acme Sync" --out .
+uv run awesome-templates generate . --preset python --name "Acme Sync"
 uv run pytest --cov=awesome_templates
 uv run pytest tests/test_integration_real_repo.py
 uv run ruff check src/ tests/

@@ -334,7 +334,7 @@ write and must not be used as the recording step here. Adjust step 3 accordingly
 the ruling where the milestone's design lives.
 
 The observable convention, from `docs/roadmap/0001-ai-assisted-generation/` and
-`docs/roadmap/0002-api-based-marker-research/`:
+`../../docs/roadmap/0003-api-based-marker-research/`:
 
 - The design document that owns the decision carries the rationale inline - see
   `03.Agentic_marker_research.md`'s `## Root cause`, `## Interim fixes shipped (same

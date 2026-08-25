@@ -21,8 +21,8 @@ Two roots matter and are usually the same directory:
 - the *kit root* (`out_dir`): the generated `.claude/` + `docs/` + `scripts/`
   tree whose Markdown carries the markers - the only place the session edits;
 - the *project root*: the codebase the markers ask about. With the documented
-  `--out .` usage they coincide; when `--out` points at a scratch directory
-  that contains no project of its own (no manifest, no `src/`),
+  `generate .` usage they coincide; when the target directory is a scratch
+  directory that contains no project of its own (no manifest, no `src/`),
   detect_project_root falls back to the `generate` invocation's cwd, so the
   research still reads the real project the kit was generated for.
 
@@ -39,6 +39,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 from awesome_templates.log_helper import NULL_LOG, LogHelper
 from awesome_templates.markers import Marker, scan_tree
@@ -87,7 +88,7 @@ _PROJECT_HINTS = (
 )
 
 
-def find_claude() -> str | None:
+def find_claude() -> Optional[str]:
     """Absolute path of the `claude` CLI, or None when it isn't installed -
     the caller's cue to fall back to resolver.resolve_tree or fail with an
     actionable message, never a bare FileNotFoundError from subprocess."""
@@ -103,7 +104,7 @@ def _looks_like_project(root: Path) -> bool:
 
 def detect_project_root(out_dir: Path, cwd: Path) -> Path:
     """The project the research session should read: out_dir itself when it
-    holds a real project (the documented `--out .` usage), else the `generate`
+    holds a real project (the documented `generate .` usage), else the `generate`
     invocation's cwd when *that* does (the generate-into-a-scratch-dir case),
     else out_dir - a genuinely skeletal target, which the prompt tells the
     model to answer honestly with TODOs rather than fabrication."""
@@ -254,10 +255,7 @@ def build_prompt(
     and what a future --dry-run would print."""
     kit = _rel_or_abs(kit_root, project_root)
     if kit == ".":
-        roots = (
-            "Project root and kit root are both the current working directory: "
-            "research here, edit here."
-        )
+        roots = "Project root and kit root are both the current working directory: research here, edit here."
     else:
         roots = (
             "The project root is the current working directory - research there "
@@ -269,7 +267,8 @@ def build_prompt(
     sections = [
         _PROMPT_INTRO,
         roots,
-        "## Marker manifest\n\n" + (
+        "## Marker manifest\n\n"
+        + (
             render_manifest(markers, kit_root, project_root)
             if markers
             else "(no markers - see the guideline docs section below)"
@@ -282,9 +281,7 @@ def build_prompt(
         sections.append(_PROMPT_GUIDELINES.format(files=files))
     sections.append(
         _PROMPT_OUTRO.format(
-            guidelines_summary=(
-                "; then which guideline docs you created or updated" if update_guidelines else ""
-            )
+            guidelines_summary=("; then which guideline docs you created or updated" if update_guidelines else "")
         )
     )
     return "\n\n".join(section.rstrip() for section in sections) + "\n"
@@ -299,7 +296,7 @@ def build_command(
     """The headless argv. `--setting-sources user` keeps the user's own
     settings (and their normal login - the session authenticates however the
     installed CLI already does, OAuth or ANTHROPIC_API_KEY) while skipping
-    project/local settings: with the documented `--out .` usage the generated
+    project/local settings: with the documented `generate .` usage the generated
     kit's own settings.json sits at the session cwd and its wired hooks would
     otherwise fire on - and could block - every edit the session makes. The
     prompt goes over stdin, not argv: it embeds the whole manifest and can
@@ -318,12 +315,17 @@ def build_command(
     return [
         claude_bin,
         "-p",
-        "--output-format", "text",
-        "--setting-sources", "user",
-        "--permission-mode", "bypassPermissions",
+        "--output-format",
+        "text",
+        "--setting-sources",
+        "user",
+        "--permission-mode",
+        "bypassPermissions",
         "--no-session-persistence",
-        "--model", model,
-        "--tools", *tools,
+        "--model",
+        model,
+        "--tools",
+        *tools,
     ]
 
 
@@ -347,10 +349,10 @@ def _count_fallbacks(paths: set[Path]) -> tuple[dict[str, int], int]:
 def resolve_tree_headless(
     out_dir: Path,
     *,
-    api_key: str | None,
+    api_key: Optional[str],
     warnings: list[str],
-    claude_bin: str | None = None,
-    project_root: Path | None = None,
+    claude_bin: Optional[str] = None,
+    project_root: Optional[Path] = None,
     update_guidelines: bool = False,
     model: str = HEADLESS_MODEL,
     run=subprocess.run,
@@ -391,7 +393,9 @@ def resolve_tree_headless(
 
     todos_before, sme_drafts_before = _count_fallbacks(marker_files)
     prompt = build_prompt(
-        before, kit_root=out_dir, project_root=project_root,
+        before,
+        kit_root=out_dir,
+        project_root=project_root,
         update_guidelines=update_guidelines,
     )
     cmd = build_command(claude_bin, update_guidelines=update_guidelines, model=model)
@@ -412,10 +416,7 @@ def resolve_tree_headless(
             timeout=_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
-        message = (
-            f"headless research session timed out after {_TIMEOUT_SECONDS}s - "
-            "reconciling whatever it completed"
-        )
+        message = f"headless research session timed out after {_TIMEOUT_SECONDS}s - reconciling whatever it completed"
         warnings.append(message)
         log.warning(message)
         proc = None
@@ -456,10 +457,7 @@ def resolve_tree_headless(
 
     summary.human_review = max(0, sme_drafts_after - sme_drafts_before)
     if summary.human_review:
-        message = (
-            f"drafted {summary.human_review} SME REVIEW NEEDED marker(s) - "
-            "still need human review"
-        )
+        message = f"drafted {summary.human_review} SME REVIEW NEEDED marker(s) - still need human review"
         warnings.append(message)
         log.info(message)
 
@@ -484,8 +482,7 @@ def resolve_tree_headless(
             log.info(f"guideline doc created/updated: {path}")
 
     if update_guidelines:
-        missing = [f for f in GUIDELINE_FILES if f not in guidelines_updated
-                   and snapshot.get(out_dir / f) is None]
+        missing = [f for f in GUIDELINE_FILES if f not in guidelines_updated and snapshot.get(out_dir / f) is None]
         for name in missing:
             message = f"--update-guidelines: session did not produce {name}"
             warnings.append(message)

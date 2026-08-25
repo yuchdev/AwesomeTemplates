@@ -24,9 +24,7 @@ def kit(tmp_path: Path) -> Path:
     agents = root / ".claude" / "agents"
     agents.mkdir(parents=True)
     (agents / "architect.md").write_text(
-        "# Architect\n\n"
-        "## Domain model\n\n"
-        "<!-- TEMPLATE-INIT: research the architecture and describe it here -->\n",
+        "# Architect\n\n## Domain model\n\n<!-- TEMPLATE-INIT: research the architecture and describe it here -->\n",
         encoding="utf-8",
     )
     (agents / "reviewer.md").write_text(
@@ -95,9 +93,7 @@ def test_manifest_lists_every_marker_with_kit_relative_paths(kit, tmp_path):
 
 def test_prompt_embeds_manifest_and_closed_set_rule(kit, tmp_path):
     markers = scan_tree(kit)
-    prompt = headless.build_prompt(
-        markers, kit_root=kit, project_root=tmp_path, update_guidelines=False
-    )
+    prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=False)
     assert "name the hot modules" in prompt
     assert "closed set of files you may edit" in prompt
     assert "TODO (fill in):" in prompt
@@ -106,9 +102,7 @@ def test_prompt_embeds_manifest_and_closed_set_rule(kit, tmp_path):
 
 def test_prompt_guidelines_section_only_when_enabled(kit, tmp_path):
     markers = scan_tree(kit)
-    prompt = headless.build_prompt(
-        markers, kit_root=kit, project_root=tmp_path, update_guidelines=True
-    )
+    prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=True)
     assert "## Guideline docs" in prompt
     assert "kit/CLAUDE.md" in prompt
     assert "kit/AGENTS.md" in prompt
@@ -116,9 +110,7 @@ def test_prompt_guidelines_section_only_when_enabled(kit, tmp_path):
 
 def test_prompt_same_root_collapses_root_note(kit):
     markers = scan_tree(kit)
-    prompt = headless.build_prompt(
-        markers, kit_root=kit, project_root=kit, update_guidelines=False
-    )
+    prompt = headless.build_prompt(markers, kit_root=kit, project_root=kit, update_guidelines=False)
     assert "both the current working directory" in prompt
 
 
@@ -150,8 +142,12 @@ def test_missing_api_key_leaves_ambient_auth(kit, tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     fake_run = _fake_run_factory({})
     headless.resolve_tree_headless(
-        kit, api_key=None, warnings=[], claude_bin="/bin/claude",
-        project_root=tmp_path, run=fake_run,
+        kit,
+        api_key=None,
+        warnings=[],
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        run=fake_run,
     )
     assert "ANTHROPIC_API_KEY" not in fake_run.calls[0]["env"]
 
@@ -175,8 +171,7 @@ def test_full_session_reconciliation(kit, tmp_path):
     fake_run = _fake_run_factory(
         {
             agents / "architect.md": (
-                "# Architect\n\n## Domain model\n\n"
-                "The system is a `pipeline` built around `core/engine.py`.\n"
+                "# Architect\n\n## Domain model\n\nThe system is a `pipeline` built around `core/engine.py`.\n"
             ),
             agents / "reviewer.md": (
                 "# Reviewer\n\n"
@@ -222,8 +217,12 @@ def test_todo_and_leftover_markers_counted(kit, tmp_path):
     )
     warnings: list[str] = []
     summary, _ = headless.resolve_tree_headless(
-        kit, api_key="k", warnings=warnings, claude_bin="/bin/claude",
-        project_root=tmp_path, run=fake_run,
+        kit,
+        api_key="k",
+        warnings=warnings,
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        run=fake_run,
     )
     assert summary.todos == 1
     assert summary.resolved == 0
@@ -238,8 +237,12 @@ def test_nonzero_exit_is_soft(kit, tmp_path):
 
     warnings: list[str] = []
     summary, _ = headless.resolve_tree_headless(
-        kit, api_key="k", warnings=warnings, claude_bin="/bin/claude",
-        project_root=tmp_path, run=failing_run,
+        kit,
+        api_key="k",
+        warnings=warnings,
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        run=failing_run,
     )
     assert summary.failed == 3  # all markers still in place
     assert any("exited with code 1" in w for w in warnings)
@@ -251,8 +254,12 @@ def test_timeout_is_soft(kit, tmp_path):
 
     warnings: list[str] = []
     summary, _ = headless.resolve_tree_headless(
-        kit, api_key="k", warnings=warnings, claude_bin="/bin/claude",
-        project_root=tmp_path, run=hanging_run,
+        kit,
+        api_key="k",
+        warnings=warnings,
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        run=hanging_run,
     )
     assert summary.failed == 3
     assert any("timed out" in w for w in warnings)
@@ -275,8 +282,13 @@ def test_guidelines_created_and_reported(kit, tmp_path):
     )
     warnings: list[str] = []
     summary, guidelines = headless.resolve_tree_headless(
-        kit, api_key="k", warnings=warnings, claude_bin="/bin/claude",
-        project_root=tmp_path, update_guidelines=True, run=fake_run,
+        kit,
+        api_key="k",
+        warnings=warnings,
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        update_guidelines=True,
+        run=fake_run,
     )
     assert guidelines == ["CLAUDE.md", "README.md"]
     assert any("did not produce AGENTS.md" in w for w in warnings)
@@ -298,7 +310,7 @@ def test_cli_rejects_update_guidelines_without_resolve_markers(fixture_workspace
     monkeypatch.setattr("awesome_templates.cli.TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(
         app,
-        ["generate", "--preset", "demo", "--name", "Test", "--update-guidelines"],
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--update-guidelines"],
     )
     assert result.exit_code == 1
     assert "--update-guidelines requires --resolve-markers" in result.output

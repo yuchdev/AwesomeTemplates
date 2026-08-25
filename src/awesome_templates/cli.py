@@ -76,9 +76,7 @@ TEMPLATES_ROOT = REPO_ROOT / "templates"
 # prints straight to the live console as a side effect and leaves get_help()
 # returning near-empty text - that's what FullHelpTyperGroup needs to be able
 # to actually capture and concatenate each subcommand's help text below.
-app = typer.Typer(
-    add_completion=False, help=__doc__, cls=FullHelpTyperGroup, rich_markup_mode=None
-)
+app = typer.Typer(add_completion=False, help=__doc__, cls=FullHelpTyperGroup, rich_markup_mode=None)
 
 console = Console()
 
@@ -93,7 +91,7 @@ class LogVerbosity(str, enum.Enum):
 
 # Ordering used by the `>= 1` / `>= 2` progress gates. The flag being unset
 # (None) is level 0 - summary output only.
-_LOG_LEVELS: dict[LogVerbosity | None, int] = {
+_LOG_LEVELS: dict[Optional[LogVerbosity], int] = {
     None: 0,
     LogVerbosity.info: 1,
     LogVerbosity.debug: 2,
@@ -140,10 +138,7 @@ def list_cmd(
     if json_out:
         payload = {
             preset: {
-                **{
-                    kind: discover(Workspace(root=workspace.path(preset))).names(".", kind)
-                    for kind in KINDS
-                },
+                **{kind: discover(Workspace(root=workspace.path(preset))).names(".", kind) for kind in KINDS},
                 "specializations": list_specializations(workspace, preset),
             }
             for preset in presets
@@ -179,12 +174,8 @@ def graph_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
-    out: str = typer.Option(
-        "docs/dependency-graph.md", "--out", help="where to write the rendered graph doc"
-    ),
-    json_out: bool = typer.Option(
-        False, "--json", help="print the raw graph as JSON instead of writing the doc"
-    ),
+    out: str = typer.Option("docs/dependency-graph.md", "--out", help="where to write the rendered graph doc"),
+    json_out: bool = typer.Option(False, "--json", help="print the raw graph as JSON instead of writing the doc"),
     inline: bool = typer.Option(
         False,
         "--inline",
@@ -197,9 +188,7 @@ def graph_cmd(
         help="remove per-file 'Dependencies' blocks from every template entity - "
         "MUTATES files in place; review `git diff` before committing",
     ),
-    force: bool = typer.Option(
-        False, "--force", help="overwrite existing inline dependency blocks"
-    ),
+    force: bool = typer.Option(False, "--force", help="overwrite existing inline dependency blocks"),
     log_verbosity: Optional[LogVerbosity] = typer.Option(
         None,
         "--log-verbosity",
@@ -231,8 +220,7 @@ def graph_cmd(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(render_doc(graph), encoding="utf-8")
     console.print(
-        f"Wrote dependency graph for {target} to {out_path} "
-        f"({len(graph.nodes)} nodes, {len(graph.edges)} edges)"
+        f"Wrote dependency graph for {target} to {out_path} ({len(graph.nodes)} nodes, {len(graph.edges)} edges)"
     )
     if level >= 1 and graph.missing:
         console.print(f"{len(graph.missing)} unresolved reference(s) in the graph:")
@@ -268,24 +256,17 @@ def graph_cmd(
 
 @app.command()
 def generate(
-    config: Optional[str] = typer.Option(
-        None, "--config", help="JSON or TOML config file; CLI flags override it"
+    target_dir: Optional[Path] = typer.Argument(
+        None,
+        help="project directory to analyze and generate into (required), e.g. `.`; "
+        "gets .claude/, docs/, and scripts/ subdirectories",
     ),
-    preset: Optional[str] = typer.Option(
-        None, help="which preset to generate (see `awesome_templates list`)"
-    ),
+    config: Optional[str] = typer.Option(None, "--config", help="JSON or TOML config file; CLI flags override it"),
+    preset: Optional[str] = typer.Option(None, help="which preset to generate (see `awesome_templates list`)"),
     name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
-    package: Optional[str] = typer.Option(
-        None, help="PROJECT_PACKAGE value (default: slugified --name)"
-    ),
+    package: Optional[str] = typer.Option(None, help="PROJECT_PACKAGE value (default: slugified --name)"),
     purpose: Optional[str] = typer.Option(None, help="PROJECT_PURPOSE value"),
-    slug: Optional[str] = typer.Option(
-        None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"
-    ),
-    out: Optional[str] = typer.Option(
-        None, help="project directory to generate into (default: .); "
-        "gets .claude/, docs/, and scripts/ subdirectories"
-    ),
+    slug: Optional[str] = typer.Option(None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"),
     specialization: Optional[List[str]] = typer.Option(
         None,
         "--specialization",
@@ -313,9 +294,7 @@ def generate(
         help="create or update README.md, CLAUDE.md, and AGENTS.md at the output root from "
         "the marker-research session - requires --resolve-markers and the `claude` CLI",
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="print the plan without writing anything"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="print the plan without writing anything"),
     json_out: bool = typer.Option(False, "--json", help="emit dry-run/summary output as JSON"),
     log_severity: LogSeverity = typer.Option(
         LogSeverity.warning,
@@ -326,7 +305,8 @@ def generate(
         "previous quiet-by-default behavior)",
     ),
 ) -> None:
-    """Generate a project-specific preset (.claude/ kit + docs/ + scripts/)."""
+    """Generate a project-specific preset (.claude/ kit + docs/ + scripts/) into and
+    from an analysis of TARGET_DIR (e.g. `awesome-templates generate .`)."""
     workspace = _workspace()
     log = LogHelper(severity=log_severity)
 
@@ -339,13 +319,9 @@ def generate(
     project_cfg = cfg.get("project", {})
 
     preset_value = preset or cfg.get("preset")
-    out_value = out if out is not None else cfg.get("out", ".")
+    out_value = str(target_dir) if target_dir is not None else cfg.get("out")
     force_value = force if force is not None else bool(cfg.get("force", False))
-    resolve_value = (
-        resolve_markers
-        if resolve_markers is not None
-        else bool(cfg.get("resolve_markers", False))
-    )
+    resolve_value = resolve_markers if resolve_markers is not None else bool(cfg.get("resolve_markers", False))
     name_value = name or project_cfg.get("name")
     package_value = package or project_cfg.get("package")
     purpose_value = purpose or project_cfg.get("purpose")
@@ -353,11 +329,12 @@ def generate(
     # A repeatable flag replaces the config list wholesale when passed at all -
     # it never merges with config's list. There is no "explicitly zero" via the
     # flag; not passing it is the only way to defer to config.
-    specializations_value = (
-        specialization if specialization is not None else list(cfg.get("specializations", []))
-    )
+    specializations_value = specialization if specialization is not None else list(cfg.get("specializations", []))
 
     preset_value = _resolve_preset(workspace, preset_value)
+    if not out_value:
+        _fail("the project directory argument (or config `out`) is required, e.g. `awesome-templates generate .`")
+        return
     if not name_value:
         _fail("--name (or config project.name) is required")
         return
@@ -400,23 +377,22 @@ def generate(
                 console.print(f"Would AI-resolve {payload['markers_to_resolve']} marker(s)")
         return
 
-    existing = [
-        d
-        for d in (".claude", "docs", "scripts")
-        if (out_dir / d).exists() and any((out_dir / d).iterdir())
-    ]
+    existing = [d for d in (".claude", "docs", "scripts") if (out_dir / d).exists() and any((out_dir / d).iterdir())]
     if existing and not force_value:
-        _fail(
-            f"{', '.join(str(out_dir / d) for d in existing)} already has content - "
-            "pass --force to overwrite"
-        )
+        _fail(f"{', '.join(str(out_dir / d) for d in existing)} already has content - pass --force to overwrite")
         return
 
     warnings: list[str] = []
     try:
         written = copy_preset(
-            workspace, preset_value, out_dir, force_value, subs, warnings,
-            specializations=specializations_value, log=log,
+            workspace,
+            preset_value,
+            out_dir,
+            force_value,
+            subs,
+            warnings,
+            specializations=specializations_value,
+            log=log,
         )
     except ValueError as exc:
         _fail(str(exc))
@@ -477,8 +453,11 @@ def generate(
                 _fail("--resolve-markers needs the 'ai' extra: pip install awesome_templates[ai]")
                 return
             rsum = resolver.resolve_tree(
-                out_dir, api_key=api_key, warnings=warnings,
-                make_client=lambda: fallback_client, log=log,
+                out_dir,
+                api_key=api_key,
+                warnings=warnings,
+                make_client=lambda: fallback_client,
+                log=log,
             )
         summary["markers_resolved"] = rsum.resolved
         summary["markers_todo"] = rsum.todos
@@ -518,14 +497,25 @@ def generate(
         if client is not None:
             context_bundle = resolver.gather_context(out_dir)
             summary["tutorial_written"] = resolver.maybe_write_tutorial(
-                out_dir, client, context_bundle, warnings, log=log,
+                out_dir,
+                client,
+                context_bundle,
+                warnings,
+                log=log,
             )
             if seed_roadmap:
                 summary["roadmap_seeded"] = resolver.seed_first_milestone(
-                    out_dir, client, context_bundle, warnings, log=log,
+                    out_dir,
+                    client,
+                    context_bundle,
+                    warnings,
+                    log=log,
                 )
             summary["test_conventions_described"] = resolver.maybe_describe_test_conventions(
-                out_dir, client, warnings, log=log,
+                out_dir,
+                client,
+                warnings,
+                log=log,
             )
 
     if json_out:
@@ -546,9 +536,7 @@ def generate(
             if seed_roadmap and summary.get("roadmap_seeded"):
                 console.print("Seeded the first roadmap milestone")
             if update_guidelines and summary.get("guidelines_updated"):
-                console.print(
-                    f"Guideline docs created/updated: {', '.join(summary['guidelines_updated'])}"
-                )
+                console.print(f"Guideline docs created/updated: {', '.join(summary['guidelines_updated'])}")
         if warnings:
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:
