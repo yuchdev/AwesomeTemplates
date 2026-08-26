@@ -166,7 +166,7 @@ def list_cmd(
 
 @app.command("graph")
 def graph_cmd(
-    target: Path = typer.Argument(
+    target: Path = typer.Argument(  # noqa: B008 - Typer requires the call in the default position
         TEMPLATES_ROOT,
         help="path to the directory to analyze (default: templates/)",
         exists=True,
@@ -189,7 +189,7 @@ def graph_cmd(
         "MUTATES files in place; review `git diff` before committing",
     ),
     force: bool = typer.Option(False, "--force", help="overwrite existing inline dependency blocks"),
-    log_verbosity: Optional[LogVerbosity] = typer.Option(
+    log_verbosity: Optional[LogVerbosity] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
         None,
         "--log-verbosity",
         "-v",
@@ -256,7 +256,7 @@ def graph_cmd(
 
 @app.command()
 def generate(
-    target_dir: Path = typer.Argument(
+    target_dir: Path = typer.Argument(  # noqa: B008 - Typer requires the call in the default position
         ...,
         help="project directory to analyze (required), e.g. `.`",
     ),
@@ -265,7 +265,7 @@ def generate(
         "--config-file",
         help="JSON or TOML config file; CLI flags override it",
     ),
-    output_dir: Optional[Path] = typer.Option(
+    output_dir: Optional[Path] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
         None,
         "--output-dir",
         help="directory to generate into (default: TARGET_DIR; config `out` when set)",
@@ -275,7 +275,7 @@ def generate(
     package: Optional[str] = typer.Option(None, help="PROJECT_PACKAGE value (default: slugified --name)"),
     purpose: Optional[str] = typer.Option(None, help="PROJECT_PURPOSE value"),
     slug: Optional[str] = typer.Option(None, help="PROJECT_SLUG_UPPER value (default: derived from --name)"),
-    specialization: Optional[List[str]] = typer.Option(
+    specialization: Optional[List[str]] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
         None,
         "--specialization",
         help="add a specialization's agents/skills on top of the preset "
@@ -304,7 +304,7 @@ def generate(
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="print the plan without writing anything"),
     json_out: bool = typer.Option(False, "--json", help="emit dry-run/summary output as JSON"),
-    log_severity: LogSeverity = typer.Option(
+    log_severity: LogSeverity = typer.Option(  # noqa: B008 - Typer requires the call in the default position
         LogSeverity.warning,
         "--log-severity",
         help="live console tracing detail on stderr: error, warning, info, or debug "
