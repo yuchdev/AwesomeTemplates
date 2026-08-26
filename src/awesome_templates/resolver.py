@@ -26,6 +26,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from awesome_templates.ai import client as ai_client
 from awesome_templates.docgen import (
@@ -271,6 +272,7 @@ def resolve_tree(
     *,
     api_key: str,
     warnings: list[str],
+    context_root: Optional[Path] = None,
     make_client=None,
     log: LogHelper = NULL_LOG,
 ) -> ResolveSummary:
@@ -291,7 +293,7 @@ def resolve_tree(
     auth_errors, api_errors = ai_client.error_classes()
 
     log.info("gathering target-project context (README/CLAUDE.md/manifest/source tree)...")
-    context_bundle = gather_context(out_dir)
+    context_bundle = gather_context(context_root or out_dir)
     client = make_client() if make_client is not None else ai_client.build_client(api_key)
 
     by_file: dict[Path, list[Marker]] = {}

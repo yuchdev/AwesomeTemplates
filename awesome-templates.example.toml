@@ -1,4 +1,4 @@
-# Example config for `awesome-templates generate --config <this file>`.
+# Example config for `awesome-templates generate . --config-file <this file>`.
 #
 # Every value here fills in one of the deterministic {{PLACEHOLDER}} tokens
 # substituted across a preset's .claude/ and docs/ files (PROJECT_NAME,
@@ -8,10 +8,10 @@
 # Copy this file into your own project (any name/location works), edit the
 # values, and run:
 #
-#   uv run awesome-templates generate --config awesome-templates.example.toml
+#   uv run awesome-templates generate . --config-file awesome-templates.example.toml
 #
-# Any flag passed alongside --config overrides the matching value here, e.g.
-# `--config awesome-templates.example.toml --force` keeps everything below but
+# Any flag passed alongside --config-file overrides the matching value here, e.g.
+# `--config-file awesome-templates.example.toml --force` keeps everything below but
 # turns force on.
 
 # Which preset to generate - see `uv run awesome-templates list`.
@@ -23,10 +23,9 @@ preset = "python"
 # rather than merging with it. Commented out by default (no specializations).
 # specializations = ["django"]
 
-# Project root to analyze and generate into: gets .claude/, docs/, and
-# scripts/ subdirectories. Required - either here or as the CLI's positional
-# TARGET_DIR argument (e.g. `awesome-templates generate .`), which overrides
-# this value if both are given.
+# Output root: gets .claude/, docs/, and scripts/ subdirectories. Optional -
+# defaults to the CLI positional TARGET_DIR argument (e.g. `awesome-templates
+# generate .`) and can be overridden by --output-dir.
 out = "."
 
 # Overwrite existing .claude/ or docs/ content instead of failing. Defaults

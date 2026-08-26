@@ -256,12 +256,20 @@ def graph_cmd(
 
 @app.command()
 def generate(
-    target_dir: Optional[Path] = typer.Argument(
-        None,
-        help="project directory to analyze and generate into (required), e.g. `.`; "
-        "gets .claude/, docs/, and scripts/ subdirectories",
+    target_dir: Path = typer.Argument(
+        ...,
+        help="project directory to analyze (required), e.g. `.`",
     ),
-    config: Optional[str] = typer.Option(None, "--config", help="JSON or TOML config file; CLI flags override it"),
+    config_file: Optional[str] = typer.Option(
+        None,
+        "--config-file",
+        help="JSON or TOML config file; CLI flags override it",
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None,
+        "--output-dir",
+        help="directory to generate into (default: TARGET_DIR; config `out` when set)",
+    ),
     preset: Optional[str] = typer.Option(None, help="which preset to generate (see `awesome_templates list`)"),
     name: Optional[str] = typer.Option(None, help="PROJECT_NAME substitution value"),
     package: Optional[str] = typer.Option(None, help="PROJECT_PACKAGE value (default: slugified --name)"),
@@ -305,13 +313,13 @@ def generate(
         "previous quiet-by-default behavior)",
     ),
 ) -> None:
-    """Generate a project-specific preset (.claude/ kit + docs/ + scripts/) into and
-    from an analysis of TARGET_DIR (e.g. `awesome-templates generate .`)."""
+    """Generate a project-specific preset (.claude/ kit + docs/ + scripts/) from
+    an analysis of TARGET_DIR (e.g. `awesome-templates generate .`)."""
     workspace = _workspace()
     log = LogHelper(severity=log_severity)
 
     try:
-        cfg = load_config(config) if config else {}
+        cfg = load_config(config_file) if config_file else {}
     except ConfigError as exc:
         _fail(str(exc))
         return
@@ -319,7 +327,7 @@ def generate(
     project_cfg = cfg.get("project", {})
 
     preset_value = preset or cfg.get("preset")
-    out_value = str(target_dir) if target_dir is not None else cfg.get("out")
+    out_value = str(output_dir) if output_dir is not None else cfg.get("out") or str(target_dir)
     force_value = force if force is not None else bool(cfg.get("force", False))
     resolve_value = resolve_markers if resolve_markers is not None else bool(cfg.get("resolve_markers", False))
     name_value = name or project_cfg.get("name")
@@ -332,9 +340,6 @@ def generate(
     specializations_value = specialization if specialization is not None else list(cfg.get("specializations", []))
 
     preset_value = _resolve_preset(workspace, preset_value)
-    if not out_value:
-        _fail("the project directory argument (or config `out`) is required, e.g. `awesome-templates generate .`")
-        return
     if not name_value:
         _fail("--name (or config project.name) is required")
         return
@@ -421,6 +426,7 @@ def generate(
                 api_key=api_key,
                 warnings=warnings,
                 claude_bin=claude_bin,
+                project_root=target_dir,
                 update_guidelines=update_guidelines,
                 log=log,
             )
@@ -456,6 +462,7 @@ def generate(
                 out_dir,
                 api_key=api_key,
                 warnings=warnings,
+                context_root=target_dir,
                 make_client=lambda: fallback_client,
                 log=log,
             )
@@ -495,7 +502,7 @@ def generate(
             warnings.append(message)
             log.warning(message)
         if client is not None:
-            context_bundle = resolver.gather_context(out_dir)
+            context_bundle = resolver.gather_context(target_dir)
             summary["tutorial_written"] = resolver.maybe_write_tutorial(
                 out_dir,
                 client,

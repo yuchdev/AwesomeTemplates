@@ -95,7 +95,7 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   session edits with no real CLI. `resolver.resolve_tree` stays as the warned fallback when `claude`
   isn't on `PATH`; the tutorial/roadmap/test-conventions increments stay on the one-shot API path.
 - `cli.py` — Typer app; command tree is `list`, `graph`, `generate`. Each `generate` flag has a
-  config-file fallback (`--config file.json|.toml`) merged before CLI flags, which always win. The
+  config-file fallback (`--config-file file.json|.toml`) merged before CLI flags, which always win. The
   repeatable `--specialization` flag is the one list-valued exception to "flag wins": passing it at
   all replaces the config file's `specializations` list wholesale rather than merging with it.
   `--seed-roadmap` is rejected unless `--resolve-markers` is also set — it shares that flag's API key

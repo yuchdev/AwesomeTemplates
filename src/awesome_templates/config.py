@@ -1,4 +1,4 @@
-"""Load a --config file (JSON or TOML, picked by extension) with the same
+"""Load a --config-file input (JSON or TOML, picked by extension) with the same
 schema `generate` accepts as flags. CLI flags passed alongside always
 override the matching config value - see cli.py's merge step."""
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 class ConfigError(Exception):
-    """Invalid --config input - the CLI surfaces this as an error message."""
+    """Invalid --config-file input - the CLI surfaces this as an error message."""
 
 
 def load_config(path: str) -> dict:
