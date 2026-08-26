@@ -59,7 +59,7 @@ def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", "--preset", preset, "--name", "Big", "--package", "big", str(proj)],
+        ["generate", str(proj), "--preset", preset, "--name", "Big", "--package", "big"],
     )
     assert result.exit_code == 0, result.stdout
     assert (proj / ".claude").is_dir()
@@ -100,8 +100,7 @@ def test_generated_preset_passes_its_own_link_checker(preset):
         proj = Path(tmp) / "proj"
         result = runner.invoke(
             app,
-            ["generate", "--preset", preset, "--name", "Link Check", "--package", "link_check",
-             str(proj)],
+            ["generate", str(proj), "--preset", preset, "--name", "Link Check", "--package", "link_check"],
         )
         assert result.exit_code == 0, result.stdout
         # `cwd=proj` is required, not cosmetic: the checker's default path list is
@@ -151,7 +150,7 @@ def test_preset_never_links_outside_its_own_tree(preset):
 
 
 def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_path):
-    # awesome-templates.example.toml is the documented --config example (see
+    # awesome-templates.example.toml is the documented --config-file example (see
     # README.md's "Config file" section) - it must actually work end to end,
     # and every deterministic {{PLACEHOLDER}} token it fills in must leave no
     # trace in the generated Markdown. docs/adr/template.md's own `{{ seq }}`
@@ -160,7 +159,7 @@ def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_p
     # them because they aren't the all-caps `{{WORD}}` shape it matches.
     config_path = REAL_REPO_ROOT / "awesome-templates.example.toml"
     proj = tmp_path / "proj"
-    result = runner.invoke(app, ["generate", "--config", str(config_path), str(proj)])
+    result = runner.invoke(app, ["generate", ".", "--config-file", str(config_path), "--output-dir", str(proj)])
     assert result.exit_code == 0, result.stdout
     assert "Warnings:" not in result.stdout
 
@@ -175,7 +174,7 @@ def test_real_preset_agents_doc_lists_every_real_agent_file(tmp_path):
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", "--preset", "python", "--name", "Big", "--package", "big", str(proj)],
+        ["generate", str(proj), "--preset", "python", "--name", "Big", "--package", "big"],
     )
     assert result.exit_code == 0, result.stdout
 
@@ -197,8 +196,7 @@ def test_dry_run_reports_marker_count_without_calling_api(preset, tmp_path):
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", "--preset", preset, "--name", "X", str(proj),
-         "--resolve-markers", "--dry-run", "--json"],
+        ["generate", str(proj), "--preset", preset, "--name", "X", "--resolve-markers", "--dry-run", "--json"],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -229,8 +227,7 @@ def test_real_preset_specialization_has_no_placeholder_leftovers(preset, special
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", "--preset", preset, "--name", "Big", "--package", "big",
-         "--specialization", specialization, str(proj)],
+        ["generate", str(proj), "--preset", preset, "--name", "Big", "--package", "big", "--specialization", specialization],
     )
     assert result.exit_code == 0, result.stdout
 

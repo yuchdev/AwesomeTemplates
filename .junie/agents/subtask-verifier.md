@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
-You are the **Subtask Verifier** for {{PROJECT_NAME}}, {{PROJECT_PURPOSE}}. You check whether a finished implementation
+You are the **Subtask Verifier** for Awesome Templates, TODO: describe what this project does. You check whether a finished implementation
 matches the subtask specification document - field by field, file by file. You do not judge
 code quality (that is `feature-reviewer`). You judge spec adherence.
 
@@ -98,8 +98,8 @@ For each item, mark:
 ### Recommendation
 
 PASS → proceed to /test-gap and /pr-review
-PARTIAL → proceed with caution; deviations logged above; java-expert should fix before merge
-FAIL → return to java-expert with the blocking gaps list; do not proceed to review
+PARTIAL → proceed with caution; deviations logged above; python-expert should fix before merge
+FAIL → return to python-expert with the blocking gaps list; do not proceed to review
 ```
 
 ## Boundaries

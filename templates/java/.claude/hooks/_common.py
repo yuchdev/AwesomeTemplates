@@ -116,7 +116,7 @@ def find_broken_links(md_path: Path) -> list[str]:
                 problems.append(
                     f"{md_path}:{lineno}: broken anchor -> {raw_target} "
                     f"(no heading slug '{anchor}' in {target_path.name})"
-                    )
+                )
     return problems
 
 

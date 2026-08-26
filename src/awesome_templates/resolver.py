@@ -26,6 +26,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from awesome_templates.ai import client as ai_client
 from awesome_templates.docgen import (
@@ -157,7 +158,7 @@ def parse_dotenv(path: Path) -> dict[str, str]:
     return env
 
 
-def load_api_key(cwd: Path) -> str | None:
+def load_api_key(cwd: Path) -> Optional[str]:
     """ANTHROPIC_API_KEY from the environment, else from a `.env` in cwd."""
     key = os.environ.get("ANTHROPIC_API_KEY")
     if key:
@@ -271,6 +272,7 @@ def resolve_tree(
     *,
     api_key: str,
     warnings: list[str],
+    context_root: Optional[Path] = None,
     make_client=None,
     log: LogHelper = NULL_LOG,
 ) -> ResolveSummary:
@@ -291,7 +293,7 @@ def resolve_tree(
     auth_errors, api_errors = ai_client.error_classes()
 
     log.info("gathering target-project context (README/CLAUDE.md/manifest/source tree)...")
-    context_bundle = gather_context(out_dir)
+    context_bundle = gather_context(context_root or out_dir)
     client = make_client() if make_client is not None else ai_client.build_client(api_key)
 
     by_file: dict[Path, list[Marker]] = {}
@@ -306,7 +308,7 @@ def resolve_tree(
         for marker in file_markers:
             log.info(
                 f"resolving marker in {path.name} (kind={marker.kind}) - "
-                f"calling Anthropic API (model={MODEL})..."
+                f"calling the Anthropic Messages API directly (model={MODEL})..."
             )
             try:
                 resolved = resolve_one(client, marker, context_bundle)
@@ -337,8 +339,7 @@ def resolve_tree(
             if marker.kind == "SME REVIEW NEEDED":
                 summary.human_review += 1
                 message = (
-                    f"drafted a starting point for a SME REVIEW NEEDED marker in {path.name} - "
-                    "still needs human review"
+                    f"drafted a starting point for a SME REVIEW NEEDED marker in {path.name} - still needs human review"
                 )
                 warnings.append(message)
                 log.info(message)
@@ -347,9 +348,7 @@ def resolve_tree(
                 log.info(f"resolved marker in {path.name} confidently")
             else:
                 summary.todos += 1
-                message = (
-                    f"low confidence for a marker in {path.name} - left a TODO: {marker.instruction}"
-                )
+                message = f"low confidence for a marker in {path.name} - left a TODO: {marker.instruction}"
                 warnings.append(message)
                 log.info(message)
 
@@ -394,13 +393,12 @@ _TUTORIAL_SCHEMA = {
 
 def _format_entity_list(agents: list[AgentInfo], skills: list[SkillInfo]) -> str:
     agent_lines = [f"- `{a.name}`: {a.description or '(no description)'}" for a in agents]
-    skill_lines = [
-        f"- `{s.name}` ({s.invocation or 'auto'}): {s.description or '(no description)'}"
-        for s in skills
-    ]
+    skill_lines = [f"- `{s.name}` ({s.invocation or 'auto'}): {s.description or '(no description)'}" for s in skills]
     return (
-        "## Agents\n" + ("\n".join(agent_lines) if agent_lines else "(none)")
-        + "\n\n## Skills\n" + ("\n".join(skill_lines) if skill_lines else "(none)")
+        "## Agents\n"
+        + ("\n".join(agent_lines) if agent_lines else "(none)")
+        + "\n\n## Skills\n"
+        + ("\n".join(skill_lines) if skill_lines else "(none)")
     )
 
 
@@ -416,13 +414,12 @@ def generate_tutorial(
     it names things that actually shipped rather than plausible-sounding
     invented ones."""
     user = (
-        "# Target project context\n\n" + context_bundle
+        "# Target project context\n\n"
+        + context_bundle
         + "\n\n# Actual agents and skills shipped in this project's .claude/\n\n"
         + _format_entity_list(agents, skills)
     )
-    data = ai_client.request_json(
-        client, model=model, system=_TUTORIAL_SYSTEM, user=user, schema=_TUTORIAL_SCHEMA
-    )
+    data = ai_client.request_json(client, model=model, system=_TUTORIAL_SYSTEM, user=user, schema=_TUTORIAL_SCHEMA)
     return str(data["markdown"]).strip() + "\n"
 
 
@@ -444,7 +441,7 @@ def maybe_write_tutorial(
         log.info(message)
         return False
 
-    log.info(f"drafting {path} via Anthropic API (model={MODEL})...")
+    log.info(f"drafting {path} via a direct Anthropic Messages API call (model={MODEL})...")
     try:
         markdown = generate_tutorial(client, context_bundle, list_agents(out_dir), list_skills(out_dir))
     except Exception as exc:  # soft failure: markers already resolved, don't abort the run
@@ -515,9 +512,7 @@ def propose_first_milestone(client, context_bundle: str, *, model: str = MODEL) 
     """Ask the model for a small, structured first-milestone plan - content
     only, no file layout. render_milestone turns this into the actual files."""
     user = "# Target project context\n\n" + context_bundle
-    return ai_client.request_json(
-        client, model=model, system=_ROADMAP_SYSTEM, user=user, schema=_ROADMAP_SCHEMA
-    )
+    return ai_client.request_json(client, model=model, system=_ROADMAP_SYSTEM, user=user, schema=_ROADMAP_SCHEMA)
 
 
 def render_milestone(plan: dict) -> dict[str, str]:
@@ -597,7 +592,7 @@ def seed_first_milestone(
         log.info(message)
         return False
 
-    log.info(f"proposing first roadmap milestone via Anthropic API (model={MODEL})...")
+    log.info(f"proposing first roadmap milestone via a direct Anthropic Messages API call (model={MODEL})...")
     try:
         plan = propose_first_milestone(client, context_bundle)
         files = render_milestone(plan)
@@ -645,9 +640,7 @@ _CONVENTIONS_SCHEMA = {
 }
 
 
-def maybe_describe_test_conventions(
-    out_dir: Path, client, warnings: list[str], log: LogHelper = NULL_LOG
-) -> bool:
+def maybe_describe_test_conventions(out_dir: Path, client, warnings: list[str], log: LogHelper = NULL_LOG) -> bool:
     """Append one AI-drafted paragraph of observed test conventions to
     docs/test/code_test_coverage.md, fed only file *names* (never contents) -
     deliberately cheap and fast regardless of project size. No-ops if the doc
@@ -669,7 +662,7 @@ def maybe_describe_test_conventions(
         log.info(f"no test files found under {out_dir / 'tests'} - skipping test-conventions paragraph")
         return False
 
-    log.info(f"drafting test-conventions paragraph via Anthropic API (model={MODEL})...")
+    log.info(f"drafting test-conventions paragraph via a direct Anthropic Messages API call (model={MODEL})...")
     user = "Test file paths:\n" + "\n".join(file_names)
     try:
         data = ai_client.request_json(

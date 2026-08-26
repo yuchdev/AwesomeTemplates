@@ -60,13 +60,13 @@ def test_generate_dry_run_json(fixture_workspace, monkeypatch):
 
 def test_generate_requires_name(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--dry-run"])
+    result = runner.invoke(app, ["generate", ".", "--preset", "demo", "--dry-run"])
     assert result.exit_code == 1
 
 
 def test_generate_rejects_unknown_preset(fixture_workspace, monkeypatch):
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(app, ["generate", "--preset", "nope", "--name", "Test", "--dry-run"])
+    result = runner.invoke(app, ["generate", ".", "--preset", "nope", "--name", "Test", "--dry-run"])
     assert result.exit_code == 1
 
 
@@ -104,7 +104,7 @@ def test_generate_with_specialization_writes_addon_agent(fixture_workspace, tmp_
     out_dir = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", "--preset", "demo", "--name", "Acme", "--specialization", "widgets", str(out_dir), "--json"],
+        ["generate", str(out_dir), "--preset", "demo", "--name", "Acme", "--specialization", "widgets", "--json"],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -118,7 +118,7 @@ def test_generate_writes_a_real_kit(fixture_workspace, tmp_path, monkeypatch):
     out_dir = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", "--preset", "demo", "--name", "Acme Sync", str(out_dir), "--json"],
+        ["generate", str(out_dir), "--preset", "demo", "--name", "Acme Sync", "--json"],
     )
     assert result.exit_code == 0, result.stdout
     generated = (out_dir / ".claude" / "agents" / "widget-verifier.md").read_text()
@@ -133,7 +133,7 @@ def test_generate_refuses_nonempty_claude_without_force(fixture_workspace, tmp_p
     out_dir = tmp_path / "proj"
     (out_dir / ".claude").mkdir(parents=True)
     (out_dir / ".claude" / "existing.txt").write_text("pre-existing")
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Acme", str(out_dir)])
+    result = runner.invoke(app, ["generate", str(out_dir), "--preset", "demo", "--name", "Acme"])
     assert result.exit_code == 1
 
 
@@ -142,7 +142,7 @@ def test_generate_refuses_nonempty_scripts_without_force(fixture_workspace, tmp_
     out_dir = tmp_path / "proj"
     (out_dir / "scripts").mkdir(parents=True)
     (out_dir / "scripts" / "existing.py").write_text("pre-existing")
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Acme", str(out_dir)])
+    result = runner.invoke(app, ["generate", str(out_dir), "--preset", "demo", "--name", "Acme"])
     assert result.exit_code == 1
     assert "scripts" in result.stdout
 
@@ -152,7 +152,7 @@ def test_generate_force_overwrites(fixture_workspace, tmp_path, monkeypatch):
     out_dir = tmp_path / "proj"
     (out_dir / ".claude").mkdir(parents=True)
     (out_dir / ".claude" / "existing.txt").write_text("pre-existing")
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Acme", str(out_dir), "--force"])
+    result = runner.invoke(app, ["generate", str(out_dir), "--preset", "demo", "--name", "Acme", "--force"])
     assert result.exit_code == 0, result.stdout
     assert (out_dir / ".claude" / "agents" / "widget-verifier.md").exists()
 
@@ -162,7 +162,7 @@ def test_generate_applies_substitution_to_both_halves(fixture_workspace, tmp_pat
     (fixture_workspace.path("demo", "docs") / "x.md").write_text("Project: {{PROJECT_NAME}}\n")
 
     out_dir = tmp_path / "proj"
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Acme", str(out_dir)])
+    result = runner.invoke(app, ["generate", str(out_dir), "--preset", "demo", "--name", "Acme"])
     assert result.exit_code == 0, result.stdout
     text = (out_dir / "docs" / "x.md").read_text()
     assert text == "Project: Acme\n"
@@ -182,7 +182,7 @@ def test_generate_populates_agents_doc_without_resolve_markers_flag(fixture_work
     # docgen runs unconditionally - no --resolve-markers, no API key needed.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "proj"
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Acme", str(out_dir)])
+    result = runner.invoke(app, ["generate", str(out_dir), "--preset", "demo", "--name", "Acme"])
     assert result.exit_code == 0, result.stdout
     agents_doc = (out_dir / "docs" / "agent" / "agents.md").read_text()
     assert agents_doc != "# Agent Reference\n"
@@ -192,6 +192,9 @@ def test_generate_populates_agents_doc_without_resolve_markers_flag(fixture_work
 def test_generate_help_documents_log_severity():
     result = runner.invoke(app, ["generate", "--help"])
     assert result.exit_code == 0
+    assert "TARGET_DIR" in result.stdout
+    assert "--config-file" in result.stdout
+    assert "--output-dir" in result.stdout
     assert "--log-severity" in result.stdout
 
 
@@ -201,7 +204,7 @@ def test_generate_default_log_severity_stays_quiet(fixture_workspace, tmp_path, 
     # caller explicitly asks for --log-severity info or louder.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     out_dir = tmp_path / "proj"
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Acme", str(out_dir)])
+    result = runner.invoke(app, ["generate", str(out_dir), "--preset", "demo", "--name", "Acme"])
     assert result.exit_code == 0, result.stdout
     assert "copying preset" not in result.stderr
     assert "copying preset" not in result.stdout
@@ -282,7 +285,7 @@ def test_generate_produces_complete_preset_tree(fixture_workspace, tmp_path, mon
     # source tree, so they can never drift out of sync at generation time.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     proj = tmp_path / "proj"
-    result = runner.invoke(app, ["generate", "--preset", "demo", "--name", "Big", str(proj), "--json"])
+    result = runner.invoke(app, ["generate", str(proj), "--preset", "demo", "--name", "Big", "--json"])
     assert result.exit_code == 0, result.stdout
     assert (proj / ".claude").is_dir()
     assert (proj / "docs").is_dir()

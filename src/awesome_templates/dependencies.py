@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from awesome_templates.catalog import KIND_ALIAS, KINDS, SKIP_NAMES, Catalog, discover
 from awesome_templates.workspace import Workspace
@@ -71,8 +72,8 @@ def _entity_text(kind: str, path: Path) -> str:
 
 def build_dependency_graph(
     workspace: Workspace,
-    catalog: Catalog | None = None,
-    extra_scan_path: Path | None = None,
+    catalog: Optional[Catalog] = None,
+    extra_scan_path: Optional[Path] = None,
 ) -> DependencyGraph:
     """Scan every entity's own content for whole-word mentions of every other
     entity's name. A match on the source entity's own name is never an edge
@@ -116,9 +117,7 @@ def build_dependency_graph(
 
     pattern_names = sorted(by_name, key=len, reverse=True)
     pattern = (
-        re.compile(
-            r"(?<![\w-])(" + "|".join(re.escape(n) for n in pattern_names) + r")(?![\w-])"
-        )
+        re.compile(r"(?<![\w-])(" + "|".join(re.escape(n) for n in pattern_names) + r")(?![\w-])")
         if pattern_names
         else None
     )
@@ -173,9 +172,8 @@ def build_dependency_graph(
         if extra_ref not in nodes:
             nodes.append(extra_ref)
             # Check existence for docs and files
-            if extra_ref.kind == "doc":
-                if not (workspace.root / "docs" / extra_ref.name).exists():
-                    missing.add(extra_ref)
+            if extra_ref.kind == "doc" and not (workspace.root / "docs" / extra_ref.name).exists():
+                missing.add(extra_ref)
             elif extra_ref.kind == "file" and not (workspace.root / extra_ref.name).exists():
                 missing.add(extra_ref)
 
@@ -296,11 +294,7 @@ def render_doc(graph: DependencyGraph) -> str:
     ]
     if orphans:
         for ref in orphans:
-            label = (
-                f"{ref.kind}:{ref.name}"
-                if ref.category == "."
-                else f"{ref.kind}:{ref.category}/{ref.name}"
-            )
+            label = f"{ref.kind}:{ref.name}" if ref.category == "." else f"{ref.kind}:{ref.category}/{ref.name}"
             lines.append(f"- `{label}`")
     else:
         lines.append("(none - every node is referenced by at least one other entity)")
@@ -346,7 +340,7 @@ def render_dependency_block_python(source: EntityRef, graph: DependencyGraph) ->
     return "\n".join(lines)
 
 
-def markdown_frontmatter_end(text: str) -> int | None:
+def markdown_frontmatter_end(text: str) -> Optional[int]:
     """Position right after a leading `---`-fenced frontmatter block, or None
     if the text doesn't start with one. Anchored at file-start with a
     newline-bounded closing fence so it isn't fooled by a `---` horizontal
@@ -370,9 +364,7 @@ def python_insertion_point(text: str) -> int:
 
 def remove_marked_block(text: str, begin_marker: str, end_marker: str) -> tuple[str, bool]:
     """Remove a marker-delimited block and its surrounding padding."""
-    region_re = re.compile(
-        r"\n*" + re.escape(begin_marker) + r".*?" + re.escape(end_marker) + r"\n*", re.DOTALL
-    )
+    region_re = re.compile(r"\n*" + re.escape(begin_marker) + r".*?" + re.escape(end_marker) + r"\n*", re.DOTALL)
     m = region_re.search(text)
     if not m:
         return text, False
@@ -398,9 +390,7 @@ def upsert_marked_block(
     re-running with the same canonical_block reproduces byte-identical text
     (padding is normalized, not accumulated) - see dependencies.py's plan for
     the stability argument."""
-    region_re = re.compile(
-        r"\n*" + re.escape(begin_marker) + r".*?" + re.escape(end_marker) + r"\n*", re.DOTALL
-    )
+    region_re = re.compile(r"\n*" + re.escape(begin_marker) + r".*?" + re.escape(end_marker) + r"\n*", re.DOTALL)
     m = region_re.search(text)
     if m:
         head, tail = text[: m.start()], text[m.end() :]
@@ -419,9 +409,9 @@ def upsert_marked_block(
 
 def write_inline_dependencies(
     workspace: Workspace,
-    catalog: Catalog | None = None,
+    catalog: Optional[Catalog] = None,
     log_verbosity: int = 0,
-    extra_scan_path: Path | None = None,
+    extra_scan_path: Optional[Path] = None,
     force: bool = False,
     remove: bool = False,
 ) -> int:
@@ -468,9 +458,7 @@ def write_inline_dependencies(
                 original = target_path.read_text(encoding="utf-8")
                 marker = BEGIN_MARKER_PY if target_path.suffix == ".py" else BEGIN_MARKER_MD
                 if marker in original:
-                    raise RuntimeError(
-                        f"Dependencies already generated in {target_path}. Use --force to regenerate."
-                    )
+                    raise RuntimeError(f"Dependencies already generated in {target_path}. Use --force to regenerate.")
             except UnicodeDecodeError:
                 continue
 
@@ -481,9 +469,7 @@ def write_inline_dependencies(
             continue
 
         begin_marker, end_marker = (
-            (BEGIN_MARKER_PY, END_MARKER_PY)
-            if target_path.suffix == ".py"
-            else (BEGIN_MARKER_MD, END_MARKER_MD)
+            (BEGIN_MARKER_PY, END_MARKER_PY) if target_path.suffix == ".py" else (BEGIN_MARKER_MD, END_MARKER_MD)
         )
 
         if remove:
@@ -533,9 +519,7 @@ def write_inline_dependencies(
             insertion_point = fm_end if fm_end is not None else 0
             # markers already set above
 
-        new_text = upsert_marked_block(
-            original, block, begin_marker, end_marker, insertion_point
-        )
+        new_text = upsert_marked_block(original, block, begin_marker, end_marker, insertion_point)
         if new_text != original:
             target_path.write_text(new_text, encoding="utf-8")
             updated += 1
