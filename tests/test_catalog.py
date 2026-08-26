@@ -33,4 +33,17 @@ def test_discover_real_repo_presets(real_workspace):
     assert "subtask-verifier" in python_catalog.names(".", "agents")
 
     java_catalog = discover(Workspace(root=real_workspace.path("java")))
-    assert {"java-expert", "testing-expert"} <= set(java_catalog.names(".", "agents"))
+    assert {
+        "agent-orchestrator",
+        "app-architect",
+        "background-reviewer",
+        "docs-updater",
+        "docs-writer",
+        "feature-reviewer",
+        "incident-analyst",
+        "java-expert",
+        "security-auditor",
+        "subtask-verifier",
+        "test-documenter",
+        "testing-expert",
+    } <= set(java_catalog.names(".", "agents"))

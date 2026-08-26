@@ -98,8 +98,8 @@ For each item, mark:
 ### Recommendation
 
 PASS → proceed to /test-gap and /pr-review
-PARTIAL → proceed with caution; deviations logged above; python-expert should fix before merge
-FAIL → return to python-expert with the blocking gaps list; do not proceed to review
+PARTIAL → proceed with caution; deviations logged above; java-expert should fix before merge
+FAIL → return to java-expert with the blocking gaps list; do not proceed to review
 ```
 
 ## Boundaries
