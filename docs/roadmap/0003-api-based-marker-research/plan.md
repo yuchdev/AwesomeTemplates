@@ -5,7 +5,7 @@ not because work is expected to begin soon.
 
 ## Why this milestone exists
 
-[`0001-ai-assisted-generation/03.Agentic_marker_research.md`](../0001-ai-assisted-generation/01.0-working-implementation/03.Agentic_marker_research.md)
+[`0001-ai-assisted-generation/01.0-working-implementation/03-agentic-marker-research.md`](/docs/roadmap/0001-ai-assisted-generation/01.0-working-implementation/03-agentic-marker-research.md)
 diagnoses why `generate --resolve-markers` produces instruction-echo instead of grounded
 facts on well-documented targets: `resolve_one` is a single Messages API call with only a
 static context bundle, so it genuinely cannot research the target project the way a marker

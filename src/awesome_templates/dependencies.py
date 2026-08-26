@@ -176,9 +176,8 @@ def build_dependency_graph(
             if extra_ref.kind == "doc":
                 if not (workspace.root / "docs" / extra_ref.name).exists():
                     missing.add(extra_ref)
-            elif extra_ref.kind == "file":
-                if not (workspace.root / extra_ref.name).exists():
-                    missing.add(extra_ref)
+            elif extra_ref.kind == "file" and not (workspace.root / extra_ref.name).exists():
+                missing.add(extra_ref)
 
     nodes.sort()
     return DependencyGraph(nodes=nodes, edges=edges, missing=missing)
@@ -382,10 +381,7 @@ def remove_marked_block(text: str, begin_marker: str, end_marker: str) -> tuple[
     head = head.rstrip("\n")
     tail = tail.lstrip("\n")
 
-    if head and tail:
-        new_text = head + "\n\n" + tail
-    else:
-        new_text = head + tail
+    new_text = head + "\n\n" + tail if head and tail else head + tail
 
     # Ensure it ends with exactly one newline if not empty
     if new_text and not new_text.endswith("\n"):

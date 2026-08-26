@@ -112,11 +112,10 @@ def find_broken_links(md_path: Path) -> list[str]:
                     continue
             else:
                 target_path = md_path
-            if anchor and target_path.suffix.lower() == ".md":
-                if anchor not in heading_slugs(target_path):
-                    problems.append(
-                        f"{md_path}:{lineno}: broken anchor -> {raw_target} "
-                        f"(no heading slug '{anchor}' in {target_path.name})"
+            if anchor and target_path.suffix.lower() == ".md" and anchor not in heading_slugs(target_path):
+                problems.append(
+                    f"{md_path}:{lineno}: broken anchor -> {raw_target} "
+                    f"(no heading slug '{anchor}' in {target_path.name})"
                     )
     return problems
 
