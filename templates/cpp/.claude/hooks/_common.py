@@ -105,8 +105,14 @@ def find_broken_links(md_path: Path) -> list[str]:
             path_part, _, anchor = raw_target.partition("#")
             if path_part and not re.search(r"\w", path_part):
                 continue  # e.g. "[000N](...)" illustrative prose, not a real link
+            # Skip glob/template paths (e.g. /docs/adr/*.md or {NN}-{slug}.md)
+            if path_part and ("*" in path_part or "?" in path_part or "{" in path_part):
+                continue
             if path_part:
-                target_path = (md_path.parent / path_part).resolve()
+                if path_part.startswith("/"):
+                    target_path = (REPO_ROOT / path_part.lstrip("/")).resolve()
+                else:
+                    target_path = (md_path.parent / path_part).resolve()
                 if not target_path.exists():
                     problems.append(f"{md_path}:{lineno}: broken link -> {raw_target} (file not found)")
                     continue

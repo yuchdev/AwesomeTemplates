@@ -160,7 +160,11 @@ def _context_label(file_path: Path, suite_name: str) -> str:
 
 
 def _params_line(macro: str) -> str:
-    return "GetParam()" if macro in ("TEST_P", "TYPED_TEST_P") else "none"
+    if macro == "TEST_P":
+        return "GetParam()"
+    if macro == "TYPED_TEST_P":
+        return "TypeParam"
+    return "none"
 
 
 def _extract_body(lines: list[str], brace_line: int) -> str:

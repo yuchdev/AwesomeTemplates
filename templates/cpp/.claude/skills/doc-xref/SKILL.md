@@ -15,7 +15,7 @@ target is renamed or deleted - at that point `/link-check` has nothing left to c
 `/link-check` covers the opposite direction (does what a file points at resolve?).
 Run both after a rename.
 
-Unlike `/link-check`, this skill also searches **`src/**` and `tests/**`**, because a
+Unlike `/link-check`, this skill also searches **`src/**`** and **`tests/**`**, because a
 renamed doc or symbol is just as likely to be referenced from a docstring or comment
 as from another Markdown file.
 
