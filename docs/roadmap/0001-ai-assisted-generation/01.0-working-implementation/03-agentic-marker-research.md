@@ -271,4 +271,4 @@ resolution pass) as an alternative to depending on the `claude` CLI. That design
 may still be worth building - e.g. if the `claude`-CLI dependency this document now assumes
 turns out to be unacceptable for some deployment of `generate` - but it is not what ships
 first. It has been moved, content intact, to its own milestone:
-[`0002-api-based-marker-research/plan.md`](../../0003-api-based-marker-research/plan.md).
+[`0003-api-based-marker-research/plan.md`](/docs/roadmap/0003-api-based-marker-research/plan.md).

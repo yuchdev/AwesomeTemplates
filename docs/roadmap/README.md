@@ -7,7 +7,7 @@ hierarchy: **Milestone → Task → Subtask**.
 
 | Tier          | Meaning                                                                                                       | Lives in                                                |
 |---------------|---------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
-| **Milestone** | A large, strategic initiative / development direction (e.g. the generic implementation effort).               | A folder `docs/roadmap/{NNNN}-{milestone-slug}/`.       |
+| **Milestone** | A large, strategic initiative / development direction (e.g. AI-assisted generation).               | A folder `docs/roadmap/{NNNN}-{milestone-slug}/`.       |
 | **Task**      | One deliverable unit of a milestone (e.g. "AWS Bedrock Backend"). Listed in the milestone's `## Tasks` table. | A subfolder `…/{TT.t}-{task-slug}/` with a `README.md`. |
 | **Subtask**   | An atomic, implementable spec (one file, one set of classes/tests). Listed in the task's `## Subtasks` table. | A file `…/{TT.t}-{task-slug}/{NN}-{subtask-slug}.md`.   |
 
@@ -35,8 +35,12 @@ docs/roadmap/
 
 - A milestone's `plan.md` lists its tasks under a `## Tasks` heading (table column: `Task`).
 - A task's `README.md` lists its subtasks under a `## Subtasks` heading.
-- Avoid "Phase" for these tiers - it is reserved for the product-vision phases in
-  [docs/roadmap/roadmap.md](/docs/roadmap/roadmap.md) (usually require months) and would otherwise be ambiguous.
+- Avoid "Phase" for these tiers - it is reserved for higher-level, usually-months-long
+  product-vision groupings (no such document exists in this repo yet) and would otherwise be
+  ambiguous.
+- A milestone that hasn't started implementation may stay at the `plan.md` + `status.md` pair
+  (see `0002`/`0003` below) without `{TT.t}-{task-slug}/` subfolders - those are created once a
+  task's subtasks are actually being specified, not to scaffold ahead of the work.
 
 ### Linking convention
 
@@ -44,7 +48,7 @@ When a document references another **specific** document, use an
 absolute-from-repo-root Markdown link:
 
 ```
-[docs/roadmap/0001-generic-implementation/plan.md](/docs/roadmap/0001-generic-implementation/plan.md)
+[docs/roadmap/0001-ai-assisted-generation/plan.md](/docs/roadmap/0001-ai-assisted-generation/plan.md)
 ```
 
 - Always a leading `/` (repo root), never relative `../../` chains.
@@ -55,8 +59,9 @@ absolute-from-repo-root Markdown link:
 
 ## Milestones
 
-| #    | Milestone                                           | Spec                                                          | Status                                                               |
-|------|-----------------------------------------------------|---------------------------------------------------------------|----------------------------------------------------------------------|
-| 0001 | Generic implementation (backends, MAS, CLI, …)      | [plan.md](/docs/roadmap/0001-ai-assisted-generation/plan.md)  | [status.md](/docs/roadmap/0001-generic-implementation/status.md)     |
-| 0002 | Forensic agents (specialist panel + synthesis tier) | [plan.md](/docs/roadmap/0002-api-based-marker-research/plan.md)         | [status.md](/docs/roadmap/0002-forensic-agents/status.md)            |
+| #    | Milestone                                                                              | Spec                                                               | Status                                                                     |
+|------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------|
+| 0001 | AI-assisted generation (specializations, deterministic docs, agentic marker research) | [plan.md](/docs/roadmap/0001-ai-assisted-generation/plan.md)      | [status.md](/docs/roadmap/0001-ai-assisted-generation/status.md)      |
+| 0002 | Alternative headless harness support (`copilot`, `junie` alongside `claude`)          | [plan.md](/docs/roadmap/0002-alternative-harness-support/plan.md) | [status.md](/docs/roadmap/0002-alternative-harness-support/status.md) |
+| 0003 | API-based agentic marker research (deferred in-house alternative)                     | [plan.md](/docs/roadmap/0003-api-based-marker-research/plan.md)   | [status.md](/docs/roadmap/0003-api-based-marker-research/status.md)   |
 

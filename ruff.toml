@@ -33,3 +33,10 @@ ignore = [
     "E501"
 ]
 
+[lint.per-file-ignores]
+# Typer's argument-default pattern (`x: T = typer.Option(...)`) is the
+# framework's documented API, not the mutable-default-argument bug B008
+# guards against - typer.Option()/Argument() build lightweight metadata
+# objects, not the accidental-shared-state footgun the rule targets.
+"src/awesome_templates/cli.py" = ["B008"]
+
