@@ -40,7 +40,7 @@ def test_templates_root_is_separate_from_the_package_root(real_workspace):
 
 
 def test_workspace_root_resolves_to_the_actual_preset_trees(real_workspace):
-    assert list_presets(real_workspace) == ["java", "python"]
+    assert list_presets(real_workspace) == ["cpp", "java", "python"]
     assert (real_workspace.root / "python" / ".claude").is_dir()
     assert (real_workspace.root / "python" / "docs" / "adr" / "template.md").is_file()
 
