@@ -237,7 +237,8 @@ inventing a new one:
   `test_generate_harness_binary_missing_fails_hard_no_fallback_for_non_claude`.
 
 No real `copilot` or `junie` binary is ever invoked in the suite, matching how no real `claude`
-is invoked today.
+is invoked today. The porting pipeline (task 09) follows the same rule: fake `run=` per target
+harness, no real Copilot/Junie CLI invoked.
 
 ## Non-goals
 
@@ -255,19 +256,66 @@ is invoked today.
 - `awesome-templates graph` / `dependencies.py` (maintainer-only tooling) are unaffected -
   this milestone touches only the `--resolve-markers` runtime path.
 
+## Cross-harness porting pipeline (Claude, Copilot, Junie)
+
+`--harness` (above) picks which backend runs the *initial* marker-research session. It does
+not, by itself, give a site standardized on Copilot or Junie a way to get `.claude/`'s agents,
+skills, loops, and hooks translated into that tool's own equivalents - only into Claude's
+directory shape. This section adds that second, optional stage.
+
+**Claude is always the reference harness for this stage.** `generate --resolve-markers`
+(`--harness claude`, the default) is what actually authors `.claude/agents/`, `.claude/skills/`,
+`.claude/loops/`, and `.claude/hooks/` for the target project from the chosen preset - that
+does not change. What this section adds is a second, optional pass that, once that
+Claude-authored tree exists, can launch **Copilot or Junie** and task *them* with porting those
+four kinds into their own native form.
+
+**Porting, not copying.** The new session's prompt does not ask the target harness to duplicate
+files byte-for-byte into a differently-named folder. It hands Copilot/Junie the Claude-authored
+manifest (same four kinds `headless.py` already enumerates) and asks each one to *re-author* it
+in its own idiom - Copilot and Junie each have their own established conventions for how an
+agent or skill is structured, discovered, and invoked, and Claude's `.claude/agents/*.md` /
+`SKILL.md` shape is not necessarily theirs. This is deliberate: Copilot and Junie know their own
+agent/skill design better than a Claude-authored template does, so the porting session is
+scoped to preserve *intent* (what each agent/skill/loop/hook does and when it runs) rather than
+its file format or prompt structure. The Claude-authored tree stays the source of truth that the
+porting prompt points at; nothing here mutates `.claude/` itself.
+
+**Headless mode.** Both the initial Claude stage and the Junie porting stage run headless - no
+interactive session, same `resolve_tree_headless`-style contract the rest of this milestone
+uses. Junie's porting session therefore inherits task 03's outcome: if that spike confirms a
+non-interactive CLI mode (outcome 1), Junie porting uses it; if not (outcome 2), `--port-to
+junie` fails with the same honest "Junie has no supported headless CLI mode yet" message
+`find_harness` already produces for `--harness junie`, rather than falling back to an
+interactive IDE session. Copilot's porting session inherits whatever non-interactive contract
+task 02/07's own spike confirms for `--harness copilot` - this document does not additionally
+require Copilot's porting stage to be headless beyond what task 02 already established for it.
+
+**One-directional.** Porting flows Claude → target harness only; there is no sync or round-trip
+that reads Copilot's or Junie's ported artifacts back into Claude's `.claude/` tree. Re-running
+the porting stage is the update mechanism, subject to the same non-destructiveness invariant
+(never clobber the target harness's own edits without an explicit force) the rest of `generate`
+already follows.
+
 ## Tasks
 
 | Task | Name                                              | Category  | Output |
 |------|-----------------------------------------------------|-----------|--------|
-| 01   | `harnesses.py` + `claude` relocation                | refactor  | New module with `Harness`, `find_harness`, `get`, `_REGISTRY`; `headless.py`'s `find_claude`/`build_command`/`HEADLESS_MODEL` become `_CLAUDE`'s registration, behavior unchanged; `resolve_tree_headless` gains `harness: str = "claude"` |
-| 02   | `copilot` adapter                                    | feature   | Spike confirming `copilot`'s non-interactive flag set, tool-allowlist syntax, permission-bypass equivalent, and prompt-delivery mechanism against the installed CLI's own `--help`/docs; `_build_copilot_command` + `_COPILOT` registration once confirmed |
-| 03   | `junie` adapter                                      | feature   | Spike confirming whether Junie has a supported non-interactive CLI mode at all; either `_build_junie_command` + `_JUNIE` registration (outcome 1) or a registered-but-unavailable stub with an honest error message (outcome 2) |
-| 04   | `cli.py` wiring                                      | feature   | `--harness` flag, config fallback, validation, dry-run output, harness-specific missing-binary messaging, docs (`generate --help`, root `CLAUDE.md`'s Commands section) |
-| 05   | Tests                                                | test      | `tests/test_harnesses.py`; `tests/test_headless.py` and `tests/test_cli.py` additions per "Testing strategy" above |
+| 01.0 | `harnesses.py` + `claude` relocation                | refactor  | New module with `Harness`, `find_harness`, `get`, `_REGISTRY`; `headless.py`'s `find_claude`/`build_command`/`HEADLESS_MODEL` become `_CLAUDE`'s registration, behavior unchanged; `resolve_tree_headless` gains `harness: str = "claude"` |
+| 02.0 | `copilot` adapter                                    | feature   | Spike confirming `copilot`'s non-interactive flag set, tool-allowlist syntax, permission-bypass equivalent, and prompt-delivery mechanism against the installed CLI's own `--help`/docs; `_build_copilot_command` + `_COPILOT` registration once confirmed |
+| 03.0 | `junie` adapter                                      | feature   | Spike confirming whether Junie has a supported non-interactive CLI mode at all; either `_build_junie_command` + `_JUNIE` registration (outcome 1) or a registered-but-unavailable stub with an honest error message (outcome 2) |
+| 04.0 | `cli.py` wiring                                      | feature   | `--harness` flag, config fallback, validation, dry-run output, harness-specific missing-binary messaging, docs (`generate --help`, root `CLAUDE.md`'s Commands section) |
+| 05.0 | Tests                                                | test      | `tests/test_harnesses.py`; `tests/test_headless.py` and `tests/test_cli.py` additions per "Testing strategy" above |
+| 06.0 | `--port-to` pipeline orchestration                   | feature   | New `--port-to {copilot,junie}` option, gated on `--resolve-markers` and on a Claude-authored source tree; builds the four-kind porting manifest and prompt and dispatches to the chosen harness's headless (or task 02-confirmed) session; dry-run gains a `Port to: ...` line |
+| 07.0 | Copilot porting session                              | feature   | `_build_copilot_porting_prompt` / session wiring confirming (spike, same posture as task 02) how to hand Copilot "read `.claude/{agents,skills,loops,hooks}`, re-author your own equivalents" instructions and where Copilot's own conventions expect the output to live |
+| 08.0 | Junie porting session (headless)                     | feature   | Same porting session for `junie`, run strictly headless via task 03's confirmed non-interactive mode; `--port-to junie` fails the same honest way `--harness junie` does today if task 03 lands on outcome 2 |
+| 09.0 | Porting pipeline tests                               | test      | `tests/test_port.py` (or `test_headless.py`/`test_cli.py` additions): `--port-to` validation (requires `--resolve-markers`, requires `--harness claude`, respects task 03's outcome for `junie`), manifest content, fake `run=` assertions per harness, dry-run output |
 
 Tasks 02 and 03 are independent of each other and of task 04's flag plumbing beyond needing
 task 01's registry to exist first; they can land in either order, or only one of them, without
-blocking the other.
+blocking the other. Task 06 needs task 01's registry and task 04's flag plumbing; task 07 needs
+task 02's confirmed Copilot contract; task 08 needs task 03's confirmed (or honestly-stubbed)
+Junie contract. Tasks 07 and 08 are independent of each other, same as 02/03.
 
 ## Acceptance criteria
 
@@ -292,5 +340,20 @@ blocking the other.
 - [ ] `uv run ruff check src/ tests/` clean.
 - [ ] No behavior change for an existing `--resolve-markers` call that doesn't pass `--harness`
       (the default-`claude` path) - covered by task 01's "byte-identical argv" test.
+- [ ] `--port-to {copilot,junie}` exists, is rejected without `--resolve-markers`, and is
+      rejected whenever `--harness` is not `claude` (its default) - porting always reads a
+      Claude-authored `.claude/` tree, so a non-`claude` `--harness` combined with `--port-to`
+      is rejected outright, not only the exact self-port case (`--harness copilot --port-to
+      copilot`).
+- [ ] The porting prompt instructs the target harness to re-author each of the four Claude
+      kinds in its own idiom, not to copy files - Claude's `.claude/` tree is named as the
+      source of truth in the prompt, never mutated by the porting stage itself.
+- [ ] `--port-to junie` is only reachable when task 03's spike confirmed a headless mode
+      (outcome 1); otherwise it fails with the same honest message `--harness junie` already
+      gives, with no silent fallback to an interactive session.
+- [ ] Neither the Copilot nor the Junie porting session forwards `ANTHROPIC_API_KEY` -
+      `forwards_anthropic_key` stays `False` for both, matching their `--harness` registrations.
+- [ ] `tests/test_port.py` (or the equivalent additions under "Testing strategy") pass; no real
+      `copilot`/`junie` binary is invoked by the suite.
 
 See [status.md](status.md) for progress (all tasks Not started - this milestone has not begun).
