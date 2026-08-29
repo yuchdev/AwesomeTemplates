@@ -71,16 +71,16 @@ proposed gate keeps three tiers, matching the existing marker-resolution vocabul
 
 ```
                  ┌─────────────────────┐
- AI output  ───▶ │ deterministic checks │──fail──▶  reject / TODO
+ AI output  ───▶ │ deterministic checks│──fail──▶  reject / TODO
                  └─────────┬───────────┘
-                       pass │
-                            ▼
+                       pass│
+                           ▼
                  ┌─────────────────────┐
-                 │ agentic fact-check   │──fail──▶  human-review flag (never silent)
+                 │ agentic fact-check  │──fail──▶  human-review flag (never silent)
                  └─────────┬───────────┘
-                       pass │
-                            ▼
-                        ship as-is
+                       pass│
+                           ▼
+                       ship as-is
 ```
 
 - **Deterministic checks** are cheap, run on every output, and catch the classes that are
