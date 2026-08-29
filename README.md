@@ -71,8 +71,8 @@ uv run awesome-templates generate . --preset python --name "Awesome Templates" -
 # Preview with a specialization layered on top - verifies it merges into .claude/, no stray top-level folder
 uv run awesome-templates generate . --preset python --name "Awesome Templates" --package awesome_templates --output-dir .scratch/django --specialization django
 
-# Full AI-resolution pass: markers, tutorial.md, test-conventions paragraph (needs ANTHROPIC_API_KEY; makes real, billed API calls)
-uv run awesome-templates generate . --preset python --name "Awesome Templates" --package awesome_templates --output-dir .scratch/resolved --resolve-markers --json
+# Full AI-resolution pass: markers, tutorial.md, test-conventions paragraph (needs ANTHROPIC_API_KEY; makes real, billed API calls), debug logging
+uv run awesome-templates generate . --preset python --name "Awesome Templates" --package awesome_templates --output-dir .scratch/resolved --resolve-markers --json --log-severity debug
 
 # Targeted regression tests for the specialization-copy bug
 uv run pytest tests/test_specializations.py tests/test_integration_real_repo.py -q
