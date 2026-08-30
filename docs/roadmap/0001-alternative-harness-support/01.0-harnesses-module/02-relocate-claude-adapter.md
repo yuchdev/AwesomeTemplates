@@ -180,7 +180,7 @@ harness-parameterized version once `--harness` exists.
   "Edit","TodoWrite")`, `model="opus"` must be byte-identical, element for
   element, to today's `headless.build_command(claude_bin,
   update_guidelines=False)` output - this is the "relocation, not rewrite"
-  claim the milestone's plan.md rests on.
+  claim the milestone's [plan.md](/docs/roadmap/0001-alternative-harness-support/plan.md) rests on.
 - `from __future__ import annotations`; `Optional[T]`, never `T | None`.
 - No new `# type: ignore`.
 

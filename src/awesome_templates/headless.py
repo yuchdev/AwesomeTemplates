@@ -36,20 +36,14 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
 
+from awesome_templates import harnesses
 from awesome_templates.log_helper import NULL_LOG, LogHelper
 from awesome_templates.markers import Marker, scan_tree
 from awesome_templates.resolver import ResolveSummary
-
-# Model alias handed to `claude --model`; an alias tracks the newest model of
-# its tier instead of pinning a dated id the way resolver.MODEL must for the
-# raw API. The research session is the "expensive, once per target" pass, so
-# it gets the most capable tier.
-HEADLESS_MODEL = "opus"
 
 # The guideline docs --update-guidelines maintains at the kit root, in the
 # order the prompt presents them.
@@ -86,13 +80,6 @@ _PROJECT_HINTS = (
     "Cargo.toml",
     "go.mod",
 )
-
-
-def find_claude() -> Optional[str]:
-    """Absolute path of the `claude` CLI, or None when it isn't installed -
-    the caller's cue to fall back to resolver.resolve_tree or fail with an
-    actionable message, never a bare FileNotFoundError from subprocess."""
-    return shutil.which("claude")
 
 
 def _looks_like_project(root: Path) -> bool:
@@ -287,48 +274,6 @@ def build_prompt(
     return "\n\n".join(section.rstrip() for section in sections) + "\n"
 
 
-def build_command(
-    claude_bin: str,
-    *,
-    update_guidelines: bool,
-    model: str = HEADLESS_MODEL,
-) -> list[str]:
-    """The headless argv. `--setting-sources user` keeps the user's own
-    settings (and their normal login - the session authenticates however the
-    installed CLI already does, OAuth or ANTHROPIC_API_KEY) while skipping
-    project/local settings: with the documented `generate .` usage the generated
-    kit's own settings.json sits at the session cwd and its wired hooks would
-    otherwise fire on - and could block - every edit the session makes. The
-    prompt goes over stdin, not argv: it embeds the whole manifest and can
-    exceed argv limits. `--tools` is a variadic flag, so it goes last, where
-    the argv ends before anything could be swallowed into its value list.
-
-    `--permission-mode bypassPermissions` is required, not a convenience:
-    Claude Code's permission layer treats `.claude/**` files as sensitive and
-    blocks Edit on them even under acceptEdits and even with an explicit
-    `--allowedTools "Edit(<kit>/**)"` rule (verified empirically) - and the
-    kit's agent/loop files, the very thing this session exists to edit, all
-    live under `.claude/`. The security boundary is therefore the tool
-    allowlist (no Bash, no network tools) plus the prompt's closed file set,
-    not per-path permission checks."""
-    tools = _BASE_TOOLS + (("Write",) if update_guidelines else ())
-    return [
-        claude_bin,
-        "-p",
-        "--output-format",
-        "text",
-        "--setting-sources",
-        "user",
-        "--permission-mode",
-        "bypassPermissions",
-        "--no-session-persistence",
-        "--model",
-        model,
-        "--tools",
-        *tools,
-    ]
-
-
 def _count_fallbacks(paths: set[Path]) -> tuple[dict[str, int], int]:
     """(TODO-instruction multiset, SME-draft count) across paths - the
     before/after halves of reconciliation both use this."""
@@ -351,10 +296,11 @@ def resolve_tree_headless(
     *,
     api_key: Optional[str],
     warnings: list[str],
+    harness: str = "claude",
     claude_bin: Optional[str] = None,
     project_root: Optional[Path] = None,
     update_guidelines: bool = False,
-    model: str = HEADLESS_MODEL,
+    model: Optional[str] = None,
     run=subprocess.run,
     log: LogHelper = NULL_LOG,
 ) -> tuple[ResolveSummary, list[str]]:
@@ -371,14 +317,16 @@ def resolve_tree_headless(
         log.info(f"no markers found under {out_dir} - nothing to resolve")
         return summary, []
 
-    claude_bin = claude_bin or find_claude()
+    harness_obj = harnesses.get(harness)
+    resolved_model = model or harness_obj.default_model
+    claude_bin = claude_bin or harnesses.find_harness(harness_obj)
     if claude_bin is None:
-        raise RuntimeError("the `claude` CLI is not on PATH")
+        raise RuntimeError(f"the `{harness}` CLI is not on PATH")
 
     project_root = (project_root or detect_project_root(out_dir, Path.cwd())).resolve()
     log.info(
         f"found {len(before)} marker(s); researching project at {project_root} "
-        f"via one headless Claude Code session (model={model})"
+        f"via one headless {harness} session (model={resolved_model})"
     )
 
     marker_files = {m.path for m in before}
@@ -398,25 +346,58 @@ def resolve_tree_headless(
         project_root=project_root,
         update_guidelines=update_guidelines,
     )
-    cmd = build_command(claude_bin, update_guidelines=update_guidelines, model=model)
-    # An explicit key (env or .env - see resolver.load_api_key) is forwarded;
-    # without one the session authenticates however the installed CLI already
-    # does (typically the user's own login).
-    env = {**os.environ, "ANTHROPIC_API_KEY": api_key} if api_key else {**os.environ}
+    # Tool selection depends on update_guidelines, a marker-research concept the
+    # harness registry has no business knowing about, so it is computed here and
+    # handed to the harness's build_command rather than inside it.
+    tools = _BASE_TOOLS + (("Write",) if update_guidelines else ())
+    cmd = harness_obj.build_command(claude_bin, tools=tools, model=resolved_model, prompt=prompt)
+    # An explicit key (env or .env - see resolver.load_api_key) is forwarded
+    # only for harnesses that authenticate through ANTHROPIC_API_KEY; without
+    # one (or for a harness with its own auth) the session authenticates however
+    # the installed CLI already does (typically the user's own login). A
+    # non-forwarding harness must have the key stripped from the inherited env,
+    # not merely left unset - the developer may already have it exported.
+    env = {**os.environ}
+    if api_key and harness_obj.forwards_anthropic_key:
+        env["ANTHROPIC_API_KEY"] = api_key
+    else:
+        env.pop("ANTHROPIC_API_KEY", None)
 
-    log.debug(f"headless command: {' '.join(cmd)}")
+    # claude receives its prompt over stdin (prompt_via="stdin"); a harness that
+    # takes the prompt as an argv element instead embeds it in cmd already.
+    run_kwargs = {"input": prompt} if harness_obj.prompt_via == "stdin" else {"input": None}
+
+    # For prompt_via="arg" the prompt (marker manifest + gathered project
+    # context) is an argv element, so it must be redacted before the command is
+    # logged; the stdin case never carries it in cmd.
+    if harness_obj.prompt_via == "arg":
+        logged_cmd = [f"<prompt: {len(prompt)} chars>" if part == prompt else part for part in cmd]
+    else:
+        logged_cmd = cmd
+    log.debug(f"headless command: {' '.join(logged_cmd)}")
     try:
         proc = run(
             cmd,
-            input=prompt,
             cwd=str(project_root),
             env=env,
             capture_output=True,
             text=True,
             timeout=_TIMEOUT_SECONDS,
+            **run_kwargs,
         )
     except subprocess.TimeoutExpired:
         message = f"headless research session timed out after {_TIMEOUT_SECONDS}s - reconciling whatever it completed"
+        warnings.append(message)
+        log.warning(message)
+        proc = None
+    except OSError as exc:
+        # An oversized argv (prompt_via="arg" with many markers / large context)
+        # can exceed ARG_MAX and raise E2BIG; degrade gracefully like the
+        # timeout path rather than crashing the whole generate run.
+        message = (
+            f"headless research session failed to start ({exc}) - the prompt may be too large "
+            "for this harness's argv limits; falling back to no session"
+        )
         warnings.append(message)
         log.warning(message)
         proc = None

@@ -45,9 +45,9 @@ Concretely:
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [`port.py`: manifest + prompt builder](01-port-manifest-prompt.md) | task 01.0 | 02 |
-| 02 | [`port.py`: `port_tree_headless` orchestrator](02-port-tree-headless.md) | 01 | 03 |
-| 03 | [`cli.py`: `--port-to` flag + validation + dispatch](03-cli-port-to-wiring.md) | 02, task 04.0 | task 09.0 |
+| 01 | [`port.py`: manifest + prompt builder](01-port-manifest-prompt.md) ✅ | task 01.0 | 02 |
+| 02 | [`port.py`: `port_tree_headless` orchestrator](02-port-tree-headless.md) ✅ | 01 | 03 |
+| 03 | [`cli.py`: `--port-to` flag + validation + dispatch](03-cli-port-to-wiring.md) ✅ | 02, task 04.0 | task 09.0 |
 
 ## Key constraints
 

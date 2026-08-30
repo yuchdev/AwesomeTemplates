@@ -33,8 +33,8 @@ so:
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [Spike: Junie's own agent/skill config convention (outcome 1 only)](01-spike-junie-porting-target.md) | task 03.0 outcome 1 | 02 |
-| 02 | [Wire the confirmed hint into `_JUNIE`, or confirm the honest-rejection path](02-wire-junie-porting-hint.md) | 01 | - |
+| 01 | [Spike: Junie's own agent/skill config convention (outcome 1 only)](01-spike-junie-porting-target.md) ✅ | task 03.0 outcome 1 | 02 |
+| 02 | [Wire the confirmed hint into `_JUNIE`, or confirm the honest-rejection path](02-wire-junie-porting-hint.md) ✅ (Outcome 1) | 01 | - |
 
 ## Key constraints
 

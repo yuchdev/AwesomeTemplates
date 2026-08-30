@@ -22,8 +22,8 @@ plan's own placeholder text.
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [Spike: confirm `copilot`'s non-interactive contract](01-spike-copilot-contract.md) | task 01.0 | 02 |
-| 02 | [`_build_copilot_command` + `_COPILOT` registration](02-copilot-command-registration.md) | 01 | tasks 04.0, 07.0 |
+| 01 | [Spike: confirm `copilot`'s non-interactive contract](01-spike-copilot-contract.md) ✅ | task 01.0 | 02 |
+| 02 | [`_build_copilot_command` + `_COPILOT` registration](02-copilot-command-registration.md) ✅ | 01 | tasks 04.0, 07.0 |
 
 ## Key constraints
 

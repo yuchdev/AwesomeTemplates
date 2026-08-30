@@ -29,6 +29,7 @@ uv run awesome-templates generate . --preset python --name "Acme Sync" --package
 uv run awesome-templates generate . --preset python --name "Acme Sync" --specialization django
 uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers
 uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers --seed-roadmap
+uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers --harness copilot
 
 uv run awesome-templates graph                       # maintainer-only reference graph
 uv run awesome-templates graph templates/python
@@ -40,6 +41,14 @@ uv run pytest tests/test_catalog.py::test_name_here  # single test
 uv run pytest tests/test_integration_real_repo.py    # exercises the real templates/ tree
 uv run ruff check src/ tests/
 ```
+
+**`--harness` note:** defaults to `claude`; `copilot` and `junie` require `--resolve-markers`
+and that CLI installed/authenticated. There is no automatic fallback between harnesses - a
+missing `copilot`/`junie` binary is a hard failure naming that harness, not a silent
+substitution. `junie` additionally has no CLI-level tool/permission restriction of any kind
+(unlike `claude`/`copilot`'s allowlists), so its session's action scope is bounded only by its
+working directory - see
+[docs/roadmap/0001-alternative-harness-support/plan.md](docs/roadmap/0001-alternative-harness-support/plan.md).
 
 **Ruff config note:** `ruff.toml` (repo root) and `pyproject.toml`'s `[tool.ruff]` section
 both exist and disagree - different `line-length` (120 vs 100), `target-version` (py312 vs

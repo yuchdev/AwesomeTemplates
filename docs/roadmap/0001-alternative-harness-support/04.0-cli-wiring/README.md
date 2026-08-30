@@ -26,17 +26,17 @@ harness whose binary is never found, correctly reported as unavailable).
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [`--harness` option + validation](01-harness-option.md) | task 01.0 | 02, 03 |
-| 02 | [Dry-run output](02-dry-run-output.md) | 01 | - |
-| 03 | [Missing-binary branching, no silent fallback for non-claude](03-missing-binary-branching.md) | 01 | task 06.0 (reuses this branch's shape) |
-| 04 | [Docs: root `CLAUDE.md` Commands section](04-root-claude-md-docs.md) | 03 | - |
+| 01 | [`--harness` option + validation](01-harness-option.md) ✅ | task 01.0 | 02, 03 |
+| 02 | [Dry-run output](02-dry-run-output.md) ✅ | 01 | - |
+| 03 | [Missing-binary branching, no silent fallback for non-claude](03-missing-binary-branching.md) ✅ | 01 | task 06.0 (reuses this branch's shape) |
+| 04 | [Docs: root `CLAUDE.md` Commands section](04-root-claude-md-docs.md) ✅ | 03 | - |
 
 ## Key constraints
 
 - `--harness` defaults to `"claude"` - no behavior change for a `generate
   --resolve-markers` call that doesn't pass it.
 - The one-shot API fallback (`resolver.resolve_tree`) stays `claude`/Anthropic-
-  only, per plan.md's explicit non-goal: it is unreachable for
+  only, per [plan.md](/docs/roadmap/0001-alternative-harness-support/plan.md)'s explicit non-goal: it is unreachable for
   `--harness copilot`/`--harness junie`.
 - `--harness` is rejected outright when passed without `--resolve-markers`,
   mirroring `--seed-roadmap`'s existing check

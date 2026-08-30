@@ -19,9 +19,9 @@ invoked, matching how no real `claude` is invoked today.
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [`tests/test_harnesses.py`](01-test-harnesses.md) | tasks 01.0-03.0 | - |
-| 02 | [`tests/test_headless.py` additions](02-test-headless-additions.md) | task 01.0 (harness param) | - |
-| 03 | [`tests/test_cli.py` additions](03-test-cli-additions.md) | task 04.0 | - |
+| 01 | [`tests/test_harnesses.py`](01-test-harnesses.md) ✅ | tasks 01.0-03.0 | - |
+| 02 | [`tests/test_headless.py` additions](02-test-headless-additions.md) ✅ | task 01.0 (harness param) | - |
+| 03 | [`tests/test_cli.py` additions](03-test-cli-additions.md) ✅ | task 04.0 | - |
 
 ## Key constraints
 

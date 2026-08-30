@@ -17,9 +17,9 @@ No real `copilot` or `junie` binary is ever invoked.
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [`tests/test_port.py`: manifest + prompt tests](01-test-port-manifest-prompt.md) | task 06.0 subtask 01 | - |
-| 02 | [`tests/test_port.py`: `port_tree_headless` fake-run tests](02-test-port-tree-headless.md) | task 06.0 subtask 02 | - |
-| 03 | [`tests/test_cli.py`: `--port-to` validation tests](03-test-cli-port-to.md) | task 06.0 subtask 03 | - |
+| 01 | [`tests/test_port.py`: manifest + prompt tests](01-test-port-manifest-prompt.md) ✅ | task 06.0 subtask 01 | - |
+| 02 | [`tests/test_port.py`: `port_tree_headless` fake-run tests](02-test-port-tree-headless.md) ✅ | task 06.0 subtask 02 | - |
+| 03 | [`tests/test_cli.py`: `--port-to` validation tests](03-test-cli-port-to.md) ✅ | task 06.0 subtask 03 | - |
 
 ## Key constraints
 

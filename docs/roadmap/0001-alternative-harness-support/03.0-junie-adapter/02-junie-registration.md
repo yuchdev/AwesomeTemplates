@@ -1,7 +1,7 @@
 # 02 - `_JUNIE` registration (outcome-dependent)
 
 **Parent task:** 03.0 `junie` adapter
-**State:** ⬜ Not started
+**State:** ✅ Complete (2026-08-30) - Outcome 1
 **Depends on:** 01 (this task's confirmed outcome)
 **Blocks:** task 04.0 (`--harness junie` becomes selectable, honestly, either
 way); task 08.0 (Junie porting session - buildable only under outcome 1)
@@ -89,10 +89,10 @@ requirement. This subtask's job is only to make that distinction possible
 ## Success criteria
 
 **Outcome 1:**
-- [ ] `harnesses.get("junie")` returns a fully functional `Harness` sourced
+- [x] `harnesses.get("junie")` returns a fully functional `Harness` sourced
       from subtask 01's confirmed contract.
 
-**Outcome 2:**
+**Outcome 2 (not applicable - outcome 1 landed):**
 - [ ] `harnesses.get("junie")` returns a `Harness` with `binary_names=()`.
 - [ ] `harnesses.find_harness(harnesses.get("junie"))` returns `None`
       unconditionally (no `shutil.which` call can accidentally succeed).
@@ -100,4 +100,13 @@ requirement. This subtask's job is only to make that distinction possible
       with a message pointing at subtask 01's spike document.
 
 **Either way:**
-- [ ] `ruff check src/` clean.
+- [x] `ruff check src/` clean.
+
+## Post-review amendment (2026-08-30)
+
+`/pr-review` on the sibling copilot task (02.0) found that `_build_copilot_command` produced
+malformed argv when `prompt=None` (its `if ... and prompt is not None` guard silently omitted the
+prompt instead of failing loudly). The identical pattern existed here and is arguably worse:
+`_build_junie_command`'s prompt is Junie's *only* non-interactive trigger (no separate `-p`-style
+flag), so a silently-omitted prompt would drop the invocation into interactive mode instead of
+raising - fixed with the same early `raise ValueError` guard.

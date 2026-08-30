@@ -37,8 +37,8 @@ honest-failure path.
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [Spike: does Junie have a headless CLI mode?](01-spike-junie-headless-mode.md) | task 01.0 | 02 |
-| 02 | [`_JUNIE` registration (outcome-dependent)](02-junie-registration.md) | 01 | tasks 04.0, 08.0 |
+| 01 | [Spike: does Junie have a headless CLI mode?](01-spike-junie-headless-mode.md) ✅ | task 01.0 | 02 |
+| 02 | [`_JUNIE` registration (outcome-dependent)](02-junie-registration.md) ✅ (Outcome 1) | 01 | tasks 04.0, 08.0 |
 
 ## Key constraints
 

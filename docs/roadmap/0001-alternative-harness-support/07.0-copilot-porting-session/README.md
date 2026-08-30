@@ -29,8 +29,8 @@ outside the kit root; porting does).
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [Spike: Copilot's own agent/skill config convention](01-spike-copilot-porting-target.md) | task 02.0 | 02 |
-| 02 | [Wire the confirmed hint into `_COPILOT`](02-wire-copilot-porting-hint.md) | 01 | - |
+| 01 | [Spike: Copilot's own agent/skill config convention](01-spike-copilot-porting-target.md) ✅ | task 02.0 | 02 |
+| 02 | [Wire the confirmed hint into `_COPILOT`](02-wire-copilot-porting-hint.md) ✅ | 01 | - |
 
 ## Key constraints
 

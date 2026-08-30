@@ -1,7 +1,7 @@
 # 02 - `_build_copilot_command` + `_COPILOT` registration
 
 **Parent task:** 02.0 `copilot` adapter
-**State:** ⬜ Not started
+**State:** ✅ Complete (2026-08-30)
 **Depends on:** 01 (this task's confirmed answers)
 **Blocks:** task 04.0 (`--harness copilot` becomes selectable), task 07.0
 (Copilot porting session)
@@ -74,11 +74,24 @@ _REGISTRY["copilot"] = _COPILOT
 
 ## Success criteria
 
-- [ ] `harnesses.get("copilot")` returns a `Harness` with every field sourced
+- [x] `harnesses.get("copilot")` returns a `Harness` with every field sourced
       from subtask 01's confirmed answers - no placeholder flag names remain.
-- [ ] `_build_copilot_command` never emits a `None` model flag when
+- [x] `_build_copilot_command` never emits a `None` model flag when
       `default_model is None` and no explicit `model` is passed.
-- [ ] `harnesses.HARNESS_NAMES` already listed `"copilot"` (task 01.0); this
+- [x] `harnesses.HARNESS_NAMES` already listed `"copilot"` (task 01.0); this
       subtask makes `get("copilot")` actually resolve instead of raising
       `KeyError`.
-- [ ] `ruff check src/` clean.
+- [x] `ruff check src/` clean.
+
+## Post-review amendment (2026-08-30)
+
+`/pr-review` (feature-reviewer) found two defects fixed before this task closed: (1) `prompt=None`
+produced malformed argv (copilot's `-p` takes an adjacent value, unlike claude's bare `-p` flag) -
+fixed with an early `raise ValueError` guard, matching this doc's own "passing a `None`
+positionally into an argv list is a bug, not a no-op" principle applied to `prompt`, not just
+`model`. (2) The tool-gating pair `--deny-tool=shell --allow-tool=write` was an untested
+substitution for `--allow-all-tools --deny-tool=shell`, the only combination this task's own spike
+actually ran live (the spike's live test hit an auth error before reaching any approval-prompt
+behavior, so the narrower pair's non-interactive-mode sufficiency was never confirmed) - reverted
+to the live-validated `--allow-all-tools --deny-tool=shell` (deny still takes precedence over
+`--allow-all-tools` per the confirmed permissions model, so the no-shell boundary holds).

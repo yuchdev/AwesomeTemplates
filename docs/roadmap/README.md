@@ -62,6 +62,6 @@ absolute-from-repo-root Markdown link:
 | #    | Milestone                                                                              | Spec                                                               | Status                                                                     |
 |------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------|
 | 0001 | AI-assisted generation (specializations, deterministic docs, agentic marker research) | [plan.md](/docs/roadmap/0001-ai-assisted-generation/plan.md)      | [status.md](/docs/roadmap/0001-ai-assisted-generation/status.md)      |
-| 0002 | Alternative headless harness support (`copilot`, `junie` alongside `claude`)          | [plan.md](/docs/roadmap/0002-alternative-harness-support/plan.md) | [status.md](/docs/roadmap/0002-alternative-harness-support/status.md) |
+| 0001 | Alternative headless harness support (`copilot`, `junie` alongside `claude`) - ✅ complete 2026-08-30 | [plan.md](/docs/roadmap/0001-alternative-harness-support/plan.md) | [status.md](/docs/roadmap/0001-alternative-harness-support/status.md) |
 | 0003 | API-based agentic marker research (deferred in-house alternative)                     | [plan.md](/docs/roadmap/0003-api-based-marker-research/plan.md)   | [status.md](/docs/roadmap/0003-api-based-marker-research/status.md)   |
 

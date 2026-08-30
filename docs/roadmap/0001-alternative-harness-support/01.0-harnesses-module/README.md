@@ -31,9 +31,9 @@ flag, or dispatch a porting session.
 
 | # | Document | Depends on | Blocks |
 |---|----------|------------|--------|
-| 01 | [`Harness` dataclass + registry skeleton](01-harnesses-registry.md) | none | 02, 03 |
-| 02 | [Relocate `claude`'s adapter out of `headless.py`](02-relocate-claude-adapter.md) | 01 | 03; tasks 02.0, 03.0, 04.0, 06.0 |
-| 03 | [Module-map docs](03-module-map-docs.md) | 02 | - |
+| 01 | [`Harness` dataclass + registry skeleton](01-harnesses-registry.md) ✅ | none | 02, 03 |
+| 02 | [Relocate `claude`'s adapter out of `headless.py`](02-relocate-claude-adapter.md) ✅ | 01 | 03; tasks 02.0, 03.0, 04.0, 06.0 |
+| 03 | [Module-map docs](03-module-map-docs.md) ✅ | 02 | - |
 
 ## Key constraints
 

@@ -8,7 +8,7 @@
 ## Objective
 
 Extend [`tests/test_cli.py`](/tests/test_cli.py) with the four cases task
-04.0's plan.md acceptance criteria name explicitly, following the existing
+04.0's [plan.md](/docs/roadmap/0001-alternative-harness-support/plan.md) acceptance criteria name explicitly, following the existing
 `test_generate_rejects_seed_roadmap_without_resolve_markers` pattern (line
 171) for shape.
 
@@ -75,7 +75,7 @@ def test_generate_harness_binary_missing_fails_hard_no_fallback_for_non_claude(
   `test_docs_command_is_not_available`'s existing exit-code-2 pattern for a
   Click-level rejection rather than an application-level one.
 - `test_generate_harness_binary_missing_fails_hard_no_fallback_for_non_claude`'s
-  `_boom` monkeypatch is the concrete pin for plan.md's "no silent fallback"
+  `_boom` monkeypatch is the concrete pin for [plan.md](/docs/roadmap/0001-alternative-harness-support/plan.md)'s "no silent fallback"
   non-goal - it turns a silent regression (accidentally falling back to the
   one-shot API path for `copilot`) into a loud test failure instead of a
   passing-but-wrong test.

@@ -20,7 +20,7 @@ from rich.console import Console
 from rich.table import Table
 from typer.core import TyperGroup
 
-from awesome_templates import docgen
+from awesome_templates import docgen, harnesses
 from awesome_templates.catalog import KINDS, discover, list_presets
 from awesome_templates.config import ConfigError, load_config
 from awesome_templates.dependencies import (
@@ -96,6 +96,36 @@ _LOG_LEVELS: dict[Optional[LogVerbosity], int] = {
     LogVerbosity.info: 1,
     LogVerbosity.debug: 2,
 }
+
+
+# Enum-backed choices for `generate --harness`, derived from the single source
+# of truth in `harnesses.HARNESS_NAMES` so the two never drift. Typer turns an
+# enum-typed option into a Click choice, giving free "invalid value" rejection
+# (exit code 2) before the command body runs - the same mechanism `LogVerbosity`
+# relies on above. It is a `str` enum so each member compares equal to its plain
+# name, and `.value` yields that name for the resolved `harness_value`.
+HarnessChoice = enum.Enum(  # type: ignore[misc]
+    "HarnessChoice",
+    {name: name for name in harnesses.HARNESS_NAMES},
+    type=str,
+)
+
+# Enum-backed choices for `generate --port-to`, following the same pattern as
+# HarnessChoice above (the spec's own sample used click.Choice, but this
+# environment ships no standalone `click`, only the copy vendored privately
+# inside typer). The two porting targets are fixed - claude is never a valid
+# `--port-to` value, since it is always the reference harness porting reads
+# *from*, never a target. Being a `str` enum, each member compares equal to its
+# plain name and `.value` yields that name for dispatch/payload use.
+#
+# Unlike HarnessChoice, this is NOT derived from harnesses.HARNESS_NAMES -
+# keep it manually in sync with the non-claude subset of that tuple if a
+# future harness registers as a valid --port-to target.
+PortToChoice = enum.Enum(  # type: ignore[misc]
+    "PortToChoice",
+    {"copilot": "copilot", "junie": "junie"},
+    type=str,
+)
 
 
 def _workspace() -> Workspace:
@@ -302,6 +332,21 @@ def generate(
         help="create or update README.md, CLAUDE.md, and AGENTS.md at the output root from "
         "the marker-research session - requires --resolve-markers and the `claude` CLI",
     ),
+    harness: Optional[HarnessChoice] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
+        None,
+        "--harness",
+        help="which headless CLI runs the marker-research session: claude (default), "
+        "copilot, or junie - requires --resolve-markers and that CLI installed/authenticated",
+    ),
+    port_to: Optional[PortToChoice] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
+        None,
+        "--port-to",
+        help="after the initial Claude-authored .claude/ tree is ready, launch this "
+        "harness in its own headless session and task it with porting every agent/ "
+        "skill/loop/hook into its own native form - requires --resolve-markers and "
+        "--harness claude (the default); the target harness re-authors each kind in "
+        "its own idiom, it does not copy files",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="print the plan without writing anything"),
     json_out: bool = typer.Option(False, "--json", help="emit dry-run/summary output as JSON"),
     log_severity: LogSeverity = typer.Option(  # noqa: B008 - Typer requires the call in the default position
@@ -338,6 +383,20 @@ def generate(
     # it never merges with config's list. There is no "explicitly zero" via the
     # flag; not passing it is the only way to defer to config.
     specializations_value = specialization if specialization is not None else list(cfg.get("specializations", []))
+    # `.value` collapses the enum member to its plain name so `harness_value` is
+    # always a `str` (its f-string form and equality checks read cleanly);
+    # config-file fallback follows the same "CLI wins" semantics as every other
+    # scalar option (not the `--specialization` list-merge exception).
+    harness_value = harness.value if harness is not None else cfg.get("harness", "claude")
+    # The `--harness` flag itself is gated by the HarnessChoice enum before this
+    # point ever runs; only a config-file-sourced value can still be unvalidated
+    # (config.py returns the raw parsed dict with no schema check), so it must be
+    # checked here too - harnesses.get() has no try/except around it below, and
+    # its own docstring already promises callers turn an unknown name into this
+    # same _fail(...) shape (mirroring _resolve_preset's unknown-preset case).
+    if harness_value not in harnesses.HARNESS_NAMES:
+        _fail(f"unknown harness '{harness_value}' (choices: {', '.join(harnesses.HARNESS_NAMES)})")
+        return
 
     preset_value = _resolve_preset(workspace, preset_value)
     if not name_value:
@@ -349,6 +408,23 @@ def generate(
         return
     if update_guidelines and not resolve_value:
         _fail("--update-guidelines requires --resolve-markers (it rides the same research session)")
+        return
+    if harness_value != "claude" and not resolve_value:
+        _fail(f"--harness {harness_value} requires --resolve-markers")
+        return
+    # The two --port-to gates run in fundamental-first order: --resolve-markers
+    # (porting has nothing to read without the initial authoring stage) before
+    # the --harness claude gate (Claude is always the reference harness porting
+    # reads from). Both must be reachable in isolation - see the subtask spec's
+    # implementation notes.
+    if port_to and not resolve_value:
+        _fail(f"--port-to {port_to.value} requires --resolve-markers")
+        return
+    if port_to and harness_value != "claude":
+        _fail(
+            f"--port-to {port_to.value} requires --harness claude (the default) - "
+            "porting always reads a Claude-authored .claude/ tree"
+        )
         return
 
     subs = {
@@ -366,6 +442,8 @@ def generate(
             "out": out_value,
             "substitutions": subs,
             "specializations": specializations_value,
+            "harness": harness_value,
+            "port_to": port_to.value if port_to else None,
         }
         if resolve_value:
             from awesome_templates.markers import scan_tree
@@ -379,7 +457,10 @@ def generate(
             if specializations_value:
                 console.print(f"Specializations: {', '.join(specializations_value)}")
             if resolve_value:
+                console.print(f"Harness: {harness_value}")
                 console.print(f"Would AI-resolve {payload['markers_to_resolve']} marker(s)")
+            if port_to:
+                console.print(f"Port to: {port_to.value}")
         return
 
     existing = [d for d in (".claude", "docs", "scripts") if (out_dir / d).exists() and any((out_dir / d).iterdir())]
@@ -413,26 +494,60 @@ def generate(
         "specializations": specializations_value,
         "warnings": warnings,
     }
+    summary["harness"] = harness_value
 
     if resolve_value:
         from awesome_templates import headless, resolver
 
         api_key = resolver.load_api_key(Path.cwd())
-        claude_bin = headless.find_claude()
+        harness_obj = harnesses.get(harness_value)
+        harness_bin = harnesses.find_harness(harness_obj)
 
-        if claude_bin:
+        if harness_bin:
             rsum, guidelines_updated = headless.resolve_tree_headless(
                 out_dir,
                 api_key=api_key,
                 warnings=warnings,
-                claude_bin=claude_bin,
+                harness=harness_value,
+                claude_bin=harness_bin,
                 project_root=target_dir,
                 update_guidelines=update_guidelines,
                 log=log,
             )
             if update_guidelines:
                 summary["guidelines_updated"] = guidelines_updated
+        elif harness_value != "claude":
+            # No silent fallback for a non-default harness (plan.md non-goal):
+            # substituting a different vendor's model for the one the user
+            # explicitly asked for would be a surprising, unrequested behavior
+            # change.
+            #
+            # The junie sub-branch below is unreachable with today's real
+            # registry: task 03.0's spike confirmed Junie DOES have a headless
+            # mode, so `_JUNIE.binary_names == ("junie",)` is non-empty and this
+            # harness falls through to the generic "not found on PATH" message
+            # like copilot. It stays implemented (not dead-code-removed) because
+            # `binary_names=()` is the *signal* task 03.0 subtask 02's registration
+            # contract defines for "no headless mode exists" - if a future change
+            # ever re-registers junie that way (a JetBrains regression, or this
+            # milestone's outcome-2 path if ever revisited), this branch is what
+            # turns that back into the honest message instead of a misleading
+            # generic one. Do not flip `_JUNIE.binary_names` to `()` to "make this
+            # reachable" - that would incorrectly disable working Junie support.
+            if harness_value == "junie" and not harness_obj.binary_names:
+                _fail(
+                    "Junie has no supported headless CLI mode yet - "
+                    "see docs/roadmap/0001-alternative-harness-support/03.0-junie-adapter/ "
+                    "or use --harness claude"
+                )
+            else:
+                _fail(
+                    f"{harness_value} CLI not found on PATH - install it (or check "
+                    f"authentication), or use --harness claude"
+                )
+            return
         else:
+            # harness_value == "claude": today's unchanged fallback behavior.
             if update_guidelines:
                 _fail(
                     "--update-guidelines needs the `claude` CLI on PATH "
@@ -525,6 +640,30 @@ def generate(
                 log=log,
             )
 
+        # Chained porting stage: only reached once the initial Claude authoring/
+        # marker-research session above has run and `summary` is fully populated
+        # (this milestone's one-invocation pipeline shape). A missing target
+        # binary is a hard failure - the user explicitly asked for the port, so a
+        # warn-and-skip would silently drop it. `port` is imported lazily here to
+        # keep the offline `generate` path free of it, matching headless/resolver.
+        if port_to:
+            from awesome_templates import port
+
+            try:
+                port_summary = port.port_tree_headless(
+                    out_dir,
+                    harness=port_to.value,
+                    warnings=warnings,
+                    project_root=target_dir,
+                    log=log,
+                )
+            except RuntimeError as exc:
+                _fail(str(exc))
+                return
+            summary["ported_to"] = port_to.value
+            summary["ported_kinds"] = port_summary.manifest_kinds
+            summary["port_command_ok"] = port_summary.command_ok
+
     if json_out:
         typer.echo(json.dumps(summary, indent=2))
     else:
@@ -544,6 +683,10 @@ def generate(
                 console.print("Seeded the first roadmap milestone")
             if update_guidelines and summary.get("guidelines_updated"):
                 console.print(f"Guideline docs created/updated: {', '.join(summary['guidelines_updated'])}")
+            if port_to and summary.get("ported_to"):
+                ported = ", ".join(f"{n} {k}" for k, n in summary["ported_kinds"].items() if n)
+                status = "ok" if summary["port_command_ok"] else "see warnings"
+                console.print(f"Ported to {summary['ported_to']} ({ported or 'nothing to port'}) - {status}")
         if warnings:
             console.print("\n[yellow]Warnings:[/yellow]")
             for w in warnings:

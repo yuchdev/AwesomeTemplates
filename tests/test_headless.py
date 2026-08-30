@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import dataclasses
 import subprocess
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from awesome_templates import headless
+from awesome_templates import harnesses, headless
 from awesome_templates.cli import app
 from awesome_templates.markers import scan_tree
 
@@ -118,7 +119,9 @@ def test_prompt_same_root_collapses_root_note(kit):
 
 
 def test_command_is_hard_allowlisted_and_skips_project_settings():
-    cmd = headless.build_command("/bin/claude", update_guidelines=False)
+    cmd = harnesses.get("claude").build_command(
+        "/bin/claude", tools=("Read", "Grep", "Glob", "Edit", "TodoWrite"), model="opus"
+    )
     assert cmd[0] == "/bin/claude"
     assert "-p" in cmd
     assert cmd[cmd.index("--setting-sources") + 1] == "user"
@@ -131,7 +134,9 @@ def test_command_is_hard_allowlisted_and_skips_project_settings():
 
 
 def test_command_adds_write_only_for_guidelines():
-    cmd = headless.build_command("/bin/claude", update_guidelines=True)
+    cmd = harnesses.get("claude").build_command(
+        "/bin/claude", tools=("Read", "Grep", "Glob", "Edit", "TodoWrite", "Write"), model="opus"
+    )
     assert "Write" in cmd[cmd.index("--tools") :]
 
 
@@ -144,6 +149,24 @@ def test_missing_api_key_leaves_ambient_auth(kit, tmp_path, monkeypatch):
     headless.resolve_tree_headless(
         kit,
         api_key=None,
+        warnings=[],
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        run=fake_run,
+    )
+    assert "ANTHROPIC_API_KEY" not in fake_run.calls[0]["env"]
+
+
+def test_non_forwarding_harness_strips_exported_key(kit, tmp_path, monkeypatch):
+    # A non-forwarding harness (copilot/junie) must not leak an
+    # ANTHROPIC_API_KEY the developer already has exported in their shell.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    non_forwarding = dataclasses.replace(harnesses.get("claude"), forwards_anthropic_key=False)
+    monkeypatch.setattr(harnesses, "get", lambda name: non_forwarding)
+    fake_run = _fake_run_factory({})
+    headless.resolve_tree_headless(
+        kit,
+        api_key="k",
         warnings=[],
         claude_bin="/bin/claude",
         project_root=tmp_path,
@@ -265,6 +288,72 @@ def test_timeout_is_soft(kit, tmp_path):
     assert any("timed out" in w for w in warnings)
 
 
+class _LogSpy:
+    """Minimal LogHelper stand-in recording every message per level, so a test
+    can assert on what would have been printed without touching stderr."""
+
+    def __init__(self):
+        self.messages: dict[str, list[str]] = {"error": [], "warning": [], "info": [], "debug": []}
+
+    def error(self, message):
+        self.messages["error"].append(message)
+
+    def warning(self, message):
+        self.messages["warning"].append(message)
+
+    def info(self, message):
+        self.messages["info"].append(message)
+
+    def debug(self, message):
+        self.messages["debug"].append(message)
+
+
+def test_arg_harness_command_log_redacts_prompt(kit, tmp_path, monkeypatch):
+    # A prompt_via="arg" harness embeds the whole marker-research prompt in argv;
+    # the debug command-log line must redact it, not dump project context.
+    arg_harness = harnesses.get("copilot")  # real prompt_via="arg" backend
+    monkeypatch.setattr(harnesses, "get", lambda name: arg_harness)
+    log = _LogSpy()
+    fake_run = _fake_run_factory({})
+    headless.resolve_tree_headless(
+        kit,
+        api_key=None,
+        warnings=[],
+        claude_bin="/bin/copilot",
+        project_root=tmp_path,
+        run=fake_run,
+        log=log,
+    )
+    cmd_lines = [m for m in log.messages["debug"] if m.startswith("headless command:")]
+    assert cmd_lines, "expected a debug command-log line"
+    line = cmd_lines[0]
+    assert "name the hot modules" not in line  # a marker instruction from the prompt
+    assert "research the architecture" not in line
+    assert "<prompt:" in line  # redaction placeholder present instead
+
+
+def test_argv_too_large_is_soft(kit, tmp_path, monkeypatch):
+    # An oversized argv (prompt_via="arg" over ARG_MAX) makes run() raise OSError
+    # (E2BIG); like the timeout path it must degrade gracefully, not crash.
+    arg_harness = harnesses.get("copilot")
+    monkeypatch.setattr(harnesses, "get", lambda name: arg_harness)
+
+    def too_big_run(cmd, **kwargs):
+        raise OSError(7, "Argument list too long")  # errno 7 == E2BIG
+
+    warnings: list[str] = []
+    summary, _ = headless.resolve_tree_headless(
+        kit,
+        api_key=None,
+        warnings=warnings,
+        claude_bin="/bin/copilot",
+        project_root=tmp_path,
+        run=too_big_run,
+    )
+    assert summary.failed == 3  # all markers still in place
+    assert any("prompt may be too large" in w for w in warnings)
+
+
 def test_guidelines_created_and_reported(kit, tmp_path):
     agents = kit / ".claude" / "agents"
     fake_run = _fake_run_factory(
@@ -298,9 +387,126 @@ def test_guidelines_created_and_reported(kit, tmp_path):
 
 
 def test_missing_claude_raises(kit, monkeypatch):
-    monkeypatch.setattr(headless, "find_claude", lambda: None)
+    # Simulate an uninstalled binary at the harness lookup itself; monkeypatching
+    # PATH="" is unreliable because shutil.which falls back to os.defpath.
+    monkeypatch.setattr(harnesses, "find_harness", lambda harness: None)
     with pytest.raises(RuntimeError, match="not on PATH"):
         headless.resolve_tree_headless(kit, api_key="k", warnings=[])
+
+
+# --- resolve_tree_headless harness dispatch --------------------------------
+
+
+def test_resolve_tree_headless_defaults_to_claude(kit, tmp_path):
+    # No harness= kwarg: the session must resolve exactly as it did before the
+    # harness registry existed - the claude backend, its opus default model, its
+    # prompt piped over stdin, its ANTHROPIC_API_KEY forwarded into the env.
+    fake_run = _fake_run_factory({})
+    markers = scan_tree(kit)
+    expected_prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=False)
+    expected_cmd = harnesses.get("claude").build_command(
+        "/bin/claude", tools=headless._BASE_TOOLS, model="opus", prompt=expected_prompt
+    )
+    headless.resolve_tree_headless(
+        kit,
+        api_key="k",
+        warnings=[],
+        claude_bin="/bin/claude",
+        project_root=tmp_path,
+        run=fake_run,
+    )
+    call = fake_run.calls[0]
+    assert call["cmd"] == expected_cmd
+    assert call["input"] == expected_prompt  # claude: prompt over stdin
+    assert call["env"]["ANTHROPIC_API_KEY"] == "k"  # forwarded (forwards_anthropic_key=True)
+
+
+def test_resolve_tree_headless_with_copilot_harness(kit, tmp_path, monkeypatch):
+    # A fake copilot binary resolvable via shutil.which, never actually run (the
+    # run= fake intercepts). The constructed argv must be exactly what copilot's
+    # own build_command produces for that binary path, the base tools, no model,
+    # and the real prompt resolve_tree_headless built - and ANTHROPIC_API_KEY
+    # must be absent from the subprocess env (forwards_anthropic_key=False).
+    fake_bin = tmp_path / "bin" / "copilot"
+    fake_bin.parent.mkdir()
+    fake_bin.write_text("#!/bin/sh\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin.parent))
+
+    fake_run = _fake_run_factory({})
+    markers = scan_tree(kit)
+    expected_prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=False)
+    # A non-empty key that must NOT reach copilot's env (forwards_anthropic_key=False).
+    summary, _ = headless.resolve_tree_headless(
+        kit,
+        api_key="k",
+        warnings=[],
+        harness="copilot",
+        project_root=tmp_path,
+        run=fake_run,
+    )
+    call = fake_run.calls[0]
+    assert call["cmd"] == harnesses.get("copilot").build_command(
+        str(fake_bin),
+        tools=headless._BASE_TOOLS,
+        model=None,
+        prompt=expected_prompt,
+    )
+    assert call["input"] is None  # copilot: prompt travels in argv, not stdin
+    assert "ANTHROPIC_API_KEY" not in call["env"]  # forwards_anthropic_key=False
+
+
+def test_resolve_tree_headless_with_junie_harness(kit, tmp_path, monkeypatch):
+    # The marker-research contract (manifest, prompt, reconciliation) is
+    # harness-agnostic; only the binary/argv/env change. Junie is a real
+    # registry backend with a genuine headless mode, so its dispatch is pinned
+    # the same way copilot's is: exact argv from its own build_command, no
+    # ANTHROPIC_API_KEY leaked into its env.
+    fake_bin = tmp_path / "bin" / "junie"
+    fake_bin.parent.mkdir()
+    fake_bin.write_text("#!/bin/sh\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin.parent))
+
+    fake_run = _fake_run_factory({})
+    markers = scan_tree(kit)
+    expected_prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=False)
+    # A non-empty key that must NOT reach junie's env (forwards_anthropic_key=False).
+    summary, _ = headless.resolve_tree_headless(
+        kit,
+        api_key="k",
+        warnings=[],
+        harness="junie",
+        project_root=tmp_path,
+        run=fake_run,
+    )
+    call = fake_run.calls[0]
+    assert call["cmd"] == harnesses.get("junie").build_command(
+        str(fake_bin),
+        tools=headless._BASE_TOOLS,
+        model=None,
+        prompt=expected_prompt,
+    )
+    assert call["input"] is None  # junie: prompt is a bare positional argv, not stdin
+    assert "ANTHROPIC_API_KEY" not in call["env"]  # forwards_anthropic_key=False
+
+
+def test_resolve_tree_headless_unknown_harness_raises(kit, tmp_path):
+    # An unregistered harness name fails at the registry lookup (KeyError),
+    # after the manifest scan but before any subprocess is constructed. Uses the
+    # marker-carrying kit so the empty-manifest early return can't mask it.
+    with pytest.raises(KeyError):
+        headless.resolve_tree_headless(kit, api_key=None, warnings=[], harness="bogus", project_root=tmp_path)
+
+
+def test_resolve_tree_headless_claude_missing_binary_message_names_claude(kit, monkeypatch):
+    # Pin the harness lookup itself to "not installed" rather than emptying PATH:
+    # shutil.which falls back to os.defpath when PATH="" on POSIX, so a stray
+    # `claude` in /bin would false-pass (the same correction as
+    # test_missing_claude_raises).
+    monkeypatch.setattr(harnesses, "find_harness", lambda harness: None)
+    with pytest.raises(RuntimeError, match="claude"):
+        headless.resolve_tree_headless(kit, api_key=None, warnings=[])
 
 
 # --- CLI gating ------------------------------------------------------------

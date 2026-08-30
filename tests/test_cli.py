@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 import awesome_templates.cli as cli_module
 from awesome_templates.cli import app
+from awesome_templates.resolver import ResolveSummary
 
 runner = CliRunner()
 
@@ -176,6 +177,219 @@ def test_generate_rejects_seed_roadmap_without_resolve_markers(fixture_workspace
     )
     assert result.exit_code == 1
     assert "--seed-roadmap requires --resolve-markers" in result.stdout
+
+
+def test_generate_rejects_harness_without_resolve_markers(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--harness", "copilot", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--harness copilot requires --resolve-markers" in result.stdout
+
+
+def test_generate_rejects_unknown_harness(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--harness", "gpt4", "--dry-run"],
+    )
+    assert result.exit_code == 2  # Click's own choice validation, not _fail's exit(1)
+
+
+def test_generate_dry_run_json_includes_harness(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--dry-run", "--json"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["harness"] == "claude"
+
+
+def test_generate_harness_binary_missing_fails_hard_no_fallback_for_non_claude(
+    fixture_workspace, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("PATH", str(tmp_path))  # nothing resolves, incl. no `claude`
+
+    # Guard against an accidental silent fallback: resolver.resolve_tree must
+    # never be called for a non-claude harness.
+    def _boom(*a, **k):
+        raise AssertionError("resolver.resolve_tree must not be called for --harness copilot")
+
+    monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "copilot",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "copilot" in result.stdout
+
+
+def test_generate_harness_binary_missing_fails_hard_no_fallback_for_junie(fixture_workspace, tmp_path, monkeypatch):
+    # Junie has a real headless mode (task 03.0 outcome 1), so it shares
+    # copilot's "no silent fallback when the binary is absent" posture: with
+    # `_JUNIE.binary_names == ("junie",)` non-empty, an unfound binary falls
+    # through to the generic "not found on PATH" message, never the one-shot
+    # API path (which would be a surprising vendor substitution).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("PATH", str(tmp_path))  # nothing resolves, incl. no `junie`
+
+    def _boom(*a, **k):
+        raise AssertionError("resolver.resolve_tree must not be called for --harness junie")
+
+    monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "junie",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "junie" in result.stdout
+
+
+def test_generate_rejects_unknown_harness_from_config_file(fixture_workspace, tmp_path, monkeypatch):
+    # A config-file `harness` value bypasses the HarnessChoice enum (Click only
+    # validates the flag, never config.py's raw parsed dict), so cli.py guards
+    # it explicitly before harnesses.get() - otherwise an unknown name would
+    # reach get() and raise an uncaught KeyError (regression from task 04.0's
+    # /pr-review).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"harness": "bogus", "preset": "demo", "project": {"name": "Test"}}')
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--config-file", str(config_path), "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "unknown harness 'bogus' (choices: claude, copilot, junie)" in result.stdout
+
+
+# --- generate --port-to ---------------------------------------------------
+
+
+def test_generate_rejects_port_to_without_resolve_markers(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--port-to", "copilot", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--port-to copilot requires --resolve-markers" in result.stdout
+
+
+def test_generate_rejects_port_to_with_non_claude_harness(fixture_workspace, monkeypatch):
+    # The single most important negative test in this subtask: it pins the
+    # strict "porting always reads a Claude-authored tree" rule - a non-claude
+    # --harness is rejected even when --resolve-markers is present.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "copilot",
+            "--port-to",
+            "junie",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--port-to junie requires --harness claude" in result.stdout
+
+
+def test_generate_rejects_unknown_port_to(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--port-to", "bogus", "--dry-run"],
+    )
+    assert result.exit_code == 2  # Click's own choice validation, not _fail's exit(1)
+
+
+def test_generate_dry_run_json_includes_port_to_null_by_default(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(app, ["generate", ".", "--preset", "demo", "--name", "Test", "--dry-run", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["port_to"] is None
+
+
+def test_generate_port_to_missing_binary_fails_after_successful_claude_stage(fixture_workspace, tmp_path, monkeypatch):
+    # The one case here that must reach the --port-to dispatch, which only runs
+    # after the initial Claude-authored stage succeeds. Setup:
+    #   * a fake `claude` on a scoped PATH so cli.py's `harness_bin` lookup for
+    #     the default --harness claude resolves (find_harness uses shutil.which);
+    #   * stub headless.resolve_tree_headless so that stage returns cleanly
+    #     without ever executing the fake binary (patched on the real module,
+    #     since cli.py imports it lazily as `from awesome_templates import
+    #     headless` and calls it as a module attribute);
+    #   * empty ANTHROPIC_API_KEY so the API-only tutorial/roadmap/test-convention
+    #     increments soft-skip (client stays None) rather than calling out.
+    # copilot is absent from the same scoped PATH, so port.port_tree_headless
+    # raises RuntimeError, which cli.py catches via _fail (exit 1).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))  # scoped PATH: claude present, copilot absent (not PATH="")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # soft-skip the API-only increments
+
+    monkeypatch.setattr(
+        "awesome_templates.headless.resolve_tree_headless",
+        lambda *a, **k: (ResolveSummary(), []),
+    )
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--port-to",
+            "copilot",
+        ],
+    )
+    assert result.exit_code == 1, result.stdout
+    assert "copilot" in result.stdout
 
 
 def test_generate_populates_agents_doc_without_resolve_markers_flag(fixture_workspace, tmp_path, monkeypatch):
