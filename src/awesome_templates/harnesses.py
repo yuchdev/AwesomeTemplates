@@ -16,6 +16,17 @@ from typing import Callable, Optional
 
 HARNESS_NAMES = ("claude", "copilot", "junie")
 
+# The subset of HARNESS_NAMES `generate` will actually run today. The registry
+# below deliberately stays wider than this: copilot and junie have complete
+# adapters (binary discovery, argv construction, porting hints) derived from
+# milestone 0001's spikes, but neither has been validated end-to-end as a
+# marker-research harness, so `cli.sanity_check` accepts their names as *valid*
+# values and then exits with a "not implemented yet" notice. Rejecting them as
+# unknown instead would tell a user they made a typo when they didn't; dropping
+# them from HARNESS_NAMES would throw away the adapters. Move a name in here
+# when its end-to-end path is proven, not when its adapter compiles.
+IMPLEMENTED_HARNESS_NAMES = ("claude",)
+
 
 @dataclass(frozen=True)
 class Harness:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
 
+import pytest
+import typer
+from rich.console import Console
 from typer.testing import CliRunner
 
 import awesome_templates.cli as cli_module
@@ -9,6 +13,31 @@ from awesome_templates.cli import app
 from awesome_templates.resolver import ResolveSummary
 
 runner = CliRunner()
+
+
+@pytest.fixture
+def console_text(monkeypatch):
+    """Capture what `cli_module.console` prints, for tests that call into cli.py
+    directly instead of through the CliRunner.
+
+    sanity_check reports through that module-level console, which the CliRunner
+    picks up only because it captures the process's stdout - so this fixture is
+    deliberately *not* autouse: swapping the console for every test would
+    divert the output the CliRunner-based tests assert on. Returns a callable so
+    a test reads the buffer after the call under test, not before. `width=200`
+    keeps Rich from soft-wrapping short messages at all; `_flat` still
+    normalizes anything that does wrap.
+    """
+    buffer = io.StringIO()
+    monkeypatch.setattr(cli_module, "console", Console(file=buffer, width=200))
+    return buffer.getvalue
+
+
+def _flat(text: str) -> str:
+    """Collapse Rich's soft line wrapping so a message assertion doesn't depend
+    on the terminal width the test happened to run under - `console.print`
+    wraps at the detected width, which can split a phrase mid-sentence."""
+    return " ".join(text.split())
 
 
 def test_top_level_help_includes_subcommand_options():
@@ -179,14 +208,216 @@ def test_generate_rejects_seed_roadmap_without_resolve_markers(fixture_workspace
     assert "--seed-roadmap requires --resolve-markers" in result.stdout
 
 
+# --- sanity_check() called directly ------------------------------------------
+#
+# sanity_check documents a deliberate gate *order*, and order is exactly what
+# end-to-end CLI invocations can't pin down: several of these combinations are
+# invalid for more than one reason at once, and only the message says which
+# reason won. These call it directly so the promised precedence is the thing
+# under test.
+
+
+def _check(**overrides):
+    """Call sanity_check with a valid baseline, overridden per test."""
+    kwargs = {
+        "harness_value": None,
+        "backend_value": None,
+        "resolve_markers": False,
+        "seed_roadmap": False,
+        "update_guidelines": False,
+        "port_to": None,
+    }
+    kwargs.update(overrides)
+    cli_module.sanity_check(**kwargs)
+
+
+def test_sanity_check_passes_the_plain_offline_case():
+    _check()  # no engine, no AI stage - must not raise
+
+
+def test_sanity_check_passes_the_supported_ai_case():
+    _check(harness_value="claude", resolve_markers=True)
+
+
+def test_sanity_check_mutual_exclusion_beats_unknown_names(console_text):
+    # Gate 1 before gate 2: two engines *and* a bogus one is reported as the
+    # exclusion error, because naming both is the more fundamental mistake.
+    with pytest.raises(typer.Exit):
+        _check(harness_value="claude", backend_value="not-a-backend", resolve_markers=True)
+    assert "mutually exclusive" in _flat(console_text())
+
+
+def test_sanity_check_mutual_exclusion_applies_without_resolve_markers(console_text):
+    # Gate 1 is unconditional - it does not wait for the AI stage to be asked for.
+    with pytest.raises(typer.Exit):
+        _check(harness_value="claude", backend_value="anthropic-api")
+    assert "mutually exclusive" in _flat(console_text())
+
+
+def test_sanity_check_unknown_name_beats_missing_engine(console_text):
+    # Gate 2 before gate 4: a misspelled harness is a typo to fix, not a
+    # "you didn't choose an engine" lecture.
+    with pytest.raises(typer.Exit):
+        _check(harness_value="claud", resolve_markers=True)
+    assert "unknown harness 'claud'" in _flat(console_text())
+
+
+def test_sanity_check_rider_prerequisite_beats_missing_engine(console_text):
+    # Gate 3 before gate 4: --seed-roadmap without --resolve-markers is
+    # reported as the rider problem, not as a missing engine.
+    with pytest.raises(typer.Exit):
+        _check(seed_roadmap=True)
+    assert "--seed-roadmap requires --resolve-markers" in _flat(console_text())
+
+
+def test_sanity_check_port_to_gate_beats_not_implemented(console_text):
+    # Gate 5 before gate 6: --port-to with a non-claude harness is a flag
+    # mistake, which is more actionable than "junie isn't built yet".
+    with pytest.raises(typer.Exit):
+        _check(harness_value="junie", resolve_markers=True, port_to="copilot")
+    flat = _flat(console_text())
+    assert "--port-to copilot requires --harness claude" in flat
+    assert "not implemented" not in flat
+
+
+def test_sanity_check_not_implemented_is_last(console_text):
+    with pytest.raises(typer.Exit):
+        _check(harness_value="junie", resolve_markers=True)
+    assert "--harness junie is not implemented yet" in _flat(console_text())
+
+
 def test_generate_rejects_harness_without_resolve_markers(fixture_workspace, monkeypatch):
+    # An engine choice is meaningless on the offline path - naming one without
+    # --resolve-markers is a mistake worth reporting, not a silent no-op. The
+    # message must be reachable *before* the not-implemented gate, so this uses
+    # copilot: a flag mistake is more actionable than "that harness isn't built".
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(
         app,
         ["generate", ".", "--preset", "demo", "--name", "Test", "--harness", "copilot", "--dry-run"],
     )
     assert result.exit_code == 1
-    assert "--harness copilot requires --resolve-markers" in result.stdout
+    assert "--harness copilot has no effect without --resolve-markers" in _flat(result.stdout)
+
+
+def test_generate_rejects_backend_without_resolve_markers(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--backend", "anthropic-api", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--backend anthropic-api has no effect without --resolve-markers" in _flat(result.stdout)
+
+
+def test_generate_requires_an_engine_for_resolve_markers(fixture_workspace, monkeypatch):
+    # The core of this contract: there is no default engine. --resolve-markers
+    # with neither flag must refuse rather than quietly pick claude (and, with
+    # ANTHROPIC_API_KEY exported, quietly bill an API).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--resolve-markers", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--resolve-markers requires an explicit AI engine" in _flat(result.stdout)
+
+
+def test_generate_rejects_harness_and_backend_together(fixture_workspace, monkeypatch):
+    # Mutual exclusion is sanity_check's first gate and applies even without
+    # --resolve-markers: the two select different machinery for the same job,
+    # so asking for both is incoherent rather than a precedence question.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--harness",
+            "claude",
+            "--backend",
+            "anthropic-api",
+            "--resolve-markers",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--harness claude and --backend anthropic-api are mutually exclusive" in _flat(result.stdout)
+
+
+@pytest.mark.parametrize("harness", ["copilot", "junie"])
+def test_generate_rejects_unimplemented_harness(fixture_workspace, monkeypatch, harness):
+    # copilot/junie stay valid *names* (their adapters exist) but are not wired
+    # end-to-end, so they get a not-implemented notice, not "unknown harness".
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--harness",
+            harness,
+            "--resolve-markers",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert f"--harness {harness} is not implemented yet" in _flat(result.stdout)
+    assert "unknown" not in result.stdout
+
+
+@pytest.mark.parametrize("backend", ["anthropic-api", "openai-api", "jetbrains-api"])
+def test_generate_rejects_every_backend_as_unimplemented(fixture_workspace, monkeypatch, backend):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--backend",
+            backend,
+            "--resolve-markers",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert f"--backend {backend}" in _flat(result.stdout)
+    assert "not implemented yet" in _flat(result.stdout)
+
+
+def test_generate_rejects_unknown_backend(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--backend", "grok-api", "--dry-run"],
+    )
+    assert result.exit_code == 2  # Click's own choice validation, not _fail's exit(1)
+
+
+def test_generate_rejects_unknown_backend_from_config_file(fixture_workspace, tmp_path, monkeypatch):
+    # Same hole HarnessChoice has: a config-file `backend` value never passes
+    # through the Typer enum, so sanity_check re-checks it by name.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    config_path = tmp_path / "cfg.json"
+    config_path.write_text('{"backend": "bogus-api", "preset": "demo", "project": {"name": "Test"}}')
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--config-file", str(config_path), "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "unknown backend 'bogus-api'" in _flat(result.stdout)
 
 
 def test_generate_rejects_unknown_harness(fixture_workspace, monkeypatch):
@@ -206,72 +437,173 @@ def test_generate_dry_run_json_includes_harness(fixture_workspace, monkeypatch):
     )
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
+    # No engine was asked for and none is defaulted in - the offline path picks
+    # no vendor at all, and the payload has to say so rather than imply claude.
+    assert payload["harness"] is None
+    assert payload["backend"] is None
+
+
+@pytest.mark.parametrize("harness", ["copilot", "junie"])
+def test_generate_unimplemented_harness_writes_nothing_at_all(fixture_workspace, tmp_path, monkeypatch, harness):
+    # sanity_check's not-implemented gate runs before any generation, so an
+    # unimplemented harness costs nothing: no output tree, no subprocess, and
+    # emphatically no fallback to the direct-API path (which would be a silent
+    # vendor substitution for the harness the user actually named).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("PATH", str(tmp_path))  # nothing resolves, incl. no CLI
+
+    def _boom(*a, **k):
+        raise AssertionError(f"no AI path may run for --harness {harness}")
+
+    monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
+    monkeypatch.setattr("awesome_templates.headless.resolve_tree_headless", _boom)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            harness,
+        ],
+    )
+    assert result.exit_code == 1
+    assert f"--harness {harness} is not implemented yet" in _flat(result.stdout)
+    assert not out_dir.exists()
+
+
+def test_generate_missing_claude_binary_fails_hard_with_no_api_fallback(fixture_workspace, tmp_path, monkeypatch):
+    # The regression this whole flag pair exists to prevent. `claude` absent
+    # from PATH used to fall back to one-shot Messages API marker resolution -
+    # silently, whenever ANTHROPIC_API_KEY merely happened to be exported. It
+    # must now be a hard failure that *names* the explicit API alternative
+    # rather than taking it, even with a key sitting right there in the env.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("PATH", str(tmp_path))  # no `claude`
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-would-have-been-used")
+
+    def _boom(*a, **k):
+        raise AssertionError("the direct-API path must never run without --backend")
+
+    monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+        ],
+    )
+    assert result.exit_code == 1
+    flat = _flat(result.stdout)
+    assert "the `claude` CLI was not found on PATH" in flat
+    assert "--backend anthropic-api" in flat  # names it, never takes it
+
+
+def test_generate_never_forwards_an_api_key_into_the_harness_session(fixture_workspace, tmp_path, monkeypatch):
+    # The exact cause of the reported failure: cli.py used to hand
+    # resolver.load_api_key(...)'s result to resolve_tree_headless, which
+    # forwards it into the `claude` subprocess env, where the CLI treats
+    # ANTHROPIC_API_KEY as an auth source that overrides the user's own login -
+    # disabling org connectors and failing the session outright on an unfunded
+    # key. cli.py must pass api_key=None regardless of the ambient environment;
+    # headless.py's own tests then cover the env stripping that follows from it.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-must-not-be-forwarded")
+
+    seen = {}
+
+    def _capture(*a, **k):
+        seen.update(k)
+        return ResolveSummary(), []
+
+    monkeypatch.setattr("awesome_templates.headless.resolve_tree_headless", _capture)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert seen["api_key"] is None
+
+
+def test_generate_reports_skipped_api_increments_under_a_harness(fixture_workspace, tmp_path, monkeypatch):
+    # The tutorial/test-conventions/roadmap increments are direct Messages API
+    # calls. Under a harness they must not run at all - and must be reported as
+    # skipped rather than silently omitted, so a --seed-roadmap that produced
+    # nothing says so.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-still-must-not-be-used")
+
+    def _boom(*a, **k):
+        raise AssertionError("no direct Messages API call may happen under --harness")
+
+    monkeypatch.setattr("awesome_templates.resolver.maybe_write_tutorial", _boom)
+    monkeypatch.setattr("awesome_templates.resolver.seed_first_milestone", _boom)
+    monkeypatch.setattr("awesome_templates.resolver.maybe_describe_test_conventions", _boom)
+    monkeypatch.setattr(
+        "awesome_templates.headless.resolve_tree_headless",
+        lambda *a, **k: (ResolveSummary(), []),
+    )
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--seed-roadmap",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["tutorial_written"] is False
+    assert payload["roadmap_seeded"] is False
+    assert payload["test_conventions_described"] is False
     assert payload["harness"] == "claude"
-
-
-def test_generate_harness_binary_missing_fails_hard_no_fallback_for_non_claude(
-    fixture_workspace, tmp_path, monkeypatch
-):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    monkeypatch.setenv("PATH", str(tmp_path))  # nothing resolves, incl. no `claude`
-
-    # Guard against an accidental silent fallback: resolver.resolve_tree must
-    # never be called for a non-claude harness.
-    def _boom(*a, **k):
-        raise AssertionError("resolver.resolve_tree must not be called for --harness copilot")
-
-    monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
-
-    out_dir = tmp_path / "proj"
-    result = runner.invoke(
-        app,
-        [
-            "generate",
-            str(out_dir),
-            "--preset",
-            "demo",
-            "--name",
-            "Test",
-            "--resolve-markers",
-            "--harness",
-            "copilot",
-        ],
-    )
-    assert result.exit_code == 1
-    assert "copilot" in result.stdout
-
-
-def test_generate_harness_binary_missing_fails_hard_no_fallback_for_junie(fixture_workspace, tmp_path, monkeypatch):
-    # Junie has a real headless mode (task 03.0 outcome 1), so it shares
-    # copilot's "no silent fallback when the binary is absent" posture: with
-    # `_JUNIE.binary_names == ("junie",)` non-empty, an unfound binary falls
-    # through to the generic "not found on PATH" message, never the one-shot
-    # API path (which would be a surprising vendor substitution).
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    monkeypatch.setenv("PATH", str(tmp_path))  # nothing resolves, incl. no `junie`
-
-    def _boom(*a, **k):
-        raise AssertionError("resolver.resolve_tree must not be called for --harness junie")
-
-    monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
-
-    out_dir = tmp_path / "proj"
-    result = runner.invoke(
-        app,
-        [
-            "generate",
-            str(out_dir),
-            "--preset",
-            "demo",
-            "--name",
-            "Test",
-            "--resolve-markers",
-            "--harness",
-            "junie",
-        ],
-    )
-    assert result.exit_code == 1
-    assert "junie" in result.stdout
+    assert payload["backend"] is None
+    assert any("Nothing was sent to any vendor API" in w for w in payload["warnings"])
 
 
 def test_generate_rejects_unknown_harness_from_config_file(fixture_workspace, tmp_path, monkeypatch):
@@ -350,14 +682,15 @@ def test_generate_dry_run_json_includes_port_to_null_by_default(fixture_workspac
 def test_generate_port_to_missing_binary_fails_after_successful_claude_stage(fixture_workspace, tmp_path, monkeypatch):
     # The one case here that must reach the --port-to dispatch, which only runs
     # after the initial Claude-authored stage succeeds. Setup:
-    #   * a fake `claude` on a scoped PATH so cli.py's `harness_bin` lookup for
-    #     the default --harness claude resolves (find_harness uses shutil.which);
+    #   * an explicit --harness claude (there is no default engine any more) and
+    #     a fake `claude` on a scoped PATH so cli.py's `harness_bin` lookup
+    #     resolves (find_harness uses shutil.which);
     #   * stub headless.resolve_tree_headless so that stage returns cleanly
     #     without ever executing the fake binary (patched on the real module,
     #     since cli.py imports it lazily as `from awesome_templates import
     #     headless` and calls it as a module attribute);
-    #   * empty ANTHROPIC_API_KEY so the API-only tutorial/roadmap/test-convention
-    #     increments soft-skip (client stays None) rather than calling out.
+    # The API-only tutorial/roadmap/test-convention increments no longer run
+    # under a harness at all, so no key handling is needed to keep them quiet.
     # copilot is absent from the same scoped PATH, so port.port_tree_headless
     # raises RuntimeError, which cli.py catches via _fail (exit 1).
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
@@ -366,7 +699,6 @@ def test_generate_port_to_missing_binary_fails_after_successful_claude_stage(fix
     fake_claude.write_text("#!/bin/sh\nexit 0\n")
     fake_claude.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path))  # scoped PATH: claude present, copilot absent (not PATH="")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # soft-skip the API-only increments
 
     monkeypatch.setattr(
         "awesome_templates.headless.resolve_tree_headless",
@@ -384,12 +716,16 @@ def test_generate_port_to_missing_binary_fails_after_successful_claude_stage(fix
             "--name",
             "Test",
             "--resolve-markers",
+            "--harness",
+            "claude",
             "--port-to",
             "copilot",
         ],
     )
     assert result.exit_code == 1, result.stdout
     assert "copilot" in result.stdout
+    # Specifically the port dispatch failing, not sanity_check refusing earlier.
+    assert "not implemented" not in _flat(result.stdout)
 
 
 def test_generate_populates_agents_doc_without_resolve_markers_flag(fixture_workspace, tmp_path, monkeypatch):

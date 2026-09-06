@@ -196,7 +196,19 @@ def test_dry_run_reports_marker_count_without_calling_api(preset, tmp_path):
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", str(proj), "--preset", preset, "--name", "X", "--resolve-markers", "--dry-run", "--json"],
+        [
+            "generate",
+            str(proj),
+            "--preset",
+            preset,
+            "--name",
+            "X",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--dry-run",
+            "--json",
+        ],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)

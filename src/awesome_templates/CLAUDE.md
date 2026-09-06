@@ -81,6 +81,17 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   branch imports `resolver` (and `ai.client`, to build one client instance shared across all of these
   calls) lazily too, so the offline `generate` path stays free of the `ai` extra (pinned by
   `tests/test_markers.py::test_cli_import_does_not_pull_anthropic`).
+- `backends.py` — the registry for `generate --backend`: the *direct-API* half of the AI-engine
+  choice, kept separate from `harnesses.py` because the two are different machinery answering
+  the same question. A harness is an installed CLI we shell out to (binary on `PATH`, argv,
+  its own auth, an agentic loop that reads/edits files itself); a backend is an HTTP API this
+  package would call directly (no subprocess, no agentic loop, a metered per-token bill).
+  `cli.sanity_check` treats `--harness` and `--backend` as mutually exclusive for exactly that
+  reason. Every row is currently `implemented=False` **by design**, not by omission: the flag
+  exists so that spending metered API credit can only ever be a deliberate request, never an
+  implicit fallback taken because a harness binary was missing or `ANTHROPIC_API_KEY` merely
+  happened to be exported. `mirror_of()` maps a harness to its same-vendor backend, so a
+  "CLI not found on PATH" message can *name* the API alternative instead of taking it.
 - `harnesses.py` — per-backend adapters for headless sessions (marker research and, from
   Milestone 0001's `--port-to` addition, cross-harness porting): binary discovery
   (`find_harness`) and argv construction (`Harness.build_command`) for each supported CLI,
@@ -101,14 +112,26 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   The research method/rules are a deliberate re-embed of `.claude/agents/create-from-template.md` (a
   pip-installed package can't read that file at runtime) — keep the two aligned. Takes `run=`
   (defaulting to `subprocess.run`) so `tests/test_headless.py` asserts on argv/prompt and simulates
-  session edits with no real CLI. `resolver.resolve_tree` stays as the warned fallback when `claude`
-  isn't on `PATH`; the tutorial/roadmap/test-conventions increments stay on the one-shot API path.
+  session edits with no real CLI. `cli.py` always calls it with `api_key=None` so it *strips*
+  `ANTHROPIC_API_KEY` from the session environment rather than forwarding it - the `claude` CLI
+  treats that variable as an auth source overriding the user's own login, which disabled org
+  connectors and failed sessions outright on an unfunded key. `resolver.resolve_tree` is no longer
+  a fallback for a missing `claude` binary (that is now a hard failure naming `--backend
+  anthropic-api`), and the tutorial/roadmap/test-conventions increments no longer run under a
+  harness at all - all four are direct-API work reachable only through `--backend`.
 - `cli.py` — Typer app; command tree is `list`, `graph`, `generate`. Each `generate` flag has a
   config-file fallback (`--config-file file.json|.toml`) merged before CLI flags, which always win. The
   repeatable `--specialization` flag is the one list-valued exception to "flag wins": passing it at
   all replaces the config file's `specializations` list wholesale rather than merging with it.
-  `--seed-roadmap` is rejected unless `--resolve-markers` is also set — it shares that flag's API key
-  and project context rather than owning its own. `--log-severity` builds one `LogHelper` (see
+  Every AI-stage flag combination is validated in one place, `sanity_check()` — extracted as a named
+  function so the gate *order* is explicit and unit-testable (mutual exclusion → unknown names →
+  rider prerequisites → the mandatory engine choice → `--port-to`'s reference harness →
+  not-implemented last, so a flag mistake is always reported ahead of "that engine isn't built").
+  Add a new rule there, not inline in `generate`. `--resolve-markers` requires exactly one of
+  `--harness`/`--backend` and there is no default engine: a default is how a run ends up silently
+  picking a vendor, or silently billing an API, that nobody named. `--seed-roadmap` is likewise
+  rejected unless `--resolve-markers` is also set — it shares that flag's project context rather
+  than owning its own. `--log-severity` builds one `LogHelper` (see
   `log_helper.py`) shared across the whole `generate` call, defaulting to `warning` so output is
   unchanged unless a caller opts into `info`/`debug`.
 
