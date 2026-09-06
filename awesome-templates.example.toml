@@ -17,16 +17,16 @@
 # Which preset to generate - see `uv run awesome-templates list`.
 preset = "python"
 
-# Optional: layer one or more specializations' agents/skills on top of the
+# Optional: layer one or more specialization agents/skills on top of the
 # preset - see `uv run awesome-templates list` for the choices each preset
 # offers. Passing --specialization on the CLI replaces this list wholesale
 # rather than merging with it. Commented out by default (no specializations).
 # specializations = ["django"]
 
 # Output root: gets .claude/, docs/, and scripts/ subdirectories. Optional -
-# defaults to the CLI positional TARGET_DIR argument (e.g. `awesome-templates
-# generate .`) and can be overridden by --output-dir.
-out = "."
+# defaults to the CLI positional TARGET_DIR argument
+# and can be overridden by --output-dir
+out = ".scratch/preset"
 
 # Overwrite existing .claude/ or docs/ content instead of failing. Defaults
 # to false if omitted.
