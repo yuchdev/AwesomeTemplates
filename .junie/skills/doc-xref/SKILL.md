@@ -1,8 +1,6 @@
 ---
 name: doc-xref
-description: User-invoked as /doc-xref <target>. Finds every inbound reference to a doc path, heading/anchor, or code symbol - across docs/ AND src/ docstrings and comments - so a rename, move, split, or reworded section propagates everywhere. Use before renaming/moving/splitting docs or public symbols.
-allowed-tools: Grep, Glob, Read, Edit, Bash
-invocation: /doc-xref <target>
+description: Use before renaming, moving, splitting, or deleting docs or public symbols. Finds inbound references across docs plus code comments and docstrings so updates propagate cleanly.
 ---
 
 # Doc Cross-Reference

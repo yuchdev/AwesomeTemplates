@@ -1,8 +1,6 @@
 ---
 name: test-gap
-description: User-invoked as /test-gap [path]. Spawns the testing-expert agent to analyse test coverage and returns a prioritised list of missing tests, risk-ranked (core decision/business logic and untrusted-input parsing first). Use to decide what to test next.
-allowed-tools: Read, Grep, Glob, Bash, Agent
-invocation: /test-gap [path]
+description: Use to identify the highest-value missing tests for a module, feature, or change. Prioritizes business logic, regressions, and untrusted-input paths first.
 ---
 
 # Test Gap Analysis

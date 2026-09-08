@@ -1,8 +1,6 @@
 ---
 name: adr-write
-description: User-invoked as /adr-write <title>. Scaffolds a new Architecture Decision Record in docs/adr/ using the MADR template, pre-filling context from recent git log and open GitHub issues. Use when a design decision needs to be recorded before implementation.
-allowed-tools: Read, Grep, Glob, Bash, Write, Edit
-invocation: /adr-write <title>
+description: Use when a design decision needs to be recorded before implementation. Scaffolds an ADR and keeps the write-up aligned with the repository's roadmap-style decision records.
 ---
 
 # ADR Write (MADR)

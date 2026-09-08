@@ -1,8 +1,6 @@
 ---
 name: verify-subtask
-description: User-invoked as /verify-subtask <path>. Reads the subtask spec, gathers the implementation diff, and spawns subtask-verifier to produce a spec-compliance report. Run after implementation, before /pr-review and /test-gap.
-allowed-tools: Read, Grep, Glob, Bash, Agent
-invocation: /verify-subtask <subtask-path>
+description: Use after implementing a roadmap subtask and before final review. Checks the implementation against the subtask spec and reports pass, partial, or fail coverage.
 ---
 
 # Verify Subtask (spec-compliance check)

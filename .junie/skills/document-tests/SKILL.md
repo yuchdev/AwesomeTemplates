@@ -1,8 +1,6 @@
 ---
 name: document-tests
-description: User-invoked as /document-tests [path]. Documents every automated test under path (default tests/) - classifies each as Unit, Mock, Integration, or E2E and inserts a standardized Scenario/Boundaries/On-failure docstring via the document_tests.py codemod, then delegates flagged/ambiguous cases to the test-documenter agent. Use to bring an undocumented or partially-documented test suite up to a consistent standard.
-allowed-tools: Read, Grep, Glob, Bash, Agent
-invocation: /document-tests [path]
+description: Use when existing tests need standardized Scenario/Boundaries/On-failure documentation. Classifies automated tests consistently and flags ambiguous cases for deeper review.
 ---
 
 # Document Tests

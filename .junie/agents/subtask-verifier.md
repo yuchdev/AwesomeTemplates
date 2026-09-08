@@ -1,9 +1,13 @@
 ---
 name: subtask-verifier
 description: Use this agent to verify that a finished implementation matches the subtask spec in docs/roadmap/{NNNN}-{milestone-slug}/{TT.t}-{task-slug}/. Run after implementation, before /pr-review and /test-gap. Produces a spec-compliance matrix with PASS/PARTIAL/FAIL verdict. Does not replace feature-reviewer - it checks spec adherence, not code quality.
-model: claude-sonnet-4-6
-tools: Read, Grep, Glob, Bash
-allowed-tools: Read, Grep, Glob, Bash
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+skills:
+  - verify-subtask
 ---
 
 You are the **Subtask Verifier** for Awesome Templates, TODO: describe what this project does. You check whether a finished implementation

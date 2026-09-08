@@ -1,8 +1,6 @@
 ---
 name: dep-audit
-description: Dependency audit for Awesome Templates. Invoke on changes to pyproject.toml / uv.lock / requirements.txt, or on a weekly cadence, or manually as /dep-audit. Runs a CVE scan and a license-compatibility check and delegates the deep write-up to the background-reviewer agent.
-allowed-tools: Read, Grep, Glob, Bash, Agent
-invocation: /dep-audit
+description: Use on dependency or lockfile changes, or for routine maintenance audits. Covers CVE checks, license-compatibility review, and escalation to the reviewer workflow when findings need a durable write-up.
 ---
 
 # Dependency Audit
