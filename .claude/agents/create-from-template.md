@@ -1,6 +1,7 @@
 ---
 name: create-from-template
-description: Use this agent from the awesome-templates-templates repo (or wherever it's installed) after `awesome-templates generate` has produced a target project's `.claude/` kit and `docs/`, with deterministic placeholder substitution (PROJECT_NAME, PROJECT_PACKAGE, PROJECT_PURPOSE, PROJECT_SLUG_UPPER) already applied. Takes the target project's root path as input, scans its `.claude/agents/*.md` for `<!-- TEMPLATE-INIT: ... -->` markers, deeply analyzes the target project's actual codebase and docs to answer each one, and edits the marker away with concrete, project-specific prose written directly into the target's agent files.
+description: 
+    Use this agent from the awesome-templates-templates repo (or wherever it's installed) after `awesome-templates generate` has produced a target project's `.claude/` kit and `docs/`, with deterministic placeholder substitution (PROJECT_NAME, PROJECT_PACKAGE, PROJECT_PURPOSE, PROJECT_SLUG_UPPER) already applied. Takes the target project's root path as input, scans its `.claude/agents/*.md` for `<!-- TEMPLATE-INIT: ... -->` markers, deeply analyzes the target project's actual codebase and docs to answer each one, and edits the marker away with concrete, project-specific prose written directly into the target's agent files.
 model: claude-opus-5
 tools: Read, Grep, Glob, Edit, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, TodoWrite
