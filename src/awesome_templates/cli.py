@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import enum
 import json
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,7 +21,7 @@ from rich.console import Console
 from rich.table import Table
 from typer.core import TyperGroup
 
-from awesome_templates import backends, docgen, harnesses
+from awesome_templates import docgen, harnesses
 from awesome_templates.catalog import KINDS, discover, list_presets
 from awesome_templates.config import ConfigError, load_config
 from awesome_templates.dependencies import (
@@ -127,18 +128,6 @@ PortToChoice = enum.Enum(  # type: ignore[misc]
     type=str,
 )
 
-# Enum-backed choices for `generate --backend`, derived from
-# `backends.BACKEND_NAMES` exactly as HarnessChoice is derived from
-# HARNESS_NAMES. `--backend` names the direct-API half of the AI-engine choice;
-# see backends.py's module docstring for why that is a separate registry rather
-# than more `--harness` values, and `sanity_check` for the mutual exclusion the
-# two flags are subject to.
-BackendChoice = enum.Enum(  # type: ignore[misc]
-    "BackendChoice",
-    {name: name for name in backends.BACKEND_NAMES},
-    type=str,
-)
-
 
 def _workspace() -> Workspace:
     return Workspace(root=TEMPLATES_ROOT)
@@ -154,9 +143,8 @@ def _not_implemented(message: str) -> None:
 
     Deliberately distinct from `_fail`, which means "you asked for something
     invalid". This means "you asked for something this version cannot do yet" -
-    a different thing to tell a user, and the reason `HARNESS_NAMES` /
-    `BACKEND_NAMES` stay wider than what actually runs (see
-    `harnesses.IMPLEMENTED_HARNESS_NAMES` and `backends.Backend.implemented`).
+    a different thing to tell a user, and the reason `HARNESS_NAMES` stays
+    wider than what actually runs (see `harnesses.IMPLEMENTED_HARNESS_NAMES`).
     The exit code is still 1, so a script driving `generate` sees a failure
     either way and never mistakes an unbuilt path for a completed run.
     """
@@ -164,15 +152,11 @@ def _not_implemented(message: str) -> None:
     raise typer.Exit(code=1)
 
 
-def _engine_choices() -> str:
-    """The `--harness x|y` / `--backend a|b` choice list used in messages."""
-    return f"--harness {'|'.join(harnesses.HARNESS_NAMES)} or --backend {'|'.join(backends.BACKEND_NAMES)}"
-
-
 def sanity_check(
     *,
     harness_value: Optional[str],
-    backend_value: Optional[str],
+    api_key: Optional[str],
+    api_key_env: Optional[str],
     resolve_markers: bool,
     seed_roadmap: bool,
     update_guidelines: bool,
@@ -186,54 +170,47 @@ def sanity_check(
     resolution and the dry-run branch. The order below is deliberate and
     fundamental-first - each check may assume the ones above it passed:
 
-    1. **Mutual exclusion.** `--harness` and `--backend` select *different
-       machinery* for the same job (an installed agentic CLI vs. a direct HTTP
-       API - see `backends.py`), so asking for both is incoherent, not a
-       precedence puzzle to resolve. Checked first and unconditionally,
-       regardless of whether the AI stage was even requested.
-    2. **Known names.** The Typer enums already reject an unknown `--harness` /
-       `--backend` on the command line, but a value sourced from `--config-file`
-       bypasses them entirely (`config.py` returns the raw parsed dict with no
-       schema check), so both are re-checked here.
-    3. **AI-stage prerequisites.** `--seed-roadmap`, `--update-guidelines` and
+    1. **Known names.** The Typer enum already rejects an unknown `--harness`
+       on the command line, but a value sourced from `--config-file` bypasses
+       it entirely (`config.py` returns the raw parsed dict with no schema
+       check), so it is re-checked here.
+    2. **AI-stage prerequisites.** `--seed-roadmap`, `--update-guidelines` and
        `--port-to` are all riders on `--resolve-markers`; they cannot be
        satisfied without it.
-    4. **The engine choice is mandatory for an AI run** and meaningless without
-       one. There is no default engine: a silent default is exactly how a run
-       ends up quietly spending API credit or quietly picking a vendor the user
-       never named.
+    3. **`--harness` is mandatory for an AI run** and meaningless without one.
+       There is no default: a silent default is exactly how a run ends up
+       quietly picking a vendor, or quietly authenticating a way the user
+       never chose.
+    4. **`--api-key`/`--api-key-env` are credential flags, not an engine
+       choice** - they only ever change how the *same* harness subprocess
+       authenticates (see `headless.resolve_tree_headless`'s `api_key`
+       parameter), never what runs. So they: are mutually exclusive with each
+       other; require `--harness` to be given (there is no session to
+       authenticate otherwise); and are rejected for a harness whose
+       `api_key_env` is `None` (copilot/junie authenticate only via their own
+       login, with no env-var slot for a key to fill).
     5. **`--port-to` needs the reference harness.** Porting always reads a
        Claude-authored `.claude/` tree.
-    6. **Not-implemented last**, so a user who asks for an unbuilt engine *and*
-       makes a flag mistake hears about the mistake first - the more actionable
-       of the two.
+    6. **Not-implemented last**, so a user who asks for an unbuilt harness
+       *and* makes a flag mistake hears about the mistake first - the more
+       actionable of the two.
 
     :param harness_value: resolved `--harness` value (CLI, then config), or None.
-    :param backend_value: resolved `--backend` value (CLI, then config), or None.
+    :param api_key: resolved `--api-key` value, or None.
+    :param api_key_env: resolved `--api-key-env` value (a variable *name*, not
+        its value - see `generate`'s body for where that's read), or None.
     :param resolve_markers: resolved `--resolve-markers`.
     :param seed_roadmap: `--seed-roadmap`.
     :param update_guidelines: `--update-guidelines`.
     :param port_to: `--port-to` value, or None.
     :raises typer.Exit: via `_fail` / `_not_implemented` on any violation.
     """
-    # 1. Mutual exclusion.
-    if harness_value is not None and backend_value is not None:
-        _fail(
-            f"--harness {harness_value} and --backend {backend_value} are mutually exclusive - "
-            "a harness is an installed CLI that runs an agentic session, a backend is a direct "
-            "API call; pick exactly one"
-        )
-        return
-
-    # 2. Known names (a config-file value never passed through the Typer enums).
+    # 1. Known names (a config-file value never passed through the Typer enum).
     if harness_value is not None and harness_value not in harnesses.HARNESS_NAMES:
         _fail(f"unknown harness '{harness_value}' (choices: {', '.join(harnesses.HARNESS_NAMES)})")
         return
-    if backend_value is not None and backend_value not in backends.BACKEND_NAMES:
-        _fail(f"unknown backend '{backend_value}' (choices: {', '.join(backends.BACKEND_NAMES)})")
-        return
 
-    # 3. Riders on the AI stage.
+    # 2. Riders on the AI stage.
     if seed_roadmap and not resolve_markers:
         _fail("--seed-roadmap requires --resolve-markers (it needs the same project research)")
         return
@@ -244,20 +221,32 @@ def sanity_check(
         _fail(f"--port-to {port_to} requires --resolve-markers")
         return
 
-    # 4. No default engine, in either direction.
-    if resolve_markers and harness_value is None and backend_value is None:
+    # 3. No default harness, in either direction.
+    if resolve_markers and harness_value is None:
         _fail(
-            "--resolve-markers requires an explicit AI engine - pass exactly one of "
-            f"{_engine_choices()}. There is no default: which model runs, and whether it "
-            "bills a metered API, is always your choice to state"
+            "--resolve-markers requires --harness "
+            f"{'|'.join(harnesses.HARNESS_NAMES)}. There is no default: which CLI runs, and "
+            "how it authenticates, is always your choice to state"
         )
         return
-    if not resolve_markers and (harness_value is not None or backend_value is not None):
-        flag, value = ("--harness", harness_value) if harness_value is not None else ("--backend", backend_value)
+    if not resolve_markers and harness_value is not None:
         _fail(
-            f"{flag} {value} has no effect without --resolve-markers - plain `generate` is "
-            f"fully offline and calls no model; drop {flag} or add --resolve-markers"
+            f"--harness {harness_value} has no effect without --resolve-markers - plain `generate` "
+            "is fully offline and calls no model; drop --harness or add --resolve-markers"
         )
+        return
+
+    # 4. Credential flags pair with --harness; they never select an engine.
+    if api_key is not None and api_key_env is not None:
+        _fail("--api-key and --api-key-env are mutually exclusive - pass at most one")
+        return
+    if (api_key is not None or api_key_env is not None) and harness_value is None:
+        flag = "--api-key" if api_key is not None else "--api-key-env"
+        _fail(f"{flag} requires --harness - it authenticates that harness's session, nothing else")
+        return
+    if (api_key is not None or api_key_env is not None) and harnesses.get(harness_value).api_key_env is None:
+        flag = "--api-key" if api_key is not None else "--api-key-env"
+        _fail(f"--harness {harness_value} authenticates via its own login only - {flag} doesn't apply to it")
         return
 
     # 5. Porting reads a Claude-authored tree.
@@ -266,17 +255,9 @@ def sanity_check(
         return
 
     # 6. Valid, but not built yet.
-    if backend_value is not None:
-        backend = backends.get(backend_value)
-        _not_implemented(
-            f"--backend {backend_value} ({backend.vendor} direct API) is declared but not "
-            f"implemented yet - the only working engine today is --harness "
-            f"{'|'.join(harnesses.IMPLEMENTED_HARNESS_NAMES)}"
-        )
-        return
     if harness_value is not None and harness_value not in harnesses.IMPLEMENTED_HARNESS_NAMES:
         _not_implemented(
-            f"--harness {harness_value} is not implemented yet - the only working engine "
+            f"--harness {harness_value} is not implemented yet - the only working harness "
             f"today is --harness {'|'.join(harnesses.IMPLEMENTED_HARNESS_NAMES)}"
         )
         return
@@ -463,7 +444,7 @@ def generate(
         None,
         "--resolve-markers/--no-resolve-markers",
         help="AI-resolve <!-- TEMPLATE-INIT --> markers in the generated Markdown - "
-        "requires an explicit AI engine (--harness or --backend); plain generate is offline",
+        "requires --harness; plain generate is offline",
     ),
     seed_roadmap: bool = typer.Option(
         False,
@@ -481,17 +462,27 @@ def generate(
         None,
         "--harness",
         help="which installed headless CLI runs the marker-research session: claude, "
-        "copilot, or junie. Mandatory for --resolve-markers unless --backend is given "
-        "instead (the two are mutually exclusive); there is no default. Only 'claude' "
-        "is implemented today - the others exit with a not-implemented notice",
+        "copilot, or junie. Mandatory for --resolve-markers; there is no default. Only "
+        "'claude' is implemented today - the others exit with a not-implemented notice",
     ),
-    backend: Optional[BackendChoice] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
+    api_key: Optional[str] = typer.Option(
         None,
-        "--backend",
-        help="run the AI stage against a vendor's API directly instead of through an "
-        "installed CLI: anthropic-api, openai-api, or jetbrains-api. Mutually exclusive "
-        "with --harness. None are implemented yet - the flag exists so that spending "
-        "metered API credit is always an explicit request, never an implicit fallback",
+        "--api-key",
+        help="authenticate the --harness session with this literal credential instead "
+        "of the CLI's own login (e.g. an Anthropic API key for --harness claude). Never "
+        "read from --config-file - pass it on the command line only. Note: a value passed "
+        "this way is visible to other processes on this machine (e.g. `ps`) for the life "
+        "of the command - prefer --api-key-env where that matters",
+    ),
+    api_key_env: Optional[str] = typer.Option(
+        None,
+        "--api-key-env",
+        help="authenticate the --harness session with the value of this variable, read "
+        "from YOUR shell environment (e.g. --api-key-env ANTHROPIC_API_KEY, or any "
+        "variable name you've put the key in). Mutually exclusive with --api-key; "
+        "omitting both means the harness authenticates however it already does (its own "
+        "login) - this is the default and never changes what runs, only how it "
+        "authenticates",
     ),
     port_to: Optional[PortToChoice] = typer.Option(  # noqa: B008 - Typer requires the call in the default position
         None,
@@ -538,19 +529,23 @@ def generate(
     # it never merges with config's list. There is no "explicitly zero" via the
     # flag; not passing it is the only way to defer to config.
     specializations_value = specialization if specialization is not None else list(cfg.get("specializations", []))
-    # `.value` collapses the enum member to its plain name so these are always
-    # `str` (their f-string forms and equality checks read cleanly); the
+    # `.value` collapses the enum member to its plain name so this is always a
+    # `str` (its f-string form and equality checks read cleanly); the
     # config-file fallback follows the same "CLI wins" semantics as every other
     # scalar option (not the `--specialization` list-merge exception).
     #
-    # Neither has a default. A default engine is what let a run silently pick a
-    # vendor - and silently bill a metered API - that the user never named; the
-    # absence of one here is load-bearing, not an oversight. `sanity_check`
-    # below is what turns "neither given, but the AI stage was requested" into
-    # an error, and what re-validates a config-file-sourced name that never
-    # passed through the Typer enums.
+    # No default. A default harness is what let a run silently pick a vendor
+    # the user never named; the absence of one here is load-bearing, not an
+    # oversight. `sanity_check` below is what turns "not given, but the AI
+    # stage was requested" into an error, and what re-validates a
+    # config-file-sourced name that never passed through the Typer enum.
     harness_value = harness.value if harness is not None else cfg.get("harness")
-    backend_value = backend.value if backend is not None else cfg.get("backend")
+    # --api-key never has a config-file fallback - a literal credential has no
+    # business living in a checked-in config file (this repo's own secret-scan
+    # hook exists for exactly this reason). --api-key-env only ever names a
+    # variable, not a secret, so it gets the same CLI-wins config fallback
+    # every other scalar option has.
+    api_key_env_value = api_key_env or cfg.get("api_key_env")
 
     preset_value = _resolve_preset(workspace, preset_value)
     if not name_value:
@@ -559,12 +554,32 @@ def generate(
     specializations_value = _resolve_specializations(workspace, preset_value, specializations_value)
     sanity_check(
         harness_value=harness_value,
-        backend_value=backend_value,
+        api_key=api_key,
+        api_key_env=api_key_env_value,
         resolve_markers=resolve_value,
         seed_roadmap=seed_roadmap,
         update_guidelines=update_guidelines,
         port_to=port_to.value if port_to else None,
     )
+
+    # Resolve the actual credential to forward (never logged/printed - only
+    # `auth_label` below, which names the *source*, is ever surfaced) now that
+    # sanity_check has confirmed the flag combination itself is coherent. This
+    # runs before the `if dry_run:` branch below on purpose: a --dry-run with a
+    # broken --api-key-env should fail the same way a real run would, not
+    # silently defer the check to whenever the run is actually made real.
+    api_key_value = api_key
+    if api_key_env_value:
+        resolved = os.environ.get(api_key_env_value)
+        if not resolved:
+            _fail(f"--api-key-env {api_key_env_value} names a variable that isn't set")
+            return
+        api_key_value = resolved
+    auth_label = "login"
+    if api_key is not None:
+        auth_label = "api-key"
+    elif api_key_env_value:
+        auth_label = f"api-key-env:{api_key_env_value}"
 
     subs = {
         "PROJECT_NAME": name_value,
@@ -582,7 +597,7 @@ def generate(
             "substitutions": subs,
             "specializations": specializations_value,
             "harness": harness_value,
-            "backend": backend_value,
+            "auth": auth_label,
             "port_to": port_to.value if port_to else None,
         }
         if resolve_value:
@@ -598,6 +613,7 @@ def generate(
                 console.print(f"Specializations: {', '.join(specializations_value)}")
             if resolve_value:
                 console.print(f"Harness: {harness_value}")
+                console.print(f"Auth: {auth_label}")
                 console.print(f"Would AI-resolve {payload['markers_to_resolve']} marker(s)")
             if port_to:
                 console.print(f"Port to: {port_to.value}")
@@ -635,44 +651,31 @@ def generate(
         "warnings": warnings,
     }
     summary["harness"] = harness_value
-    summary["backend"] = backend_value
+    summary["auth"] = auth_label
 
     if resolve_value:
         from awesome_templates import headless
 
-        # sanity_check has already guaranteed that exactly one engine was named
-        # and that it is an implemented harness (today: `claude`), so there is
-        # no engine-selection logic left to do here - only "is it installed?".
+        # sanity_check has already guaranteed --harness was named and that it
+        # is an implemented one (today: `claude`), so there is no
+        # harness-selection logic left to do here - only "is it installed?".
         harness_obj = harnesses.get(harness_value)
         harness_bin = harnesses.find_harness(harness_obj)
         if harness_bin is None:
-            # A missing binary is a hard failure, never a quiet substitution.
-            # This used to fall back to one-shot Messages API resolution for
-            # `claude`, which meant a user who asked for an agentic session got
-            # a weaker, metered, stateless one instead - and got it *silently*
-            # if ANTHROPIC_API_KEY merely happened to be exported. The API path
-            # is now reachable only by naming it (`--backend ...`).
-            mirror = backends.mirror_of(harness_value)
-            _fail(
-                f"the `{harness_value}` CLI was not found on PATH - install it (or check its "
-                "authentication). There is no automatic API fallback: to run the AI stage "
-                "against a vendor API instead, ask for it explicitly with "
-                + (f"--backend {mirror}" if mirror else "--backend")
-            )
+            # A missing binary is a hard failure, never a quiet substitution -
+            # there is no other engine to fall back to.
+            _fail(f"the `{harness_value}` CLI was not found on PATH - install it (or check its authentication)")
             return
 
         rsum, guidelines_updated = headless.resolve_tree_headless(
             out_dir,
-            # Deliberately None, not resolver.load_api_key(...). Passing a key
-            # here makes headless.py forward ANTHROPIC_API_KEY into the CLI's
-            # subprocess environment, where the `claude` CLI treats it as an
-            # auth source that *overrides* the user's own claude.ai login - it
-            # disables org connectors and, on an unfunded key, fails the whole
-            # session with exit 1. Passing None makes headless.py strip the
-            # variable from the inherited environment instead, so the session
-            # authenticates however the installed CLI already does. Choosing
-            # the API is `--backend`'s job, and nothing else's.
-            api_key=None,
+            # api_key_value is None unless --api-key/--api-key-env was given
+            # (see above); passing None here makes headless.py strip the
+            # relevant env var from the inherited environment, so the session
+            # authenticates however the installed CLI already does (typically
+            # its own login) rather than ever reading an ambient credential
+            # implicitly. Forwarding a key is only ever an explicit request.
+            api_key=api_key_value,
             warnings=warnings,
             harness=harness_value,
             claude_bin=harness_bin,
@@ -688,14 +691,11 @@ def generate(
         summary["markers_failed"] = rsum.failed
 
         # The three remaining increments (tutorial, roadmap seed,
-        # test-conventions paragraph) are still one-shot Messages API calls in
-        # resolver.py - they are the direct-API path, not part of the harness
-        # session. Under a harness they are therefore *not* run: an engine
-        # choice means what it says, and "--harness claude" quietly placing
-        # billed Messages API requests behind the session is exactly the
-        # implicit-API behaviour this flag pair exists to remove. They are
-        # reported as skipped rather than silently omitted, and they become
-        # available when a direct-API backend is implemented.
+        # test-conventions paragraph) are direct Messages API calls in
+        # resolver.py, with no wiring into any headless harness session and no
+        # other engine to run them through - `generate` only ever executes a
+        # --harness session now. They are reported as skipped rather than
+        # silently omitted.
         summary["tutorial_written"] = False
         summary["test_conventions_described"] = False
         if seed_roadmap:
@@ -704,8 +704,7 @@ def generate(
             "skipped the tutorial/test-conventions"
             + ("/roadmap-seed" if seed_roadmap else "")
             + f" increment(s): they are direct Messages API calls, and --harness {harness_value} "
-            "runs no API calls of its own. Nothing was sent to any vendor API. They will run "
-            f"under --backend {backends.mirror_of(harness_value) or 'anthropic-api'} once it is implemented"
+            "runs no API calls of its own. Nothing was sent to any vendor API."
         )
         warnings.append(message)
         log.warning(message)

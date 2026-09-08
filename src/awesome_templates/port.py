@@ -204,12 +204,13 @@ def port_tree_headless(
         `headless.resolve_tree_headless`.
     """
     harness_obj = harnesses.get(harness)
-    if harness_obj.forwards_anthropic_key:
+    if harness_obj.api_key_env is not None:
         # A plain `assert` would be stripped under `python -O`; this invariant
         # is a security boundary (cli.py must never call this for "claude"),
         # not just a logic-error check, so it stays enforced unconditionally.
         raise ValueError(
-            f"port_tree_headless must never run for a forwards_anthropic_key=True harness (got {harness!r})"
+            f"port_tree_headless must never run for a harness with a key-based auth "
+            f"mechanism (api_key_env set) - got {harness!r}"
         )
     manifest, counts = render_porting_manifest(out_dir)
     summary = PortSummary(harness=harness, manifest_kinds=counts)
@@ -229,9 +230,9 @@ def port_tree_headless(
         model=harness_obj.default_model,
         prompt=prompt,
     )
-    # forwards_anthropic_key is False for every valid --port-to target (copilot,
-    # junie), guaranteed by the assert above - so, unlike resolve_tree_headless,
-    # there is no forwarding branch. The key is stripped unconditionally (not
+    # api_key_env is None for every valid --port-to target (copilot, junie),
+    # guaranteed by the check above - so, unlike resolve_tree_headless, there
+    # is no forwarding branch. The key is stripped unconditionally (not
     # merely left unset - the developer may already have it exported), matching
     # headless.py's own "non-forwarding harness must have the key stripped from
     # the inherited env" invariant.

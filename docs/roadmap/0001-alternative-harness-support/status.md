@@ -1,10 +1,14 @@
 # Milestone 0001 - Alternative Headless Harness Support - Status
 
-Tracks progress against [plan.md](plan.md). **✅ Complete as of 2026-08-30** - all 9 tasks
-delivered, reviewed, and merged into this status record; see the gate-status line below the
-table and each task's own summary section for details. (Corrected the header above from "0002"
-to "0001" at milestone close, matching this folder's actual name and `docs/roadmap/README.md`'s
-now-corrected index entry - both were stale from before this milestone's numbering settled.)
+Tracks progress against [plan.md](plan.md). **✅ Complete as of 2026-09-08** - all 10 tasks
+delivered, reviewed, and merged into this status record. Tasks 01.0-09.0 closed 2026-08-30; see
+the gate-status line below the table and each task's own summary section for details.
+(Corrected the header above from "0002" to "0001" at that milestone close, matching this
+folder's actual name and `docs/roadmap/README.md`'s now-corrected index entry - both were stale
+from before this milestone's numbering settled.) **Task 10.0 was added 2026-09-08**, after that
+close, to remove the never-implemented `--backend` flag and replace it with
+`--api-key`/`--api-key-env` credential flags that pair with `--harness` - see plan.md's
+"Credential flags" subsection and its own Acceptance criteria; closed the same day.
 
 ## Current status
 
@@ -19,16 +23,27 @@ now-corrected index entry - both were stale from before this milestone's numberi
 | 07.0 | Copilot porting session                      | ✅ Complete    | -     |
 | 08.0 | Junie porting session (headless)             | ✅ Complete    | -     |
 | 09.0 | Porting pipeline tests                       | ✅ Complete    | `tests/test_port.py`, `tests/test_cli.py` |
+| 10.0 | Credential flags + `--backend` removal       | ✅ Complete    | `tests/test_harnesses.py`, `tests/test_headless.py`, `tests/test_port.py`, `tests/test_cli.py` |
 
 **Legend:** ✅ Complete · 🔶 In progress / partial · ⬜ Not started
 
-**Gate status (2026-08-30):** `uv run pytest --cov=awesome_templates` - **249 passed**, coverage
-**87%** (baseline at milestone authoring: 191 tests). `uv run ruff check src/ tests/` - clean.
-No real `copilot`/`junie` binary ever invoked by the test suite. `/link-check docs/roadmap/` -
-clean except pre-existing, unrelated dangling links (tracked in Notes & decisions below, not
-introduced by this milestone). Every item in `plan.md`'s Acceptance criteria checklist is
-satisfied - see the per-task Delivered/Tests summaries below for the specific evidence each one
-rests on. All milestone exit gates pass.
+**Gate status (2026-08-30, tasks 01.0-09.0):** `uv run pytest --cov=awesome_templates` -
+**249 passed**, coverage **87%** (baseline at milestone authoring: 191 tests). `uv run ruff
+check src/ tests/` - clean. No real `copilot`/`junie` binary ever invoked by the test suite.
+`/link-check docs/roadmap/` - clean except pre-existing, unrelated dangling links (tracked in
+Notes & decisions below, not introduced by this milestone). Every item in `plan.md`'s
+Acceptance criteria checklist is satisfied - see the per-task Delivered/Tests summaries below
+for the specific evidence each one rests on.
+
+**Gate status (2026-09-08, task 10.0):** `uv run pytest --cov=awesome_templates` -
+**283 passed**, coverage **90%** (this task's own explicit floor, met - up from 249/87% before
+it started; deleting `tests/test_backends.py`/`src/awesome_templates/backends.py` shifted both
+the numerator and denominator, so this isn't a simple delta from the prior gate). `uv run ruff
+check src/ tests/` - clean. `/pr-review` - **APPROVE** (feature-reviewer LGTM; security-auditor
+PASS, one LOW non-blocking note on `--api-key`'s inherent argv/`ps` visibility, addressed with a
+help-text caveat). `/link-check docs/roadmap/0001-alternative-harness-support` - clean, no new
+dangling links from task 10.0's own docs (same 2 pre-existing ones noted below). All milestone
+exit gates now pass across all 10 tasks.
 
 ## Before starting task 02.0 or 03.0
 
@@ -138,6 +153,57 @@ begin with, per task 03.0's outcome-1 finding).
   (`tests/test_headless.py::test_non_forwarding_harness_strips_exported_key`) asserting it.
   Not a scope fork - no ratification needed, just recorded for traceability.
 
+- 2026-09-08: Task 10.0 added. `--backend {anthropic-api,openai-api,jetbrains-api}` had existed
+  alongside this milestone's `--harness` work since roughly the same period, but every backend
+  was permanently `implemented=False` and `generate` never called `resolver.resolve_tree` as a
+  fallback either - it never did real work. Rather than carry a permanently-unimplemented second
+  "engine" indefinitely, it is removed outright and replaced with `--api-key`/`--api-key-env`:
+  pure credential flags that pair with `--harness` and only change how that harness's CLI
+  subprocess authenticates, never what runs. `Harness.forwards_anthropic_key: bool` generalizes
+  to `Harness.api_key_env: Optional[str]` to support this (`"ANTHROPIC_API_KEY"` for `claude`,
+  `None` for `copilot`/`junie`). See plan.md's "Credential flags" subsection for the full design.
+
+### Task 10.0 - Credential flags + `--backend` removal (✅ 2026-09-08)
+
+**Delivered:** `src/awesome_templates/backends.py` deleted; `Harness.forwards_anthropic_key:
+bool` generalized to `Harness.api_key_env: Optional[str]` across `harnesses.py` (`_CLAUDE`'s
+`api_key_env="ANTHROPIC_API_KEY"`, `_COPILOT`/`_JUNIE`'s `api_key_env=None`), `headless.py`, and
+`port.py` (the porting-target guard now checks `api_key_env is not None`). `cli.py`: `--backend`
+and `BackendChoice` removed; `--api-key`/`--api-key-env` added (the latter with a config-file
+fallback, the former without - see plan.md's rationale); `sanity_check` regains a
+mutual-exclusion/harness-pairing/harness-capability rule set for the two new flags in place of
+the old harness/backend mutual-exclusion and backend-unknown-name/not-implemented rules; the
+missing-binary message no longer suggests `--backend <mirror>`; dry-run/summary output gains an
+`"auth"` field (`"login"` / `"api-key"` / `"api-key-env:<NAME>"`) in place of the `"backend"` key.
+`src/awesome_templates/CLAUDE.md` and root `CLAUDE.md` updated to match. `tests/test_backends.py`
+deleted; `tests/test_harnesses.py`/`test_headless.py`/`test_port.py` fully renamed to
+`api_key_env`; `tests/test_cli.py` had its 5 dead `--backend` tests removed and gained 13 new
+credential-flag tests (literal `--api-key`, `--api-key-env` reading the named variable's value,
+an unset `--api-key-env` variable failing before any subprocess - including under `--dry-run`,
+mutual exclusion, either flag requiring `--harness`, either flag rejected for a login-only
+harness before the not-implemented gate, dry-run `auth` reporting for all three states, and a
+`--backend`-is-gone smoke test), plus one more (`test_generate_reads_api_key_env_from_config_file`)
+added during `/pr-review` follow-up to close the one coverage gap `feature-reviewer` found.
+
+**Security:** a `security-auditor` pass on the already-written credential-handling code (run
+before the test-writing subtask, since this task was flagged security-sensitive - the same
+surface caught a HIGH-severity finding in task 01.0) found one LOW-severity follow-up:
+`headless.py`'s `ANTHROPIC_API_KEY` strip was still hardcoded rather than generalized to
+`harness_obj.api_key_env`, so a hypothetical future harness with a different key-env name
+wouldn't get the same ambient-leak protection. Fixed the same day - the strip now pops both
+`ANTHROPIC_API_KEY` unconditionally and `harness_obj.api_key_env` (when set) before any
+conditional re-add.
+
+**Tests / gate:** `uv run pytest --cov=awesome_templates` - **283 passed**, coverage **90%**
+(this task's own explicit floor, met). `uv run ruff check src/ tests/` clean. `subtask-verifier`
+PASS on subtask 03 (independently re-ran the suite rather than trusting the implementing
+agent's self-report). `/pr-review`: feature-reviewer LGTM (one coverage-gap suggestion, fixed
+before close; three other non-blocking notes - a documented spec/implementation divergence in
+subtask 01's snippet, a documentation-only note about `--dry-run` + unset `--api-key-env`, and a
+harmless double-pop - all addressed or accepted as-is); security-auditor PASS (one LOW note on
+`--api-key`'s inherent argv/`ps` visibility, CWE-214 - addressed with a help-text caveat
+recommending `--api-key-env` instead). Combined verdict: **APPROVE**. No deferred subtasks.
+
 ### Task 01.0 - `harnesses.py` + `claude` relocation (✅ 2026-08-30)
 
 **Delivered:** New `src/awesome_templates/harnesses.py` module (`Harness` frozen dataclass,
@@ -178,7 +244,7 @@ decisions above for the full history (prompt=None malformed argv, then an untest
 substitution, then a follow-up security catch on network-tool over-grant) - final verdict LGTM /
 no new CRITICAL or HIGH. No deferred subtasks.
 
-### Task 09.0 - Porting pipeline tests (✅ 2026-08-30) - final task of this milestone
+### Task 09.0 - Porting pipeline tests (✅ 2026-08-30) - final task of the original 01.0-09.0 scope
 
 **Delivered:** New `tests/test_port.py` (14 tests: 6 pure `render_porting_manifest`/`build_porting_prompt`
 tests, plus 8 subprocess-boundary `port_tree_headless` tests parametrized across both `copilot`

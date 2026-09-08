@@ -161,7 +161,7 @@ def test_non_forwarding_harness_strips_exported_key(kit, tmp_path, monkeypatch):
     # A non-forwarding harness (copilot/junie) must not leak an
     # ANTHROPIC_API_KEY the developer already has exported in their shell.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
-    non_forwarding = dataclasses.replace(harnesses.get("claude"), forwards_anthropic_key=False)
+    non_forwarding = dataclasses.replace(harnesses.get("claude"), api_key_env=None)
     monkeypatch.setattr(harnesses, "get", lambda name: non_forwarding)
     fake_run = _fake_run_factory({})
     headless.resolve_tree_headless(
@@ -418,7 +418,7 @@ def test_resolve_tree_headless_defaults_to_claude(kit, tmp_path):
     call = fake_run.calls[0]
     assert call["cmd"] == expected_cmd
     assert call["input"] == expected_prompt  # claude: prompt over stdin
-    assert call["env"]["ANTHROPIC_API_KEY"] == "k"  # forwarded (forwards_anthropic_key=True)
+    assert call["env"]["ANTHROPIC_API_KEY"] == "k"  # forwarded (api_key_env="ANTHROPIC_API_KEY")
 
 
 def test_resolve_tree_headless_with_copilot_harness(kit, tmp_path, monkeypatch):
@@ -426,7 +426,7 @@ def test_resolve_tree_headless_with_copilot_harness(kit, tmp_path, monkeypatch):
     # run= fake intercepts). The constructed argv must be exactly what copilot's
     # own build_command produces for that binary path, the base tools, no model,
     # and the real prompt resolve_tree_headless built - and ANTHROPIC_API_KEY
-    # must be absent from the subprocess env (forwards_anthropic_key=False).
+    # must be absent from the subprocess env (api_key_env=None).
     fake_bin = tmp_path / "bin" / "copilot"
     fake_bin.parent.mkdir()
     fake_bin.write_text("#!/bin/sh\n")
@@ -436,7 +436,7 @@ def test_resolve_tree_headless_with_copilot_harness(kit, tmp_path, monkeypatch):
     fake_run = _fake_run_factory({})
     markers = scan_tree(kit)
     expected_prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=False)
-    # A non-empty key that must NOT reach copilot's env (forwards_anthropic_key=False).
+    # A non-empty key that must NOT reach copilot's env (api_key_env=None).
     summary, _ = headless.resolve_tree_headless(
         kit,
         api_key="k",
@@ -453,7 +453,7 @@ def test_resolve_tree_headless_with_copilot_harness(kit, tmp_path, monkeypatch):
         prompt=expected_prompt,
     )
     assert call["input"] is None  # copilot: prompt travels in argv, not stdin
-    assert "ANTHROPIC_API_KEY" not in call["env"]  # forwards_anthropic_key=False
+    assert "ANTHROPIC_API_KEY" not in call["env"]  # api_key_env=None
 
 
 def test_resolve_tree_headless_with_junie_harness(kit, tmp_path, monkeypatch):
@@ -471,7 +471,7 @@ def test_resolve_tree_headless_with_junie_harness(kit, tmp_path, monkeypatch):
     fake_run = _fake_run_factory({})
     markers = scan_tree(kit)
     expected_prompt = headless.build_prompt(markers, kit_root=kit, project_root=tmp_path, update_guidelines=False)
-    # A non-empty key that must NOT reach junie's env (forwards_anthropic_key=False).
+    # A non-empty key that must NOT reach junie's env (api_key_env=None).
     summary, _ = headless.resolve_tree_headless(
         kit,
         api_key="k",
@@ -488,7 +488,7 @@ def test_resolve_tree_headless_with_junie_harness(kit, tmp_path, monkeypatch):
         prompt=expected_prompt,
     )
     assert call["input"] is None  # junie: prompt is a bare positional argv, not stdin
-    assert "ANTHROPIC_API_KEY" not in call["env"]  # forwards_anthropic_key=False
+    assert "ANTHROPIC_API_KEY" not in call["env"]  # api_key_env=None
 
 
 def test_resolve_tree_headless_unknown_harness_raises(kit, tmp_path):

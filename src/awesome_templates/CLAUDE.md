@@ -81,25 +81,18 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   branch imports `resolver` (and `ai.client`, to build one client instance shared across all of these
   calls) lazily too, so the offline `generate` path stays free of the `ai` extra (pinned by
   `tests/test_markers.py::test_cli_import_does_not_pull_anthropic`).
-- `backends.py` — the registry for `generate --backend`: the *direct-API* half of the AI-engine
-  choice, kept separate from `harnesses.py` because the two are different machinery answering
-  the same question. A harness is an installed CLI we shell out to (binary on `PATH`, argv,
-  its own auth, an agentic loop that reads/edits files itself); a backend is an HTTP API this
-  package would call directly (no subprocess, no agentic loop, a metered per-token bill).
-  `cli.sanity_check` treats `--harness` and `--backend` as mutually exclusive for exactly that
-  reason. Every row is currently `implemented=False` **by design**, not by omission: the flag
-  exists so that spending metered API credit can only ever be a deliberate request, never an
-  implicit fallback taken because a harness binary was missing or `ANTHROPIC_API_KEY` merely
-  happened to be exported. `mirror_of()` maps a harness to its same-vendor backend, so a
-  "CLI not found on PATH" message can *name* the API alternative instead of taking it.
 - `harnesses.py` — per-backend adapters for headless sessions (marker research and, from
   Milestone 0001's `--port-to` addition, cross-harness porting): binary discovery
   (`find_harness`) and argv construction (`Harness.build_command`) for each supported CLI,
   registered by name in `_REGISTRY` (`get("claude")`, etc). `headless.py` and `port.py` own
   *what* a session does (manifest, prompt, reconciliation); this module only owns *how* to
   invoke a given CLI, so a wrong guess about one backend's flags is a one-function fix here,
-  not a rewrite of a caller. Never imports `headless`/`port`/`subprocess` — it only locates
-  binaries and assembles argv.
+  not a rewrite of a caller. `Harness.api_key_env` names the environment variable that
+  harness's own CLI reads for key-based authentication (`"ANTHROPIC_API_KEY"` for `claude`),
+  or `None` when the harness has no such mechanism at all (copilot/junie authenticate only
+  through their own login) - `cli.sanity_check` rejects `--api-key`/`--api-key-env` outright
+  for a harness whose `api_key_env` is `None`. Never imports `headless`/`port`/`subprocess` —
+  it only locates binaries and assembles argv.
 - `headless.py` — the agentic half of `--resolve-markers` (design:
   `../../docs/roadmap/0001-ai-assisted-generation/01.0-working-implementation/03.Agentic_marker_research.md`): given a `harness` name
   (`"claude"` by default; see `harnesses.py`), looks up its `Harness`, finds its binary, and —
@@ -112,26 +105,34 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   The research method/rules are a deliberate re-embed of `.claude/agents/create-from-template.md` (a
   pip-installed package can't read that file at runtime) — keep the two aligned. Takes `run=`
   (defaulting to `subprocess.run`) so `tests/test_headless.py` asserts on argv/prompt and simulates
-  session edits with no real CLI. `cli.py` always calls it with `api_key=None` so it *strips*
-  `ANTHROPIC_API_KEY` from the session environment rather than forwarding it - the `claude` CLI
-  treats that variable as an auth source overriding the user's own login, which disabled org
-  connectors and failed sessions outright on an unfunded key. `resolver.resolve_tree` is no longer
-  a fallback for a missing `claude` binary (that is now a hard failure naming `--backend
-  anthropic-api`), and the tutorial/roadmap/test-conventions increments no longer run under a
-  harness at all - all four are direct-API work reachable only through `--backend`.
+  session edits with no real CLI. `resolve_tree_headless`'s `api_key` parameter is `None` by
+  default (the session authenticates however the installed CLI already does - typically its own
+  login) and is populated only from `cli.py`'s `--api-key`/`--api-key-env` flags; either way,
+  `ANTHROPIC_API_KEY` is always stripped from the inherited env first, and re-added under
+  whatever env var name `harness_obj.api_key_env` declares only if a key was actually given -
+  the `claude` CLI otherwise treats an ambient `ANTHROPIC_API_KEY` as an auth source overriding
+  the user's own login, which disabled org connectors and failed sessions outright on an
+  unfunded key. `resolver.resolve_tree` is not a fallback for a missing harness binary (that is
+  a hard failure), and the tutorial/roadmap/test-conventions increments do not run under a
+  harness at all - `generate` no longer has any other engine to run them through, so they are
+  always reported as skipped.
 - `cli.py` — Typer app; command tree is `list`, `graph`, `generate`. Each `generate` flag has a
   config-file fallback (`--config-file file.json|.toml`) merged before CLI flags, which always win. The
   repeatable `--specialization` flag is the one list-valued exception to "flag wins": passing it at
   all replaces the config file's `specializations` list wholesale rather than merging with it.
   Every AI-stage flag combination is validated in one place, `sanity_check()` — extracted as a named
-  function so the gate *order* is explicit and unit-testable (mutual exclusion → unknown names →
-  rider prerequisites → the mandatory engine choice → `--port-to`'s reference harness →
-  not-implemented last, so a flag mistake is always reported ahead of "that engine isn't built").
-  Add a new rule there, not inline in `generate`. `--resolve-markers` requires exactly one of
-  `--harness`/`--backend` and there is no default engine: a default is how a run ends up silently
-  picking a vendor, or silently billing an API, that nobody named. `--seed-roadmap` is likewise
-  rejected unless `--resolve-markers` is also set — it shares that flag's project context rather
-  than owning its own. `--log-severity` builds one `LogHelper` (see
+  function so the gate *order* is explicit and unit-testable (unknown names → rider prerequisites →
+  the mandatory `--harness` → `--api-key`/`--api-key-env`'s own rules → `--port-to`'s reference
+  harness → not-implemented last, so a flag mistake is always reported ahead of "that harness isn't
+  built"). Add a new rule there, not inline in `generate`. `--resolve-markers` requires `--harness`
+  and there is no default: a default is how a run ends up silently picking a vendor nobody named.
+  `--api-key`/`--api-key-env` are pure credential flags, not a second engine - they only change how
+  the same harness subprocess authenticates (`--api-key` a literal value with no config-file
+  fallback, since a secret has no business in a checked-in config file; `--api-key-env` a variable
+  *name* to read from the caller's own environment, which does get one). Omitting both is the
+  default and means "authenticate however the installed CLI already does". `--seed-roadmap` is
+  likewise rejected unless `--resolve-markers` is also set — it shares that flag's project context
+  rather than owning its own. `--log-severity` builds one `LogHelper` (see
   `log_helper.py`) shared across the whole `generate` call, defaulting to `warning` so output is
   unchanged unless a caller opts into `info`/`debug`.
 

@@ -29,6 +29,7 @@ uv run awesome-templates generate . --preset python --name "Acme Sync" --package
 uv run awesome-templates generate . --preset python --name "Acme Sync" --specialization django
 uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers --harness claude
 uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers --harness claude --seed-roadmap
+uv run awesome-templates generate . --preset python --name "Acme Sync" --resolve-markers --harness claude --api-key-env ANTHROPIC_API_KEY
 
 uv run awesome-templates graph                       # maintainer-only reference graph
 uv run awesome-templates graph templates/python
@@ -41,38 +42,48 @@ uv run pytest tests/test_integration_real_repo.py    # exercises the real templa
 uv run ruff check src/ tests/
 ```
 
-**The AI-engine choice (`--harness` / `--backend`):** `--resolve-markers` requires exactly one
-of them and **has no default**. `--harness {claude,copilot,junie}` names an installed CLI that
-runs an agentic session; `--backend {anthropic-api,openai-api,jetbrains-api}` names a direct
-vendor API this package would call itself (see `src/awesome_templates/backends.py` for why
-that is a separate registry). The two are mutually exclusive, and `cli.sanity_check` is the
-single place every combination is validated - add a new rule there, not inline in `generate`.
+**The AI stage runs only through `--harness` - there is no second engine.** `--resolve-markers`
+requires `--harness {claude,copilot,junie}` (an installed CLI that runs an agentic session) and
+**has no default**. There used to be a `--backend` flag naming a direct vendor API this package
+would call itself; it has been removed entirely - the `claude` CLI always does the actual work,
+never a direct HTTP call. `cli.sanity_check` is the single place every flag combination is
+validated - add a new rule there, not inline in `generate`.
+
+**`--api-key` / `--api-key-env` change how the harness authenticates, never what runs.** They
+pair with `--harness` and only populate `headless.resolve_tree_headless`'s `api_key` parameter -
+`--api-key <value>` forwards a literal credential; `--api-key-env <VAR_NAME>` reads `VAR_NAME`
+from the *caller's own* environment and forwards its value. Omitting both (the default) means
+the harness authenticates however the installed CLI already does (typically its own login).
+Both are rejected for a harness whose `harnesses.Harness.api_key_env` is `None` (copilot/junie
+authenticate only via their own login, with no env-var slot for a key to fill).
 
 **Only `--harness claude` actually runs today.** `harnesses.IMPLEMENTED_HARNESS_NAMES` is the
-gate; every other harness and *every* backend exits with a `not implemented:` notice (exit 1)
-before anything is generated. Their names stay valid values rather than being removed, so a
-user asking for one is told it is unbuilt rather than told they made a typo. copilot/junie
-still have complete adapters in `harnesses.py` (and remain reachable as `--port-to` targets) -
-they are gated, not deleted. `junie` has no CLI-level tool/permission restriction of any kind
-(unlike `claude`/`copilot`'s allowlists), so its session's action scope would be bounded only
-by its working directory - see
+gate; every other harness exits with a `not implemented:` notice (exit 1) before anything is
+generated. Their names stay valid values rather than being removed, so a user asking for one is
+told it is unbuilt rather than told they made a typo. copilot/junie still have complete adapters
+in `harnesses.py` (and remain reachable as `--port-to` targets) - they are gated, not deleted.
+`junie` has no CLI-level tool/permission restriction of any kind (unlike `claude`/`copilot`'s
+allowlists), so its session's action scope would be bounded only by its working directory - see
 [docs/roadmap/0001-alternative-harness-support/plan.md](docs/roadmap/0001-alternative-harness-support/plan.md).
 
 **No implicit API use, anywhere.** Three deliberate consequences, each of which was a real bug:
 
-1. `generate` **never** passes an API key into a harness session (`api_key=None` at the
-   `headless.resolve_tree_headless` call site), so `headless.py` strips `ANTHROPIC_API_KEY`
-   from the subprocess environment. Forwarding it made the `claude` CLI treat it as an auth
-   source overriding the user's own login - disabling org connectors and failing the session
-   outright on an unfunded key.
-2. A missing harness binary is a **hard failure that names** `--backend <mirror>`, never a
-   silent fall back to one-shot Messages API resolution.
+1. `generate` only passes a credential into a harness session when `--api-key`/`--api-key-env`
+   was explicitly given; otherwise `api_key=None` at the `headless.resolve_tree_headless` call
+   site makes `headless.py` strip `ANTHROPIC_API_KEY` from the subprocess environment
+   unconditionally. Forwarding an ambient key implicitly made the `claude` CLI treat it as an
+   auth source overriding the user's own login - disabling org connectors and failing the
+   session outright on an unfunded key.
+2. A missing harness binary is a **hard failure**, never a silent fall back to one-shot Messages
+   API resolution - there is no other engine left to fall back to.
 3. The tutorial / roadmap-seed / test-conventions increments in `resolver.py` are direct
    Messages API calls, so they **do not run under a harness** - they are reported as skipped
    in `warnings` and in the JSON summary's `tutorial_written` / `roadmap_seeded` /
    `test_conventions_described` fields. `--seed-roadmap` therefore currently produces nothing
    under `--harness claude`; folding those three increments into the headless session is the
-   open follow-up.
+   open follow-up. (`resolver.py`'s direct-API code and `ai/client.py` are otherwise untouched -
+   already unreachable from `generate` before `--backend` was removed, and still unreachable
+   now, deliberately preserved rather than deleted.)
 
 **Ruff config note:** `ruff.toml` (repo root) and `pyproject.toml`'s `[tool.ruff]` section
 both exist and disagree - different `line-length` (120 vs 100), `target-version` (py312 vs

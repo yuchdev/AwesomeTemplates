@@ -1,6 +1,10 @@
-# Milestone 0002 - Alternative Headless Harness Support
+# Milestone 0001 - Alternative Headless Harness Support
 
-**Status:** not started, not scheduled. Design only - see [status.md](status.md).
+**Status:** tasks 01.0-09.0 (below) shipped and complete as of 2026-08-30. Task 10.0
+(credential-flags + `--backend` removal, added 2026-09-08) is in progress - see
+[status.md](status.md) for current per-task state. (This header previously read "Milestone
+0002 ... not started" - stale from before this folder's numbering settled; corrected here to
+match `status.md` and `docs/roadmap/README.md`'s index.)
 
 ## Why this milestone exists
 
@@ -198,24 +202,46 @@ harness: str = typer.Option(
   other scalar `generate` option already has (not the `--specialization` list exception).
 - Rejected outright (mirroring `--seed-roadmap`'s existing check) when passed without
   `--resolve-markers`.
-- **The one-shot API fallback (`resolver.resolve_tree`) stays `claude`/Anthropic-only.** It
-  calls the Messages API directly - there is no "one-shot Copilot API" or "one-shot Junie API"
-  equivalent in this codebase, and inventing one is out of scope here (it would be a fourth,
-  unrelated integration, not a headless-harness adapter). So the fallback behavior changes by
-  harness:
-  - `--harness claude` (default): unchanged today's behavior - `claude` missing falls back to
-    `resolver.resolve_tree` with a warning, exactly as now.
-  - `--harness copilot` / `--harness junie`: binary missing is a hard failure with an
-    actionable, harness-named message (`"copilot CLI not found on PATH - install GitHub
-    Copilot CLI, or use --harness claude"` / the `junie`-specific message from outcome 2
-    above if that's what the spike finds) - **no silent fallback to a different harness or to
-    the Anthropic-only one-shot path**, since silently substituting a different vendor's model
-    for the one the user explicitly asked for would be a surprising, unrequested behavior
-    change, not a graceful degradation.
+- **As shipped, there is no one-shot API fallback for any harness, including `claude`.** A
+  missing binary is a hard failure with an actionable, harness-named message
+  (`"the \`claude\` CLI was not found on PATH - install it (or check its authentication)"` /
+  the equivalent for `copilot`/`junie`) - **no silent fallback to `resolver.resolve_tree`, to a
+  different harness, or to a direct API**, since silently substituting a different execution
+  path for the one the user explicitly asked for would be a surprising, unrequested behavior
+  change, not a graceful degradation. (An earlier revision of this document proposed keeping
+  `claude`'s missing-binary case falling back to `resolver.resolve_tree` - that was never
+  shipped; task 10.0 below removes the last trace of an alternative engine, `--backend`, that
+  had accreted alongside this milestone without ever doing real work.)
 - `--update-guidelines` keeps working per-harness: it only changes which extra tool
   (`Write`) is requested and which files are watched, both harness-agnostic already.
 - `--dry-run` output gains a `Harness: ...` line (console) / `"harness"` key (JSON), the same
   shape `Specializations: ...` already has.
+
+### Credential flags (`--api-key` / `--api-key-env`) - task 10.0
+
+`--resolve-markers` runs only through `--harness`; there is no second "engine" to authenticate
+another way. **How** the chosen harness's CLI subprocess authenticates is a separate, orthogonal
+choice, added as two flags that pair with `--harness` and never change what runs:
+
+- `--api-key <value>` forwards a literal credential into the harness subprocess's environment.
+  Never has a config-file fallback - a literal secret has no business in a checked-in config
+  file (this repo already runs a secret-scan hook on every write/edit for exactly this reason).
+- `--api-key-env <VAR_NAME>` reads `VAR_NAME` from the **caller's own** environment and forwards
+  *its* value the same way. Does get a config-file fallback (`cfg.get("api_key_env")`), since
+  naming a variable isn't itself a secret.
+- Omitting both (the default) means the harness authenticates however the installed CLI already
+  does - typically its own login. This is `headless.resolve_tree_headless`'s existing `api_key`
+  parameter; `cli.py` previously always called it with the literal `None`, and these two flags
+  are simply what lets a caller populate it instead.
+- `Harness.api_key_env: Optional[str]` (generalized from the old `forwards_anthropic_key: bool`)
+  names the environment variable a given harness's CLI reads for key-based auth -
+  `"ANTHROPIC_API_KEY"` for `claude`, `None` for `copilot`/`junie` (they authenticate only via
+  their own login, with no env-var slot a key could fill). `--api-key`/`--api-key-env` are
+  rejected outright by `sanity_check` for a harness whose `api_key_env` is `None`.
+- `--backend {anthropic-api,openai-api,jetbrains-api}` (and `src/awesome_templates/backends.py`)
+  are removed entirely - every backend was permanently `implemented=False` and `generate` never
+  called `resolver.resolve_tree` as a fallback either, so the flag never did real work. See task
+  10.0 below.
 
 ## Testing strategy
 
@@ -310,12 +336,16 @@ already follows.
 | 07.0 | Copilot porting session                              | feature   | `_build_copilot_porting_prompt` / session wiring confirming (spike, same posture as task 02) how to hand Copilot "read `.claude/{agents,skills,loops,hooks}`, re-author your own equivalents" instructions and where Copilot's own conventions expect the output to live |
 | 08.0 | Junie porting session (headless)                     | feature   | Same porting session for `junie`, run strictly headless via task 03's confirmed non-interactive mode; `--port-to junie` fails the same honest way `--harness junie` does today if task 03 lands on outcome 2 |
 | 09.0 | Porting pipeline tests                               | test      | `tests/test_port.py` (or `test_headless.py`/`test_cli.py` additions): `--port-to` validation (requires `--resolve-markers`, requires `--harness claude`, respects task 03's outcome for `junie`), manifest content, fake `run=` assertions per harness, dry-run output |
+| 10.0 | Credential flags + `--backend` removal                | feature   | Remove `backends.py`/`--backend` entirely; add `--api-key`/`--api-key-env` (pair with `--harness`, never select an engine); generalize `Harness.forwards_anthropic_key: bool` → `Harness.api_key_env: Optional[str]`; test suite back to green with coverage ≥ 90% |
 
 Tasks 02 and 03 are independent of each other and of task 04's flag plumbing beyond needing
 task 01's registry to exist first; they can land in either order, or only one of them, without
 blocking the other. Task 06 needs task 01's registry and task 04's flag plumbing; task 07 needs
 task 02's confirmed Copilot contract; task 08 needs task 03's confirmed (or honestly-stubbed)
-Junie contract. Tasks 07 and 08 are independent of each other, same as 02/03.
+Junie contract. Tasks 07 and 08 are independent of each other, same as 02/03. Task 10.0 needs
+task 01's registry (it edits the same `Harness` dataclass) and task 04's `cli.py` wiring (it
+edits the same `sanity_check`/`generate`); it is otherwise independent of 02/03/06-09 and lands
+long after all of them (added 2026-09-08, once tasks 01-09 were already shipped).
 
 ## Acceptance criteria
 
@@ -323,13 +353,14 @@ Junie contract. Tasks 07 and 08 are independent of each other, same as 02/03.
       `HARNESS_NAMES`, `_REGISTRY` with all three backends registered (task 03's `junie` entry
       may be the "unavailable, honest error" stub if its spike lands on outcome 2).
 - [ ] `headless.py`'s `resolve_tree_headless` accepts `harness: str = "claude"`, looks up the
-      `Harness`, and forwards `ANTHROPIC_API_KEY` only when `forwards_anthropic_key` is true.
-      Calling it with no `harness` argument (existing call sites) is behavior-identical to today.
-- [ ] `cli.py`'s `generate` gains `--harness {claude,copilot,junie}` (default `claude`);
-      rejected without `--resolve-markers`; unknown value rejected with the valid-choices list;
-      dry-run JSON/console output updated; the `claude`-missing → one-shot-fallback branch is
-      reachable only when `harness == "claude"` - `copilot`/`junie` missing fails hard with a
-      harness-named, actionable message and no silent fallback.
+      `Harness`, and forwards a given `api_key` only when that harness's `api_key_env` names an
+      env var (`None` for copilot/junie). Calling it with no `harness` argument (existing call
+      sites) is behavior-identical to today.
+- [ ] `cli.py`'s `generate` gains `--harness {claude,copilot,junie}` (no default - see task
+      10.0's own acceptance criteria below for why); rejected without `--resolve-markers`;
+      unknown value rejected with the valid-choices list; dry-run JSON/console output updated;
+      a missing binary for any harness (including `claude`) fails hard with a harness-named,
+      actionable message and no silent fallback to any other engine.
 - [ ] `src/awesome_templates/CLAUDE.md` module map gains a `harnesses.py` entry; `headless.py`'s
       own entry is updated to describe it as consuming a `Harness` rather than being
       `claude`-specific.
@@ -352,8 +383,30 @@ Junie contract. Tasks 07 and 08 are independent of each other, same as 02/03.
       (outcome 1); otherwise it fails with the same honest message `--harness junie` already
       gives, with no silent fallback to an interactive session.
 - [ ] Neither the Copilot nor the Junie porting session forwards `ANTHROPIC_API_KEY` -
-      `forwards_anthropic_key` stays `False` for both, matching their `--harness` registrations.
+      `api_key_env` stays `None` for both, matching their `--harness` registrations.
 - [ ] `tests/test_port.py` (or the equivalent additions under "Testing strategy") pass; no real
       `copilot`/`junie` binary is invoked by the suite.
 
-See [status.md](status.md) for progress (all tasks Not started - this milestone has not begun).
+### Task 10.0's own acceptance criteria
+
+- [x] `src/awesome_templates/backends.py` deleted; `--backend` no longer exists as a CLI option
+      (passing it is Typer/Click's own "no such option" exit 2, not `sanity_check`'s exit 1).
+- [x] `--api-key`/`--api-key-env` exist, pair with `--harness`, and are mutually exclusive with
+      each other; either without `--harness` is rejected; either against a harness whose
+      `api_key_env` is `None` is rejected; `--api-key-env NAME` naming an unset variable is
+      rejected with a clear message; omitting both is the default and forwards no credential
+      (unchanged `api_key=None` behavior).
+- [x] `Harness.api_key_env: Optional[str]` replaces `forwards_anthropic_key: bool` everywhere
+      (`harnesses.py`, `headless.py`, `port.py`, and every test referencing the old field).
+- [x] `resolver.py`'s direct-API code and `ai/client.py` are untouched - already unreachable from
+      `generate` before this task, deliberately left that way rather than deleted.
+- [x] `uv run pytest --cov=awesome_templates` green with **coverage ≥ 90%** (an explicit floor
+      for this task only - this repo otherwise sets no coverage floor by default, per its own
+      `pyproject.toml` and the project-wide convention recorded in `CLAUDE.md`). 282 passed,
+      coverage exactly 90%.
+- [x] `uv run ruff check src/ tests/` clean.
+- [x] `/pr-review` reaches LGTM (or PASS_WITH_FOLLOWUP with no unresolved HIGH/CRITICAL) -
+      APPROVE (feature-reviewer LGTM, security-auditor PASS); see status.md's Task 10.0
+      section for the full verdict and the two small follow-ups applied before close.
+
+See [status.md](status.md) for progress.

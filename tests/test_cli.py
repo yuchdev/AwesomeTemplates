@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 import awesome_templates.cli as cli_module
 from awesome_templates.cli import app
+from awesome_templates.port import PortSummary
 from awesome_templates.resolver import ResolveSummary
 
 runner = CliRunner()
@@ -221,7 +222,8 @@ def _check(**overrides):
     """Call sanity_check with a valid baseline, overridden per test."""
     kwargs = {
         "harness_value": None,
-        "backend_value": None,
+        "api_key": None,
+        "api_key_env": None,
         "resolve_markers": False,
         "seed_roadmap": False,
         "update_guidelines": False,
@@ -239,19 +241,33 @@ def test_sanity_check_passes_the_supported_ai_case():
     _check(harness_value="claude", resolve_markers=True)
 
 
-def test_sanity_check_mutual_exclusion_beats_unknown_names(console_text):
-    # Gate 1 before gate 2: two engines *and* a bogus one is reported as the
-    # exclusion error, because naming both is the more fundamental mistake.
+def test_sanity_check_rejects_api_key_and_api_key_env_together(console_text):
+    # Gate 4: the two credential flags configure the same auth slot two ways, so
+    # asking for both at once is incoherent - reported as a mutual-exclusion
+    # error regardless of the AI stage's other flags.
     with pytest.raises(typer.Exit):
-        _check(harness_value="claude", backend_value="not-a-backend", resolve_markers=True)
-    assert "mutually exclusive" in _flat(console_text())
+        _check(harness_value="claude", api_key="sk-x", api_key_env="ANTHROPIC_API_KEY", resolve_markers=True)
+    assert "--api-key and --api-key-env are mutually exclusive" in _flat(console_text())
 
 
-def test_sanity_check_mutual_exclusion_applies_without_resolve_markers(console_text):
-    # Gate 1 is unconditional - it does not wait for the AI stage to be asked for.
+def test_sanity_check_credential_flag_requires_a_harness(console_text):
+    # Gate 4: a credential flag authenticates a harness's session; with no
+    # --harness named there is nothing for it to authenticate, so it is refused
+    # before the AI stage is even considered.
     with pytest.raises(typer.Exit):
-        _check(harness_value="claude", backend_value="anthropic-api")
-    assert "mutually exclusive" in _flat(console_text())
+        _check(api_key="sk-x")
+    assert "--api-key requires --harness" in _flat(console_text())
+
+
+def test_sanity_check_credential_flag_gate_beats_not_implemented(console_text):
+    # Gate 4 before gate 6: --api-key against a harness that authenticates only
+    # through its own login (api_key_env is None, i.e. copilot/junie) is a flag
+    # mistake, reported ahead of the less-actionable "copilot isn't built yet".
+    with pytest.raises(typer.Exit):
+        _check(harness_value="copilot", api_key="sk-x", resolve_markers=True)
+    flat = _flat(console_text())
+    assert "--harness copilot authenticates via its own login only" in flat
+    assert "not implemented" not in flat
 
 
 def test_sanity_check_unknown_name_beats_missing_engine(console_text):
@@ -300,19 +316,9 @@ def test_generate_rejects_harness_without_resolve_markers(fixture_workspace, mon
     assert "--harness copilot has no effect without --resolve-markers" in _flat(result.stdout)
 
 
-def test_generate_rejects_backend_without_resolve_markers(fixture_workspace, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(
-        app,
-        ["generate", ".", "--preset", "demo", "--name", "Test", "--backend", "anthropic-api", "--dry-run"],
-    )
-    assert result.exit_code == 1
-    assert "--backend anthropic-api has no effect without --resolve-markers" in _flat(result.stdout)
-
-
-def test_generate_requires_an_engine_for_resolve_markers(fixture_workspace, monkeypatch):
-    # The core of this contract: there is no default engine. --resolve-markers
-    # with neither flag must refuse rather than quietly pick claude (and, with
+def test_generate_requires_a_harness_for_resolve_markers(fixture_workspace, monkeypatch):
+    # The core of this contract: there is no default harness. --resolve-markers
+    # with no --harness must refuse rather than quietly pick claude (and, with
     # ANTHROPIC_API_KEY exported, quietly bill an API).
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(
@@ -320,33 +326,7 @@ def test_generate_requires_an_engine_for_resolve_markers(fixture_workspace, monk
         ["generate", ".", "--preset", "demo", "--name", "Test", "--resolve-markers", "--dry-run"],
     )
     assert result.exit_code == 1
-    assert "--resolve-markers requires an explicit AI engine" in _flat(result.stdout)
-
-
-def test_generate_rejects_harness_and_backend_together(fixture_workspace, monkeypatch):
-    # Mutual exclusion is sanity_check's first gate and applies even without
-    # --resolve-markers: the two select different machinery for the same job,
-    # so asking for both is incoherent rather than a precedence question.
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(
-        app,
-        [
-            "generate",
-            ".",
-            "--preset",
-            "demo",
-            "--name",
-            "Test",
-            "--harness",
-            "claude",
-            "--backend",
-            "anthropic-api",
-            "--resolve-markers",
-            "--dry-run",
-        ],
-    )
-    assert result.exit_code == 1
-    assert "--harness claude and --backend anthropic-api are mutually exclusive" in _flat(result.stdout)
+    assert "--resolve-markers requires --harness" in _flat(result.stdout)
 
 
 @pytest.mark.parametrize("harness", ["copilot", "junie"])
@@ -374,50 +354,17 @@ def test_generate_rejects_unimplemented_harness(fixture_workspace, monkeypatch, 
     assert "unknown" not in result.stdout
 
 
-@pytest.mark.parametrize("backend", ["anthropic-api", "openai-api", "jetbrains-api"])
-def test_generate_rejects_every_backend_as_unimplemented(fixture_workspace, monkeypatch, backend):
+def test_generate_backend_flag_is_gone(fixture_workspace, monkeypatch):
+    # --backend was removed wholesale in task 10.0 (not merely gated): Typer/Click
+    # itself rejects the flag as unknown (exit 2, "no such option") before the
+    # command body runs, confirming it is fully absent from the option set.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     result = runner.invoke(
         app,
-        [
-            "generate",
-            ".",
-            "--preset",
-            "demo",
-            "--name",
-            "Test",
-            "--backend",
-            backend,
-            "--resolve-markers",
-            "--dry-run",
-        ],
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--backend", "anthropic-api", "--dry-run"],
     )
-    assert result.exit_code == 1
-    assert f"--backend {backend}" in _flat(result.stdout)
-    assert "not implemented yet" in _flat(result.stdout)
-
-
-def test_generate_rejects_unknown_backend(fixture_workspace, monkeypatch):
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    result = runner.invoke(
-        app,
-        ["generate", ".", "--preset", "demo", "--name", "Test", "--backend", "grok-api", "--dry-run"],
-    )
-    assert result.exit_code == 2  # Click's own choice validation, not _fail's exit(1)
-
-
-def test_generate_rejects_unknown_backend_from_config_file(fixture_workspace, tmp_path, monkeypatch):
-    # Same hole HarnessChoice has: a config-file `backend` value never passes
-    # through the Typer enum, so sanity_check re-checks it by name.
-    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
-    config_path = tmp_path / "cfg.json"
-    config_path.write_text('{"backend": "bogus-api", "preset": "demo", "project": {"name": "Test"}}')
-    result = runner.invoke(
-        app,
-        ["generate", ".", "--config-file", str(config_path), "--dry-run"],
-    )
-    assert result.exit_code == 1
-    assert "unknown backend 'bogus-api'" in _flat(result.stdout)
+    assert result.exit_code == 2  # Click's own option parsing, not _fail's exit(1)
+    assert "no such option" in result.output.lower()
 
 
 def test_generate_rejects_unknown_harness(fixture_workspace, monkeypatch):
@@ -437,10 +384,13 @@ def test_generate_dry_run_json_includes_harness(fixture_workspace, monkeypatch):
     )
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    # No engine was asked for and none is defaulted in - the offline path picks
+    # No harness was asked for and none is defaulted in - the offline path picks
     # no vendor at all, and the payload has to say so rather than imply claude.
+    # `--backend` is gone entirely, so the key must not resurface; auth reports
+    # the default "login" source (no credential flag given).
     assert payload["harness"] is None
-    assert payload["backend"] is None
+    assert "backend" not in payload
+    assert payload["auth"] == "login"
 
 
 @pytest.mark.parametrize("harness", ["copilot", "junie"])
@@ -479,17 +429,17 @@ def test_generate_unimplemented_harness_writes_nothing_at_all(fixture_workspace,
 
 
 def test_generate_missing_claude_binary_fails_hard_with_no_api_fallback(fixture_workspace, tmp_path, monkeypatch):
-    # The regression this whole flag pair exists to prevent. `claude` absent
-    # from PATH used to fall back to one-shot Messages API marker resolution -
+    # The regression this hard-failure exists to prevent. `claude` absent from
+    # PATH used to fall back to one-shot Messages API marker resolution -
     # silently, whenever ANTHROPIC_API_KEY merely happened to be exported. It
-    # must now be a hard failure that *names* the explicit API alternative
-    # rather than taking it, even with a key sitting right there in the env.
+    # must now be a hard failure that names the missing CLI rather than quietly
+    # taking a direct-API path, even with a key sitting right there in the env.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     monkeypatch.setenv("PATH", str(tmp_path))  # no `claude`
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-would-have-been-used")
 
     def _boom(*a, **k):
-        raise AssertionError("the direct-API path must never run without --backend")
+        raise AssertionError("the direct-API path must never run as a fallback")
 
     monkeypatch.setattr("awesome_templates.resolver.resolve_tree", _boom)
 
@@ -511,17 +461,18 @@ def test_generate_missing_claude_binary_fails_hard_with_no_api_fallback(fixture_
     assert result.exit_code == 1
     flat = _flat(result.stdout)
     assert "the `claude` CLI was not found on PATH" in flat
-    assert "--backend anthropic-api" in flat  # names it, never takes it
 
 
 def test_generate_never_forwards_an_api_key_into_the_harness_session(fixture_workspace, tmp_path, monkeypatch):
-    # The exact cause of the reported failure: cli.py used to hand
-    # resolver.load_api_key(...)'s result to resolve_tree_headless, which
-    # forwards it into the `claude` subprocess env, where the CLI treats
-    # ANTHROPIC_API_KEY as an auth source that overrides the user's own login -
-    # disabling org connectors and failing the session outright on an unfunded
-    # key. cli.py must pass api_key=None regardless of the ambient environment;
-    # headless.py's own tests then cover the env stripping that follows from it.
+    # The no-flags (default) case. cli.py *can* forward a key now - that is
+    # exactly what --api-key/--api-key-env do - but with neither flag given it
+    # must still hand api_key=None to resolve_tree_headless regardless of any
+    # ambient ANTHROPIC_API_KEY. The exact cause of the reported failure was
+    # cli.py forwarding load_api_key(...)'s result unconditionally, where the
+    # CLI treated ANTHROPIC_API_KEY as an auth source overriding the user's own
+    # login - disabling org connectors and failing on an unfunded key. So the
+    # default must forward nothing; headless.py's own tests cover the env
+    # stripping that follows from api_key=None.
     monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
     fake_claude = tmp_path / "claude"
     fake_claude.write_text("#!/bin/sh\nexit 0\n")
@@ -554,6 +505,279 @@ def test_generate_never_forwards_an_api_key_into_the_harness_session(fixture_wor
     )
     assert result.exit_code == 0, result.stdout
     assert seen["api_key"] is None
+
+
+# --- credential flags: --api-key / --api-key-env -----------------------------
+
+
+def test_generate_api_key_flag_forwards_literal_value_to_harness(fixture_workspace, tmp_path, monkeypatch):
+    # --api-key forwards its literal value straight into resolve_tree_headless's
+    # api_key parameter - the credential the harness session authenticates with,
+    # in place of the CLI's own login. This is the whole point of the flag.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    seen = {}
+
+    def _capture(*a, **k):
+        seen.update(k)
+        return ResolveSummary(), []
+
+    monkeypatch.setattr("awesome_templates.headless.resolve_tree_headless", _capture)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key",
+            "literal-key-value",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert seen["api_key"] == "literal-key-value"
+
+
+def test_generate_api_key_env_forwards_variable_value_not_name(fixture_workspace, tmp_path, monkeypatch):
+    # --api-key-env NAME reads NAME from the caller's own environment and
+    # forwards its *value* (never the variable name itself) as the credential.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("MY_CUSTOM_KEY", "value-from-env")
+
+    seen = {}
+
+    def _capture(*a, **k):
+        seen.update(k)
+        return ResolveSummary(), []
+
+    monkeypatch.setattr("awesome_templates.headless.resolve_tree_headless", _capture)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key-env",
+            "MY_CUSTOM_KEY",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert seen["api_key"] == "value-from-env"  # the value, not "MY_CUSTOM_KEY"
+
+
+def test_generate_api_key_env_unset_variable_fails_before_subprocess(fixture_workspace, tmp_path, monkeypatch):
+    # Naming a variable that isn't set is a clean exit-1 failure that names the
+    # variable, raised before any harness subprocess is dispatched (the failure
+    # happens during credential resolution, ahead of the binary lookup/run).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("PATH", str(tmp_path))  # no `claude` either
+    monkeypatch.delenv("MISSING_KEY_VAR", raising=False)
+
+    def _boom(*a, **k):
+        raise AssertionError("no harness session may run when --api-key-env is unset")
+
+    monkeypatch.setattr("awesome_templates.headless.resolve_tree_headless", _boom)
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key-env",
+            "MISSING_KEY_VAR",
+        ],
+    )
+    assert result.exit_code == 1
+    flat = _flat(result.stdout)
+    assert "MISSING_KEY_VAR" in flat
+    assert "isn't set" in flat
+    assert not out_dir.exists()  # nothing generated before the failure
+
+
+def test_generate_rejects_api_key_and_api_key_env_together_via_cli(fixture_workspace, monkeypatch):
+    # Mutual exclusion enforced end-to-end through sanity_check.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("SOME_KEY_VAR", "v")
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key",
+            "literal-key-value",
+            "--api-key-env",
+            "SOME_KEY_VAR",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--api-key and --api-key-env are mutually exclusive" in _flat(result.stdout)
+
+
+def test_generate_rejects_api_key_without_harness(fixture_workspace, monkeypatch):
+    # A credential flag has no session to authenticate without --harness.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--api-key", "literal-key-value", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--api-key requires --harness" in _flat(result.stdout)
+
+
+def test_generate_rejects_api_key_env_without_harness(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("SOME_KEY_VAR", "v")
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--preset", "demo", "--name", "Test", "--api-key-env", "SOME_KEY_VAR", "--dry-run"],
+    )
+    assert result.exit_code == 1
+    assert "--api-key-env requires --harness" in _flat(result.stdout)
+
+
+@pytest.mark.parametrize("harness", ["copilot", "junie"])
+def test_generate_rejects_credential_flag_for_login_only_harness(fixture_workspace, monkeypatch, harness):
+    # copilot/junie authenticate only through their own login (api_key_env is
+    # None), so a credential flag doesn't apply to them - and that flag mistake
+    # is reported ahead of the less-actionable "not implemented yet" notice.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            harness,
+            "--api-key",
+            "literal-key-value",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    flat = _flat(result.stdout)
+    assert f"--harness {harness} authenticates via its own login only" in flat
+    assert "not implemented" not in flat
+
+
+def test_generate_dry_run_json_auth_reports_api_key_source(fixture_workspace, monkeypatch):
+    # Dry-run JSON's `auth` names the credential *source*, never the secret, and
+    # still carries no `backend` key.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key",
+            "literal-key-value",
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["auth"] == "api-key"
+    assert "literal-key-value" not in result.stdout  # the source is named, not the secret
+    assert "backend" not in payload
+
+
+def test_generate_dry_run_json_auth_reports_api_key_env_source(fixture_workspace, monkeypatch):
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("MY_KEY_VAR", "value-from-env")
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key-env",
+            "MY_KEY_VAR",
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["auth"] == "api-key-env:MY_KEY_VAR"
+    assert "value-from-env" not in result.stdout  # only the variable name surfaces
+    assert "backend" not in payload
+
+
+def test_generate_reads_api_key_env_from_config_file(fixture_workspace, tmp_path, monkeypatch):
+    # --api-key-env names a variable, not a secret, so (unlike --api-key) it gets
+    # the same config-file fallback every other scalar `generate` option has -
+    # this is the one credential-flag path the CLI-flag tests above don't cover.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    monkeypatch.setenv("CONFIG_SOURCED_VAR", "value-from-config-sourced-env")
+    config_path = tmp_path / "cfg.json"
+    config_path.write_text(
+        '{"harness": "claude", "api_key_env": "CONFIG_SOURCED_VAR", "preset": "demo", "project": {"name": "Test"}}'
+    )
+    result = runner.invoke(
+        app,
+        ["generate", ".", "--config-file", str(config_path), "--resolve-markers", "--dry-run", "--json"],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["auth"] == "api-key-env:CONFIG_SOURCED_VAR"
+    assert "value-from-config-sourced-env" not in result.stdout
 
 
 def test_generate_reports_skipped_api_increments_under_a_harness(fixture_workspace, tmp_path, monkeypatch):
@@ -602,7 +826,8 @@ def test_generate_reports_skipped_api_increments_under_a_harness(fixture_workspa
     assert payload["roadmap_seeded"] is False
     assert payload["test_conventions_described"] is False
     assert payload["harness"] == "claude"
-    assert payload["backend"] is None
+    assert "backend" not in payload
+    assert payload["auth"] == "login"
     assert any("Nothing was sent to any vendor API" in w for w in payload["warnings"])
 
 
@@ -669,6 +894,88 @@ def test_generate_rejects_unknown_port_to(fixture_workspace, monkeypatch):
         ["generate", ".", "--preset", "demo", "--name", "Test", "--port-to", "bogus", "--dry-run"],
     )
     assert result.exit_code == 2  # Click's own choice validation, not _fail's exit(1)
+
+
+def test_generate_dry_run_human_output_shows_harness_auth_and_port(fixture_workspace, monkeypatch):
+    # The non-JSON dry-run branch prints the harness, auth source, and port-to
+    # lines; this exercises that human-readable path (the JSON dry-run tests
+    # cover the underlying payload data).
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            ".",
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--specialization",
+            "widgets",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--api-key",
+            "literal-key-value",
+            "--port-to",
+            "copilot",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    flat = _flat(result.stdout)
+    assert "Harness: claude" in flat
+    assert "Auth: api-key" in flat
+    assert "Port to: copilot" in flat
+    assert "Specializations: widgets" in flat
+
+
+def test_generate_resolve_and_port_human_output(fixture_workspace, tmp_path, monkeypatch):
+    # The success path through resolve + --update-guidelines + --port-to in
+    # human-readable (non-JSON) form: exercises the console summary lines for
+    # guideline docs and the port result. Both the harness research session and
+    # the port session are stubbed, so no real CLI is invoked.
+    monkeypatch.setattr(cli_module, "TEMPLATES_ROOT", fixture_workspace.root)
+    fake_claude = tmp_path / "claude"
+    fake_claude.write_text("#!/bin/sh\nexit 0\n")
+    fake_claude.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    monkeypatch.setattr(
+        "awesome_templates.headless.resolve_tree_headless",
+        lambda *a, **k: (ResolveSummary(), ["README.md", "CLAUDE.md"]),
+    )
+    monkeypatch.setattr(
+        "awesome_templates.port.port_tree_headless",
+        lambda *a, **k: PortSummary(
+            harness="copilot",
+            manifest_kinds={"agents": 1, "skills": 0, "loops": 0, "hooks": 2},
+            command_ok=True,
+        ),
+    )
+
+    out_dir = tmp_path / "proj"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            str(out_dir),
+            "--preset",
+            "demo",
+            "--name",
+            "Test",
+            "--resolve-markers",
+            "--harness",
+            "claude",
+            "--update-guidelines",
+            "--port-to",
+            "copilot",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    flat = _flat(result.stdout)
+    assert "Guideline docs created/updated: README.md, CLAUDE.md" in flat
+    assert "Ported to copilot" in flat
 
 
 def test_generate_dry_run_json_includes_port_to_null_by_default(fixture_workspace, monkeypatch):

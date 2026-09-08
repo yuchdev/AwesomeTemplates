@@ -43,9 +43,13 @@ class Harness:
         backend instead expects the prompt as a command-line argument -
         `build_command` is responsible for placing it correctly in that case,
         and the caller must not also pipe it over stdin.
-    :ivar forwards_anthropic_key: whether `ANTHROPIC_API_KEY` should be
-        forwarded into this harness's subprocess environment - true only for
-        `claude`; copilot/junie authenticate through their own mechanisms.
+    :ivar api_key_env: the environment variable name this harness's underlying
+        CLI reads for key-based authentication (e.g. `"ANTHROPIC_API_KEY"` for
+        `claude`), or `None` when the harness has no key-based auth mechanism
+        at all - copilot/junie authenticate only through their own login flow
+        (`gh auth login` / a cached JetBrains account token), so there is no
+        env var `--api-key`/`--api-key-env` could populate for them, and
+        `cli.sanity_check` rejects those flags outright for such a harness.
     :ivar build_command: `(binary, *, tools, model, prompt) -> argv`. `prompt`
         is unused (and should not be embedded in argv) when `prompt_via` is
         `"stdin"`; it is required and must appear in the returned argv when
@@ -61,7 +65,7 @@ class Harness:
     binary_names: tuple[str, ...]
     default_model: Optional[str]
     prompt_via: str
-    forwards_anthropic_key: bool
+    api_key_env: Optional[str]
     build_command: Callable[..., list[str]]
     porting_target_hint: Optional[str] = None
 
@@ -150,7 +154,7 @@ _CLAUDE = Harness(
     binary_names=("claude",),
     default_model="opus",
     prompt_via="stdin",
-    forwards_anthropic_key=True,
+    api_key_env="ANTHROPIC_API_KEY",
     build_command=_build_claude_command,
 )
 
@@ -204,7 +208,8 @@ def _build_copilot_command(
     `--secret-env-vars=ANTHROPIC_API_KEY` is copilot's own flag to strip and
     redact that variable from its shell-tool/MCP subprocess environments -
     defense-in-depth alongside (not instead of) `headless.py`'s own
-    env-stripping, since `forwards_anthropic_key=False`.
+    env-stripping, since `api_key_env=None` (copilot has no key-based auth for
+    `--api-key`/`--api-key-env` to populate).
 
     `--model` is omitted entirely when `model is None` (subtask 01 confirmed no
     opus-comparable alias, so `_COPILOT.default_model=None`); it is appended
@@ -247,7 +252,7 @@ _COPILOT = Harness(
     binary_names=("copilot",),
     default_model=None,
     prompt_via="arg",
-    forwards_anthropic_key=False,
+    api_key_env=None,
     build_command=_build_copilot_command,
     # Confirmed against the installed copilot CLI's own --help text (task
     # 07.0 subtask 01's spike) - see
@@ -352,7 +357,7 @@ _JUNIE = Harness(
     binary_names=("junie",),
     default_model=None,
     prompt_via="arg",
-    forwards_anthropic_key=False,
+    api_key_env=None,
     build_command=_build_junie_command,
     # Confirmed both via the installed junie CLI's own --help text and by
     # direct filesystem inspection of real, populated `.junie/` directories on

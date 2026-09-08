@@ -26,7 +26,7 @@ def _stub_harness(hint: Optional[str] = None) -> Harness:
         binary_names=(),
         default_model=None,
         prompt_via="stdin",
-        forwards_anthropic_key=False,
+        api_key_env=None,
         build_command=lambda *a, **k: [],
         porting_target_hint=hint,
     )
@@ -75,7 +75,7 @@ def test_build_porting_prompt_never_instructs_editing_claude_dir(tmp_path: Path)
 #
 # Both real headless-porting backends (copilot from task 07.0, junie from task
 # 08.0 - task 03.0 landed on Outcome 1: junie has a genuine headless mode) are
-# `prompt_via="arg"`, `forwards_anthropic_key=False` harnesses whose dispatch
+# `prompt_via="arg"`, `api_key_env=None` harnesses whose dispatch
 # must be pinned identically, so every case below is parametrized over both.
 # No real `copilot`/`junie` binary is ever invoked: the fake executables only
 # need to exist and resolve via `shutil.which`; `run=` intercepts before any
@@ -121,7 +121,7 @@ def test_port_tree_headless_dispatches_via_harness_build_command(
 ) -> None:
     # A fake binary resolvable via shutil.which, never actually run (run=
     # intercepts). A non-empty ANTHROPIC_API_KEY that must NOT reach the
-    # subprocess env (forwards_anthropic_key=False for every --port-to target).
+    # subprocess env (api_key_env=None for every --port-to target).
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     fake_bin = tmp_path / "bin" / harness
     fake_bin.parent.mkdir()
@@ -158,7 +158,7 @@ def test_port_tree_headless_dispatches_via_harness_build_command(
     assert calls[0]["cmd"] == expected_cmd
     assert calls[0]["input"] is None  # prompt_via="arg": prompt in argv, not stdin
     assert calls[0]["cwd"] == str(out_dir.resolve())
-    assert "ANTHROPIC_API_KEY" not in calls[0]["env"]  # forwards_anthropic_key=False
+    assert "ANTHROPIC_API_KEY" not in calls[0]["env"]  # api_key_env=None
 
 
 @pytest.mark.parametrize("harness", _PORT_HARNESSES)
@@ -178,3 +178,56 @@ def test_port_tree_headless_nonzero_exit_warns_not_raises(
     summary = port.port_tree_headless(fixture_workspace.path("demo"), harness=harness, warnings=warnings, run=fake_run)
     assert summary.command_ok is False
     assert any(harness in w and "permission denied" in w for w in warnings)
+
+
+@pytest.mark.parametrize("harness", _PORT_HARNESSES)
+def test_port_tree_headless_timeout_warns_not_raises(
+    fixture_workspace: Workspace, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, harness: str
+) -> None:
+    # A timed-out session is a soft failure: warn and return a not-ok summary,
+    # never crash the whole generate run.
+    fake_bin = tmp_path / "bin" / harness
+    fake_bin.parent.mkdir()
+    fake_bin.write_text("#!/bin/sh\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin.parent))
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, timeout=1)
+
+    warnings: list[str] = []
+    summary = port.port_tree_headless(fixture_workspace.path("demo"), harness=harness, warnings=warnings, run=fake_run)
+    assert summary.command_ok is False
+    assert any(harness in w and "timed out" in w for w in warnings)
+
+
+@pytest.mark.parametrize("harness", _PORT_HARNESSES)
+def test_port_tree_headless_oserror_warns_not_raises(
+    fixture_workspace: Workspace, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, harness: str
+) -> None:
+    # An oversized argv (E2BIG / OSError) degrades gracefully the same way the
+    # timeout path does, rather than crashing.
+    fake_bin = tmp_path / "bin" / harness
+    fake_bin.parent.mkdir()
+    fake_bin.write_text("#!/bin/sh\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin.parent))
+
+    def fake_run(cmd, **kwargs):
+        raise OSError("Argument list too long")
+
+    warnings: list[str] = []
+    summary = port.port_tree_headless(fixture_workspace.path("demo"), harness=harness, warnings=warnings, run=fake_run)
+    assert summary.command_ok is False
+    assert any(harness in w and "prompt may be too large" in w for w in warnings)
+
+
+def test_port_tree_headless_rejects_key_based_harness(fixture_workspace: Workspace) -> None:
+    # A security boundary, enforced unconditionally (not a plain assert): porting
+    # must never run for a harness with a key-based auth slot (api_key_env set,
+    # i.e. claude). cli.py guarantees this, but the guard stays in place.
+    def fake_run(cmd, **kwargs):  # must never be reached
+        raise AssertionError("no subprocess may run for a key-based harness")
+
+    with pytest.raises(ValueError, match="key-based auth"):
+        port.port_tree_headless(fixture_workspace.path("demo"), harness="claude", warnings=[], run=fake_run)

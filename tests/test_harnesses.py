@@ -41,7 +41,7 @@ def test_find_harness_resolves_first_matching_binary(tmp_path, monkeypatch):
         binary_names=("first_bin_missing", "second_bin"),
         default_model=None,
         prompt_via="stdin",
-        forwards_anthropic_key=False,
+        api_key_env=None,
         build_command=lambda *a, **k: [],
     )
     found = harnesses.find_harness(stub)
@@ -57,7 +57,7 @@ def test_find_harness_prefers_earlier_binary_name(tmp_path, monkeypatch):
         binary_names=("alpha", "beta"),
         default_model=None,
         prompt_via="stdin",
-        forwards_anthropic_key=False,
+        api_key_env=None,
         build_command=lambda *a, **k: [],
     )
     assert harnesses.find_harness(stub) == str(bindir / "alpha")
@@ -70,7 +70,7 @@ def test_find_harness_returns_none_when_no_candidate_installed(tmp_path, monkeyp
         binary_names=("definitely_not_installed_xyz",),
         default_model=None,
         prompt_via="stdin",
-        forwards_anthropic_key=False,
+        api_key_env=None,
         build_command=lambda *a, **k: [],
     )
     assert harnesses.find_harness(stub) is None
@@ -83,7 +83,7 @@ def test_find_harness_returns_none_for_empty_binary_names():
         binary_names=(),
         default_model=None,
         prompt_via="stdin",
-        forwards_anthropic_key=False,
+        api_key_env=None,
         build_command=lambda *a, **k: [],
     )
     assert harnesses.find_harness(stub) is None
@@ -114,7 +114,7 @@ def test_get_claude_returns_registered_harness():
     assert harness.binary_names == ("claude",)
     assert harness.default_model == "opus"
     assert harness.prompt_via == "stdin"
-    assert harness.forwards_anthropic_key is True
+    assert harness.api_key_env == "ANTHROPIC_API_KEY"
 
 
 def test_get_copilot_registration_fields():
@@ -123,7 +123,7 @@ def test_get_copilot_registration_fields():
     assert harness.binary_names == ("copilot",)
     assert harness.default_model is None
     assert harness.prompt_via == "arg"
-    assert harness.forwards_anthropic_key is False
+    assert harness.api_key_env is None
 
 
 def test_get_junie_registration_fields():
@@ -132,15 +132,15 @@ def test_get_junie_registration_fields():
     assert harness.binary_names == ("junie",)
     assert harness.default_model is None
     assert harness.prompt_via == "arg"
-    assert harness.forwards_anthropic_key is False
+    assert harness.api_key_env is None
 
 
-def test_copilot_does_not_forward_anthropic_key():
-    assert harnesses.get("copilot").forwards_anthropic_key is False
+def test_copilot_has_no_key_based_auth():
+    assert harnesses.get("copilot").api_key_env is None
 
 
-def test_junie_does_not_forward_anthropic_key():
-    assert harnesses.get("junie").forwards_anthropic_key is False
+def test_junie_has_no_key_based_auth():
+    assert harnesses.get("junie").api_key_env is None
 
 
 # --- _build_claude_command -------------------------------------------------

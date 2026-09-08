@@ -351,17 +351,26 @@ def resolve_tree_headless(
     # handed to the harness's build_command rather than inside it.
     tools = _BASE_TOOLS + (("Write",) if update_guidelines else ())
     cmd = harness_obj.build_command(claude_bin, tools=tools, model=resolved_model, prompt=prompt)
-    # An explicit key (env or .env - see resolver.load_api_key) is forwarded
-    # only for harnesses that authenticate through ANTHROPIC_API_KEY; without
-    # one (or for a harness with its own auth) the session authenticates however
-    # the installed CLI already does (typically the user's own login). A
-    # non-forwarding harness must have the key stripped from the inherited env,
-    # not merely left unset - the developer may already have it exported.
+    # An explicit key (from --api-key/--api-key-env - see cli.py) is forwarded
+    # only when this harness declares an api_key_env to forward it into (only
+    # `claude` does today); without one (or for a harness with no key-based
+    # auth mechanism at all) the session authenticates however the installed
+    # CLI already does (typically the user's own login). ANTHROPIC_API_KEY -
+    # and, generally, whatever env var this harness's own api_key_env names -
+    # is always stripped from the inherited env first, regardless of harness:
+    # the developer may already have it exported, and it must never leak into
+    # a harness that isn't the one it was meant for. The explicit
+    # ANTHROPIC_API_KEY strip stays even for a harness whose api_key_env is a
+    # different name, since Anthropic-key leakage is the specific, recurring
+    # concern this codebase has already hit once (see status.md's task 01.0
+    # notes); the harness_obj.api_key_env strip generalizes the same guarantee
+    # to whatever variable a *future* harness might declare.
     env = {**os.environ}
-    if api_key and harness_obj.forwards_anthropic_key:
-        env["ANTHROPIC_API_KEY"] = api_key
-    else:
-        env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_API_KEY", None)
+    if harness_obj.api_key_env:
+        env.pop(harness_obj.api_key_env, None)
+        if api_key:
+            env[harness_obj.api_key_env] = api_key
 
     # claude receives its prompt over stdin (prompt_via="stdin"); a harness that
     # takes the prompt as an argv element instead embeds it in cmd already.
