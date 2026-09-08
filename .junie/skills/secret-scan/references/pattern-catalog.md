@@ -73,7 +73,7 @@ commit them regardless.
 
 ## Reporting rules
 
-- Print `file:line: <type>: <short excerpt>` — **never** the full secret value.
+- Print only `file:line: <type>` — **never** a secret excerpt or value.
 - On any hit: instruct the user to (1) remove the literal, (2) **rotate** it if it
   ever reached a remote, (3) replace with an env/`${VAR}` reference (see `.mcp.json`)
   or a secrets manager.

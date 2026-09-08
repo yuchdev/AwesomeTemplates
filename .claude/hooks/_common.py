@@ -1,10 +1,10 @@
-"""Shared helpers for Awesome Templates Claude Code hooks.
+"""Shared helpers for Awesome Templates Claude Code and Copilot hooks.
 
 All hooks are written in Python (not bash) because the canonical host is
 Windows 10/11 and Python 3.12 is a hard project dependency - this guarantees the
 hooks run identically on Windows, Linux, and macOS without a POSIX shell.
 
-Hook protocol (Claude Code):
+Hook protocol (Claude Code and Copilot's PascalCase compatibility mode):
   * Hook input arrives as a single JSON object on stdin.
   * Exit code 0  -> allow / success.
   * Exit code 2  -> block the tool call (stderr is shown to Claude).
@@ -160,9 +160,15 @@ def tool_input(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def edited_path(event: dict[str, Any]) -> Optional[Path]:
-    """Resolve the file path targeted by a Write/Edit/MultiEdit tool call."""
+    """Resolve paths from Claude snake_case or Copilot camelCase tool arguments."""
     fields = tool_input(event)
-    raw = fields.get("file_path") or fields.get("path") or fields.get("notebook_path")
+    raw = (
+        fields.get("file_path")
+        or fields.get("filePath")
+        or fields.get("path")
+        or fields.get("notebook_path")
+        or fields.get("notebookPath")
+    )
     if not raw:
         return None
     p = Path(raw)

@@ -209,6 +209,9 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Local Copilot workflow cursors
+.github/copilot/state/
+
 # PyPI configuration file
 .pypirc
 

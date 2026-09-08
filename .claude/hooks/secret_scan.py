@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Secret scanner - dual mode.
 
-1. As a PreToolUse(Write|Edit|MultiEdit) hook: scans the *content about to be
-   written*. If a likely secret is detected it exits 2 to block the write.
+1. As a PreToolUse(Write|Edit|MultiEdit) hook: scans the *content or patch about
+   to be written*. If a likely secret is detected it exits 2 to block the write.
 2. As a CLI (``python secret_scan.py <file> [<file> ...]``): scans existing
    files on disk; used by the /secret-scan skill and the dep-audit flow.
 
@@ -53,28 +53,38 @@ ADDRESS_EXEMPT_TYPES = frozenset({"Generic assigned secret"})
 # exempts real addresses without opening a hole for `token = "0x<64 hex digits>"`.
 _MEM_ADDRESS_RE = re.compile(r"0[xX][0-9a-fA-F]{1,16}[uUlL]{0,3}")
 
-# Substrings that mark an obvious placeholder, so we do not cry wolf.
-ALLOWLIST = (
-    "example",
-    "placeholder",
+# Exact values that mark an obvious placeholder, so we do not cry wolf without
+# allowing a real credential that merely contains one of these words.
+PLACEHOLDER_VALUES = frozenset(
+    {
+        "example",
+        "placeholder",
+        "changeme",
+        "dummy",
+        "redacted",
+        "fake",
+        "test",
+    }
+)
+PLACEHOLDER_PREFIXES = (
     "your-",
     "your_",
-    "changeme",
-    "dummy",
-    "xxxx",
-    "${",
     "<your",
-    "redacted",
-    "fake",
-    "test",
 )
+_ENV_REFERENCE_RE = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+_MASKED_VALUE_RE = re.compile(r"x{4,}", re.IGNORECASE)
 
 SKIP_SUFFIXES = {".lock", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".dmp", ".db"}
 
 
-def _is_placeholder(line: str) -> bool:
-    low = line.lower()
-    return any(token in low for token in ALLOWLIST)
+def _is_placeholder(value: str) -> bool:
+    normalized = value.strip().strip("'\"").lower()
+    return (
+        normalized in PLACEHOLDER_VALUES
+        or normalized.startswith(PLACEHOLDER_PREFIXES)
+        or _ENV_REFERENCE_RE.fullmatch(normalized) is not None
+        or _MASKED_VALUE_RE.fullmatch(normalized) is not None
+    )
 
 
 def _is_memory_address(value: str) -> bool:
@@ -90,16 +100,15 @@ def scan_text(text: str) -> list[tuple[str, int, str]]:
     """Return (finding_name, line_number, line_excerpt) tuples."""
     hits: list[tuple[str, int, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        if _is_placeholder(line):
-            continue
         for name, pattern in PATTERNS.items():
             match = pattern.search(line)
             if match is None:
                 continue
-            if name in ADDRESS_EXEMPT_TYPES:
-                value = match.groupdict().get("value")
-                if value and _is_memory_address(value):
-                    continue  # a pointer/offset named `token`, not a credential
+            matched_value = match.groupdict().get("value") or match.group(0)
+            if _is_placeholder(matched_value):
+                continue
+            if name in ADDRESS_EXEMPT_TYPES and _is_memory_address(matched_value):
+                continue  # a pointer/offset named `token`, not a credential
             hits.append((name, lineno, line.strip()[:120]))
     return hits
 
@@ -107,15 +116,27 @@ def scan_text(text: str) -> list[tuple[str, int, str]]:
 def _content_from_event(event: dict[str, object]) -> str:
     fields = tool_input(event)
     parts: list[str] = []
-    for key in ("content", "new_string", "new_str"):
+    for key in ("content", "new_string", "newString", "new_str"):
         val = fields.get(key)
         if isinstance(val, str):
             parts.append(val)
+    patch = fields.get("patch")
+    if isinstance(patch, str):
+        parts.append(
+            "\n".join(
+                line[1:]
+                for line in patch.splitlines()
+                if line.startswith("+") and not line.startswith("+++")
+            )
+        )
     edits = fields.get("edits")
     if isinstance(edits, list):
         for edit in edits:
-            if isinstance(edit, dict) and isinstance(edit.get("new_string"), str):
-                parts.append(edit["new_string"])
+            if not isinstance(edit, dict):
+                continue
+            new_text = edit.get("new_string") or edit.get("newString")
+            if isinstance(new_text, str):
+                parts.append(new_text)
     return "\n".join(parts)
 
 
@@ -130,8 +151,8 @@ def _hook_mode() -> None:
     hits = scan_text(text)
     if hits:
         where = target.name if target else "<pending write>"
-        for name, lineno, excerpt in hits:
-            append_log("secret-scan.log", f"BLOCKED {where}:{lineno} [{name}] {excerpt}")
+        for name, lineno, _excerpt in hits:
+            append_log("secret-scan.log", f"BLOCKED {where}:{lineno} [{name}]")
         report = "\n".join(f"  - line {ln}: {name}" for name, ln, _ in hits)
         block(
             f"Blocked by Awesome Templates secret-scan: possible secret in {where}:\n{report}\n"
@@ -153,10 +174,10 @@ def _cli_mode(paths: Iterable[str]) -> None:
             text = p.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        for name, lineno, excerpt in scan_text(text):
+        for name, lineno, _excerpt in scan_text(text):
             total += 1
             rel = p.relative_to(REPO_ROOT) if str(p).startswith(str(REPO_ROOT)) else p
-            print(f"{rel}:{lineno}: {name}: {excerpt}")
+            print(f"{rel}:{lineno}: {name}")
     if total:
         print(f"\nsecret-scan: {total} potential secret(s) found.")
         sys.exit(1)

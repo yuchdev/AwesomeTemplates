@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "bash": "python .github/hooks/session-start.py",
+        "powershell": "python .github/hooks/session-start.py",
+        "cwd": ".",
+        "timeoutSec": 40
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "matcher": "Bash",
+        "bash": "python .claude/hooks/guard_bash.py",
+        "powershell": "python .claude/hooks/guard_bash.py",
+        "cwd": ".",
+        "timeoutSec": 20
+      },
+      {
+        "type": "command",
+        "matcher": "Write|Edit|MultiEdit",
+        "bash": "python .claude/hooks/secret_scan.py",
+        "powershell": "python .claude/hooks/secret_scan.py",
+        "cwd": ".",
+        "timeoutSec": 20
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "matcher": "Write|Edit|MultiEdit",
+        "bash": "python .claude/hooks/post_edit_format.py",
+        "powershell": "python .claude/hooks/post_edit_format.py",
+        "cwd": ".",
+        "timeoutSec": 90
+      },
+      {
+        "type": "command",
+        "matcher": "Write|Edit|MultiEdit",
+        "bash": "python .claude/hooks/style_fixes.py",
+        "powershell": "python .claude/hooks/style_fixes.py",
+        "cwd": ".",
+        "timeoutSec": 90
+      },
+      {
+        "type": "command",
+        "matcher": "Write|Edit|MultiEdit",
+        "bash": "python .claude/hooks/dep_audit.py",
+        "powershell": "python .claude/hooks/dep_audit.py",
+        "cwd": ".",
+        "timeoutSec": 200
+      },
+      {
+        "type": "command",
+        "matcher": "Write|Edit|MultiEdit",
+        "bash": "python .claude/hooks/doc_link_check.py",
+        "powershell": "python .claude/hooks/doc_link_check.py",
+        "cwd": ".",
+        "timeoutSec": 90
+      },
+      {
+        "type": "command",
+        "matcher": "mcp__github__.*|github/.*",
+        "bash": "python .claude/hooks/github_audit.py",
+        "powershell": "python .claude/hooks/github_audit.py",
+        "cwd": ".",
+        "timeoutSec": 20
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "bash": "python .claude/hooks/run_tests.py",
+        "powershell": "python .claude/hooks/run_tests.py",
+        "cwd": ".",
+        "timeoutSec": 900
+      },
+      {
+        "type": "command",
+        "bash": "python .claude/hooks/doc_link_check.py",
+        "powershell": "python .claude/hooks/doc_link_check.py",
+        "cwd": ".",
+        "timeoutSec": 120
+      }
+    ]
+  }
+}
+

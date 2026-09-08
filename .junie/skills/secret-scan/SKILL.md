@@ -22,8 +22,8 @@ block use identical rules.
    `git diff --name-only` + `git diff --cached --name-only` + untracked.
 2. Run the shared scanner:
    `python .claude/hooks/secret_scan.py <file> [<file> ...]`
-3. For each hit, report `file:line: <type>: <excerpt>`. Never print the full
-   secret value beyond the short excerpt the scanner emits.
+3. For each hit, report only `file:line: <type>`. Never print credential
+   excerpts or values.
 
 ## Detected shapes
 
@@ -53,7 +53,7 @@ if it was already committed.
 
 - [ ] Targets resolved from `$ARGUMENTS`, or changed+untracked files when empty
 - [ ] Shared scanner (`.claude/hooks/secret_scan.py`) run - not an ad-hoc regex
-- [ ] Each finding reported as `file:line: <type>: <short excerpt>` - full secret value never printed
+- [ ] Each finding reported as `file:line: <type>` - no secret excerpt printed
 - [ ] Placeholder/allowlisted lines correctly treated as clean (see [references/pattern-catalog.md](references/pattern-catalog.md))
 - [ ] For real hits: remove + rotate + replace with `${VAR}`/secrets-manager advised; history rewrite recommended if already committed
 - [ ] Result line emitted: `CLEAN` or `N FINDING(S)`
