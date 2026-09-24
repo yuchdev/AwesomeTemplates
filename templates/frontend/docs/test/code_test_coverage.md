@@ -2,9 +2,9 @@
 
 ## Coverage Quick Start
 
-This project requires **85% test coverage** on all JavaScript it ships. This is
-enforced via a coverage-instrumented run of the project's test runner. Coverage
-measures JavaScript only - HTML and CSS are covered by browser tests,
+This project targets **85% test coverage** on the JavaScript it ships. Enforce
+that threshold in the test runner configuration your project actually uses.
+Coverage measures JavaScript only - HTML and CSS are covered by browser tests,
 validators, and accessibility checks, not by a line-coverage number.
 
 ### Running Tests with Coverage
@@ -27,9 +27,8 @@ npx jest --coverage
 ### What This Means
 
 - ✅ Coverage is measured from an instrumented test run, not inferred
-- ✅ CI **fails** if coverage drops below 85%
-- ✅ Failed coverage checks block merging to main branches
-- ✅ Coverage reports are always available in `coverage/`
+- ✅ A configured threshold can fail the coverage run when it drops below 85%
+- ✅ Coverage reports are available when the chosen runner is configured to emit them
 
 ### If Coverage Check Fails
 
@@ -64,14 +63,14 @@ npx jest --coverage
 
 The threshold lives in the runner's config - `coverage.thresholds` in
 `vitest.config.js`, `coverageThreshold` in Jest's config, or
-`--test-coverage-lines=85` for `node --test` - and is also enforced in CI.
+`--test-coverage-lines=85` for `node --test`.
 
 ### Tips
 
 - Run a single test file: `node --test path/to/file.test.js`,
   `npx vitest run path/to/file.test.js`, or `npx jest path/to/file.test.js`
 - Filter by test name: `--test-name-pattern` (node), `-t` (Vitest/Jest)
-- Faster local iteration: run without coverage (CI still checks)
+- Faster local iteration: run without coverage, then re-run with coverage before merging
 - Update the threshold: change the runner's configured minimum (don't lower
   it casually)
 

@@ -495,7 +495,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not root.is_dir():
             continue
         for md in root.rglob("*.md"):
-            if any(part in md.parts for part in EXCLUDED_DIRS):
+            if any(part in EXCLUDED_DIRS for part in md.parts):
                 continue
             registry.append(str(md.relative_to(REPO_ROOT)))
     registry.sort()
