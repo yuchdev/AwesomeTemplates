@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh issue:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm audit:*)",
+      "Bash(node --test:*)",
+      "Bash(node --check:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx --no-install vitest run:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npx --no-install playwright test:*)",
+      "Bash(npx vite:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx jest:*)",
+      "Bash(npx vite preview:*)",
+      "Bash(npx vite build:*)",
+      "Bash(npx --no-install vite preview:*)",
+      "Bash(npx --no-install vite build:*)",
+      "Bash(npx --no-install vite:*)",
+      "Bash(npx --no-install jest:*)",
+      "Bash(npx --no-install eslint:*)",
+      "Bash(npx --no-install tsc:*)",
+      "Bash(python -m http.server:*)",
+      "Bash(python3 -m http.server:*)",
+      "Bash(python .claude/hooks/doc_link_check.py:*)",
+      "Bash(python .claude/hooks/secret_scan.py:*)",
+      "Bash(python3 .claude/hooks/doc_link_check.py:*)",
+      "Bash(python3 .claude/hooks/secret_scan.py:*)",
+      "Bash(python scripts/check_doc_links.py:*)",
+      "Bash(python scripts/doc_registry.py:*)",
+      "Bash(python scripts/document_tests.py:*)",
+      "Bash(python scripts/linkify_doc_mentions.py:*)",
+      "Bash(python3 scripts/check_doc_links.py:*)",
+      "Bash(python3 scripts/doc_registry.py:*)",
+      "Bash(python3 scripts/document_tests.py:*)",
+      "Bash(python3 scripts/linkify_doc_mentions.py:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.dmp)",
+      "Read(./prototype/*.db)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/guard_bash.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/secret_scan.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/doc_link_check.py"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/github_audit.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/doc_link_check.py"
+          }
+        ]
+      }
+    ]
+  }
+}

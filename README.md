@@ -16,6 +16,9 @@ templates/python/scripts
 templates/java/.claude
 templates/java/docs
 templates/java/scripts
+templates/frontend/.claude
+templates/frontend/docs
+templates/frontend/scripts
 ```
 
 `.claude/` contains
@@ -81,7 +84,7 @@ uv run pytest tests/test_specializations.py tests/test_integration_real_repo.py 
 A few things worth knowing before you run these yourself:
 
 * `--output-dir .scratch/...` works because `.scratch/` is now in `.gitignore` - anything you generate there won't show up in the git status clutter.
-* Add `--specialization <name>` more than once to layer several (awesome-templates list shows valid choices per preset - `django`, `ml-ai`, `webscraping` for python; `spring`, `android` for java).
+* Add `--specialization <name>` more than once to layer several (awesome-templates list shows valid choices per preset - `django`, `ml-ai`, `webscraping` for python; `spring`, `android` for java; `js`, `ts`, `react`, `vite`, `vue` for frontend).
 * Command 5 spends real model usage every time you run it - it runs a full headless Claude Code session over the whole marker manifest, billed to whatever account your local `claude` CLI is logged in to. Skip `--resolve-markers` if you just want to inspect the deterministic output.
 * `--resolve-markers` requires you to name the AI engine: exactly one of `--harness {claude,copilot,junie}` or `--backend {anthropic-api,openai-api,jetbrains-api}`, which are mutually exclusive. **There is no default**, and today only `--harness claude` actually runs - everything else exits with a `not implemented:` notice before generating anything.
 * Rerunning any of these into an existing `.scratch/{name}` will fail unless you also pass `--force` (or delete the directory first) - generate refuses to overwrite non-empty output by default.

@@ -40,7 +40,7 @@ def test_templates_root_is_separate_from_the_package_root(real_workspace):
 
 
 def test_workspace_root_resolves_to_the_actual_preset_trees(real_workspace):
-    assert list_presets(real_workspace) == ["cpp", "java", "python"]
+    assert list_presets(real_workspace) == ["cpp", "frontend", "java", "python"]
     assert (real_workspace.root / "python" / ".claude").is_dir()
     assert (real_workspace.root / "python" / "docs" / "adr" / "template.md").is_file()
 
@@ -48,11 +48,11 @@ def test_workspace_root_resolves_to_the_actual_preset_trees(real_workspace):
 def test_discover_against_real_repo_finds_expected_entities(real_workspace):
     python_catalog = discover(Workspace(root=real_workspace.path("python")))
     assert "python-expert" in python_catalog.names(".", "agents")
-    assert "subtask-verifier" in python_catalog.names(".", "agents")
+    assert "task-verifier" in python_catalog.names(".", "agents")
     assert "post-mortem" not in python_catalog.names(".", "skills")  # deleted in round 2
 
 
-@pytest.mark.parametrize("preset", ["python", "java"])
+@pytest.mark.parametrize("preset", ["python", "java", "frontend"])
 def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
     # A preset is one self-contained tree copied verbatim (see presets.py), so
     # a freshly generated project must never have a dangling @docs/ reference.
@@ -73,7 +73,7 @@ def test_generated_preset_has_no_dangling_doc_references(preset, tmp_path):
     assert broken_docs == []
 
 
-@pytest.mark.parametrize("preset", ["python", "java"])
+@pytest.mark.parametrize("preset", ["python", "java", "frontend"])
 def test_generated_preset_passes_its_own_link_checker(preset):
     """Generate the preset, then run the generated project's own
     `scripts/check_doc_links.py` inside it.
@@ -115,14 +115,13 @@ def test_generated_preset_passes_its_own_link_checker(preset):
             check=False,
         )
         assert proc.returncode == 0, (
-            f"generated {preset} project has broken doc links/anchors:\n"
-            f"{proc.stdout}\n{proc.stderr}"
+            f"generated {preset} project has broken doc links/anchors:\n{proc.stdout}\n{proc.stderr}"
         )
         # Guard the guard: if the scan ever silently covers nothing, fail loudly.
         assert "0 file(s) scanned" not in proc.stdout, f"checker scanned nothing:\n{proc.stdout}"
 
 
-@pytest.mark.parametrize("preset", ["python", "java"])
+@pytest.mark.parametrize("preset", ["python", "java", "frontend"])
 def test_preset_never_links_outside_its_own_tree(preset):
     """A preset must be self-contained: no relative link may escape its own root.
 
@@ -144,9 +143,7 @@ def test_preset_never_links_outside_its_own_tree(preset):
                 resolved = (md.parent / target).resolve()
                 if preset_root not in resolved.parents and resolved != preset_root:
                     escapes.append(f"{md.relative_to(preset_root)}:{lineno} -> {target}")
-    assert escapes == [], (
-        f"links escaping templates/{preset}/ (they break once generated):\n" + "\n".join(escapes)
-    )
+    assert escapes == [], f"links escaping templates/{preset}/ (they break once generated):\n" + "\n".join(escapes)
 
 
 def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_path):
@@ -185,7 +182,7 @@ def test_real_preset_agents_doc_lists_every_real_agent_file(tmp_path):
         assert stem in agents_doc, f"{stem} missing from generated docs/agent/agents.md"
 
 
-@pytest.mark.parametrize("preset", ["python", "java"])
+@pytest.mark.parametrize("preset", ["python", "java", "frontend"])
 def test_dry_run_reports_marker_count_without_calling_api(preset, tmp_path):
     # --resolve-markers --dry-run must report the real TEMPLATE-INIT count from
     # the source preset and make no API call (proven by staying offline here).
@@ -239,7 +236,18 @@ def test_real_preset_specialization_has_no_placeholder_leftovers(preset, special
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", str(proj), "--preset", preset, "--name", "Big", "--package", "big", "--specialization", specialization],
+        [
+            "generate",
+            str(proj),
+            "--preset",
+            preset,
+            "--name",
+            "Big",
+            "--package",
+            "big",
+            "--specialization",
+            specialization,
+        ],
     )
     assert result.exit_code == 0, result.stdout
 

@@ -22,7 +22,7 @@ to stay contiguous.
 
 ## Context
 
-Milestone 0001's first subtask ([`01-config-model.md`](/docs/roadmap/0001-working-implementation/01.0-hello-world-endpoint/01-config-model.md))
+Milestone 0001's first task ([`01-config-model.md`](/docs/roadmap/0001-working-implementation/01.0-hello-world-endpoint/01-config-model.md))
 adds a `HealthConfig` settings model and says to "load it the same way other config
 sections are loaded in this project" - but at that point in the project's life there
 *is* no established way yet. Every subsequent feature will need its own config
@@ -84,7 +84,7 @@ prematurely is harder to undo.
 - Tests override values via constructor kwargs (`HealthConfig(service_name="test")`)
   - no `monkeypatch.setenv` required, and no risk of parallel tests clobbering each
     other's environment variables.
-- Every future subtask that needs new config answers the "how do I load this"
+- Every future task that needs new config answers the "how do I load this"
   question by pointing at `HealthConfig`, not by re-deriving a pattern.
 
 ### Negative

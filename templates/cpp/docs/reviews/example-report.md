@@ -4,11 +4,11 @@
 
 ## Findings
 
-| Severity | Finding | Evidence |
-|----------|---------|----------|
-| MEDIUM | `parseBatch()` re-reads the same file on every call inside a loop | `ingest/parser.cpp:42` - no caching across iterations |
-| LOW | Unbounded vector growth in `buffer_` under high throughput | `ingest/parser.cpp:88` |
-| INFO | No license conflicts found in current dependency set | `CMakeLists.txt` |
+| Severity | Finding                                                           | Evidence                                              |
+|----------|-------------------------------------------------------------------|-------------------------------------------------------|
+| MEDIUM   | `parseBatch()` re-reads the same file on every call inside a loop | `ingest/parser.cpp:42` - no caching across iterations |
+| LOW      | Unbounded vector growth in `buffer_` under high throughput        | `ingest/parser.cpp:88`                                |
+| INFO     | No license conflicts found in current dependency set              | `CMakeLists.txt`                                      |
 
 ## Verdict
 

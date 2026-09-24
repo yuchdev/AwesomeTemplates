@@ -19,7 +19,7 @@ headings; read this for how to fill them.
 
 - `git log --oneline -10` → the recent commits that surfaced the problem.
 - `gh issue list --state open --limit 10` → any open issue the decision resolves;
-  link it in **Links → Roadmap task**, don't just paraphrase it.
+  link it in **Links → Roadmap story/task**, don't just paraphrase it.
 - State the constraints and forces plainly. No solution yet.
 
 ## Decision
@@ -49,7 +49,7 @@ doc/runbook updates → `docs-updater`. This is where downstream tasks get route
 
 ## Links
 
-- **Roadmap task:** the `docs/roadmap/...` task or GitHub issue that drove this.
+- **Roadmap story/task:** the `docs/roadmap/...` story or task or GitHub issue that drove this.
 - **Supporting specs / diagrams:** anything under `docs/specs/` or `assets/`.
 - **Supersedes / Superseded by:** prior ADRs in the same decision lineage.
 
