@@ -489,16 +489,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Build registry (exclude the files being processed? No — we want
     # cross-file links, and a file can reference itself only if it mentions its
     # own path, which is unlikely to produce a useful link anyway).
-    registry = []
-    for root_name in SCAN_ROOTS:
-        root = REPO_ROOT / root_name
-        if not root.is_dir():
-            continue
-        for md in root.rglob("*.md"):
-            if any(part in EXCLUDED_DIRS for part in md.parts):
-                continue
-            registry.append(str(md.relative_to(REPO_ROOT)))
-    registry.sort()
+    registry = build_registry()
 
     by_path, by_name = build_indices(registry)
 

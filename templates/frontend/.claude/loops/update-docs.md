@@ -247,7 +247,7 @@ Discard matches in TARGET itself (its own edits are already applied).
 Run the link checker on the target file:
 
 ```bash
-python .claude/hooks/doc_link_check.py --check <TARGET>
+python scripts/check_doc_links.py <TARGET>
 ```
 
 Collect each `missing anchor` or `missing file` finding as a separate fix
@@ -307,7 +307,7 @@ Both buckets may be delegated **in parallel** when the file sets do not overlap.
 Run the full link checker over the whole doc set (not just TARGET):
 
 ```bash
-python .claude/hooks/doc_link_check.py --check
+python scripts/check_doc_links.py docs/ .claude/ ./*.md
 ```
 
 If it exits 0: the iteration is clean. Proceed to Step 7.

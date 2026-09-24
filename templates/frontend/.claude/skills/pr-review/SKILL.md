@@ -42,9 +42,7 @@ branch, or - if empty - the current working-tree diff).
 ```
 
 Rules: any CRITICAL security finding ⇒ overall **BLOCK** regardless of the
-feature verdict. Any feature blocking issue ⇒ at least **REQUEST_CHANGES**. If
-`--comment` is requested and a PR number is known, post the synthesis as a PR
-comment via the `github` MCP.
+feature verdict. Any feature blocking issue ⇒ at least **REQUEST_CHANGES**.
 
 If any required agent returns null (terminal error), default the overall verdict
 to **REQUEST_CHANGES** and name the failed agent explicitly in the report. Never
@@ -55,4 +53,3 @@ emit APPROVE from an incomplete run.
 - [ ] Both `feature-reviewer` and `security-auditor` returned a verdict (not null / timed out)
 - [ ] Any CRITICAL security finding → overall verdict is BLOCK, not REQUEST_CHANGES
 - [ ] Combined blocking items de-duplicated across all agent reviews
-- [ ] If `--comment` and PR number known → synthesis posted as PR comment via `github` MCP
