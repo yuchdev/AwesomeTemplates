@@ -245,8 +245,8 @@ Re-run the coverage command - it should show ≥ 85% and PASS.
 ### "HTML report not generated"
 
 1. Vitest needs the coverage provider installed (`@vitest/coverage-v8`).
-2. `node --test` prints a text summary only; use `c8` or `--test-reporter=lcov`
-   to produce a file you can render.
+2. `node --test` prints a text summary only; use `c8` (or another dedicated
+   coverage tool) when you need a file/report artifact.
 3. Check the reporter list in the runner config includes `html`.
 
 ## Summary

@@ -453,7 +453,7 @@ def _apply_edits(lines: list[str], cases: list[TestCase], force: bool) -> tuple[
 
 
 def _is_test_file(path: Path) -> bool:
-    if not path.name.endswith(TEST_EXTENSIONS):
+    if path.suffix.lower() not in TEST_EXTENSIONS:
         return False
     segments = set(path.name.lower().split(".")[1:-1])
     parts = set(_relative_parts(path))
