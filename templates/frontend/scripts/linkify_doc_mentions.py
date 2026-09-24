@@ -524,8 +524,14 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if all_unresolvable:
         report_path = Path(args.report)
+        if not report_path.is_absolute():
+            report_path = REPO_ROOT / report_path
         write_report(all_unresolvable, report_path)
-        print(f"Report written to: {report_path.relative_to(REPO_ROOT)}")
+        try:
+            shown_path = report_path.relative_to(REPO_ROOT)
+        except ValueError:
+            shown_path = report_path
+        print(f"Report written to: {shown_path}")
 
     return 1 if all_unresolvable else 0
 

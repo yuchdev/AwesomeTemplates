@@ -227,7 +227,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    targets = iter_markdown([Path(p) for p in args.paths])
+    raw_targets: list[Path] = []
+    for raw in args.paths:
+        path = Path(raw)
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        raw_targets.append(path)
+    targets = iter_markdown(raw_targets)
     problems: list[str] = []
     for md in targets:
         problems.extend(check_file(md))
