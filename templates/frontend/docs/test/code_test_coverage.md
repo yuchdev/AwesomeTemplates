@@ -109,9 +109,9 @@ The threshold lives in the runner's config - `coverage.thresholds` in
   ```
 
 - [ ] Push to feature branch
-  - [ ] CI pipeline runs successfully
-  - [ ] All coverage checks pass
-  - [ ] Coverage report available in CI artifacts
+  - [ ] Local coverage command passes
+  - [ ] Any project-specific CI coverage checks (if configured) pass
+  - [ ] Coverage report saved where the project expects it (for example `coverage/` or CI artifacts)
 
 ### ✅ Pull Request
 

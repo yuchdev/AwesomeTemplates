@@ -186,9 +186,10 @@ def check_file(path: Path) -> list[str]:
 
             resolved = _resolve(file_part, path)
             if not resolved.exists():
+                display_path = resolved.relative_to(REPO_ROOT) if resolved == REPO_ROOT or REPO_ROOT in resolved.parents else resolved
                 problems.append(
                     f"{path}:{lineno}: dangling link -> {target} "
-                    f"(resolved {resolved.relative_to(REPO_ROOT) if REPO_ROOT in resolved.parents else resolved})"
+                    f"(resolved {display_path})"
                 )
                 continue
             if anchor and resolved.is_file() and resolved.suffix == ".md":

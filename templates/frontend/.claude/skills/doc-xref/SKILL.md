@@ -41,7 +41,9 @@ sweep (rename a spec + a heading, update every inbound hit across docs and code)
      ``See docs/adr/template.md#alternatives-considered``), plus the symbol name itself
      when the target is a symbol.
    ```bash
-   git grep -nF "<target>"   # exact path / anchor / symbol; repeat for old name + anchor
+   git grep -nF "<target>" -- docs .claude src tests ./*.md
+   # exact path / anchor / symbol across docs/, .claude/, src/, tests/, and repo-root Markdown;
+   # repeat for old name + anchor
    ```
 
 3. **Rename/move**: update every hit to the new path/anchor; `git mv` when renaming

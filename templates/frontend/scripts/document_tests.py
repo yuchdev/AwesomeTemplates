@@ -457,7 +457,10 @@ def _is_test_file(path: Path) -> bool:
         return False
     segments = set(path.name.lower().split(".")[1:-1])
     parts = set(_relative_parts(path))
+    stem = path.stem.lower()
     if parts & {"test", "tests", "__tests__", "spec", "specs", "unit", "integration", "e2e", "cypress"}:
+        return True
+    if stem in {"test", "spec", "integration", "int", "e2e"}:
         return True
     return bool(segments & {"test", "spec", "integration", "int", "e2e"})
 
