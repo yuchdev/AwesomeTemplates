@@ -47,6 +47,6 @@ seeds it. Leave it `Proposed` for human/architect sign-off.
 - [ ] Structure matches `docs/adr/template.md` exactly (Context, Decision, Alternatives Considered table, Consequences Positive/Negative, Validation / Rollout, Links) - no ad-hoc headings
 - [ ] Status is `Proposed` - not Accepted (that requires human/architect sign-off)
 - [ ] `Alternatives Considered` table has at least the chosen option + one rejected alternative with a stated reason
-- [ ] `Links` section points at the driving roadmap task / issue used to seed Context
+- [ ] `Links` section points at the driving roadmap story/task / issue used to seed Context
 - [ ] `docs/README.md` has a new index line for the ADR
 - [ ] `/link-check` passes on the new file

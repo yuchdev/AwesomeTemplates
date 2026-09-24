@@ -22,7 +22,7 @@ _What other options were evaluated? Why were they rejected?_
 
 | Alternative | Pros | Cons | Reason rejected |
 |-------------|------|------|-----------------|
-| … | … | … | … |
+| …           | …    | …    | …               |
 
 ## Consequences
 
@@ -42,6 +42,6 @@ _How will we verify this decision is working? What is the rollout plan?_
 
 ## Links
 
-- **Roadmap task:** _(link to roadmap/tasks or subtasks doc)_
+- **Roadmap story/task:** _(link to roadmap story or task doc)_
 - **Supporting specs:** _(link to assets/ or docs/architecture/ files)_
 - **Diagrams:** _(link to diagrams in assets/)_

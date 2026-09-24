@@ -30,7 +30,7 @@ def test_discover_at_templates_root_keys_by_preset(fixture_workspace):
 def test_discover_real_repo_presets(real_workspace):
     python_catalog = discover(Workspace(root=real_workspace.path("python")))
     assert "python-expert" in python_catalog.names(".", "agents")
-    assert "subtask-verifier" in python_catalog.names(".", "agents")
+    assert "task-verifier" in python_catalog.names(".", "agents")
 
     java_catalog = discover(Workspace(root=real_workspace.path("java")))
     assert {
@@ -43,7 +43,7 @@ def test_discover_real_repo_presets(real_workspace):
         "incident-analyst",
         "java-expert",
         "security-auditor",
-        "subtask-verifier",
+        "task-verifier",
         "test-documenter",
         "testing-expert",
     } <= set(java_catalog.names(".", "agents"))

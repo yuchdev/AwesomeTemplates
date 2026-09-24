@@ -1,15 +1,26 @@
 # 03 - Tests
 
-**Parent task:** [README.md](README.md)
+**Parent story:** [README.md](README.md)
 **Status:** ⬜ Not started
 **Depends on:** [02-health-endpoint.md](02-health-endpoint.md)
 
-## Requirements
+## Objective
 
-- Integration test: `GET /health` returns `200` and the expected JSON body.
-- Unit test: `HealthConfig` default and override, from subtask 01.
-- Both tests pass under this project's standard test command.
+This task is a stub to rename and implement a real one.
+All subsequent paragraphs also should be rewritten into a real task.
 
 ## Files
 
 - `tests/integration/health_endpoint_test.cpp` - new integration test.
+
+## Functions and Classes
+
+- `HealthConfig` struct with a `std::string service_name` field, defaulting to `"{{PROJECT_PACKAGE}}"`.
+
+## Constraints
+
+- None
+
+## Success criteria
+
+- [ ] Implemented and passed under this project's standard test command.

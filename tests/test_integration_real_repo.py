@@ -48,7 +48,7 @@ def test_workspace_root_resolves_to_the_actual_preset_trees(real_workspace):
 def test_discover_against_real_repo_finds_expected_entities(real_workspace):
     python_catalog = discover(Workspace(root=real_workspace.path("python")))
     assert "python-expert" in python_catalog.names(".", "agents")
-    assert "subtask-verifier" in python_catalog.names(".", "agents")
+    assert "task-verifier" in python_catalog.names(".", "agents")
     assert "post-mortem" not in python_catalog.names(".", "skills")  # deleted in round 2
 
 
@@ -115,8 +115,7 @@ def test_generated_preset_passes_its_own_link_checker(preset):
             check=False,
         )
         assert proc.returncode == 0, (
-            f"generated {preset} project has broken doc links/anchors:\n"
-            f"{proc.stdout}\n{proc.stderr}"
+            f"generated {preset} project has broken doc links/anchors:\n{proc.stdout}\n{proc.stderr}"
         )
         # Guard the guard: if the scan ever silently covers nothing, fail loudly.
         assert "0 file(s) scanned" not in proc.stdout, f"checker scanned nothing:\n{proc.stdout}"
@@ -144,9 +143,7 @@ def test_preset_never_links_outside_its_own_tree(preset):
                 resolved = (md.parent / target).resolve()
                 if preset_root not in resolved.parents and resolved != preset_root:
                     escapes.append(f"{md.relative_to(preset_root)}:{lineno} -> {target}")
-    assert escapes == [], (
-        f"links escaping templates/{preset}/ (they break once generated):\n" + "\n".join(escapes)
-    )
+    assert escapes == [], f"links escaping templates/{preset}/ (they break once generated):\n" + "\n".join(escapes)
 
 
 def test_example_config_generates_with_no_unresolved_markdown_placeholders(tmp_path):
@@ -239,7 +236,18 @@ def test_real_preset_specialization_has_no_placeholder_leftovers(preset, special
     proj = tmp_path / "proj"
     result = runner.invoke(
         app,
-        ["generate", str(proj), "--preset", preset, "--name", "Big", "--package", "big", "--specialization", specialization],
+        [
+            "generate",
+            str(proj),
+            "--preset",
+            preset,
+            "--name",
+            "Big",
+            "--package",
+            "big",
+            "--specialization",
+            specialization,
+        ],
     )
     assert result.exit_code == 0, result.stdout
 

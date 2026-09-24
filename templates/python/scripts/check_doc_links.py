@@ -12,7 +12,7 @@ Link-target resolution:
 
 Deliberately **skipped** (not validated): external URLs (``http(s):``,
 ``mailto:`` and other schemes), template paths containing ``{`` / ``}`` (e.g.
-``{NN}-{subtask-slug}.md``), links inside fenced code blocks, and any link
+``{NN}-{task-slug}.md``), links inside fenced code blocks, and any link
 syntax sitting inside an inline ``code span``.
 
 Usage::

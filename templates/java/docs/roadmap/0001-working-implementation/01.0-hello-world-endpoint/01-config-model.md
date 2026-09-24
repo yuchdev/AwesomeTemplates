@@ -1,6 +1,6 @@
 # 01 - Config model
 
-**Parent task:** [README.md](README.md)
+**Parent story:** [README.md](README.md)
 **Status:** ⬜ Not started
 
 ## Requirements

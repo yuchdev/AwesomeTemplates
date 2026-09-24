@@ -1,13 +1,13 @@
 ---
-name: verify-subtask
-description: User-invoked as /verify-subtask <path>. Reads the subtask spec, gathers the implementation diff, and spawns subtask-verifier to produce a spec-compliance report. Run after implementation, before /pr-review and /test-gap.
+name: verify-task
+description: User-invoked as /verify-task <path>. Reads the task spec, gathers the implementation diff, and spawns task-verifier to produce a spec-compliance report. Run after implementation, before /pr-review and /test-gap.
 allowed-tools: Read, Grep, Glob, Bash, Agent
-invocation: /verify-subtask <subtask-path>
+invocation: /verify-task <task-path>
 ---
 
-# Verify Subtask (spec-compliance check)
+# Verify Task (spec-compliance check)
 
-Check that the implementation of a subtask matches its specification document.
+Check that the implementation of a task matches its specification document.
 
 ## Steps
 
@@ -22,7 +22,7 @@ Check that the implementation of a subtask matches its specification document.
    (no staged or unstaged changes), try `git diff --name-only HEAD~1` to capture the
    most recent commit.
 
-3. **Spawn `subtask-verifier`** with:
+3. **Spawn `task-verifier`** with:
    - The resolved spec path
    - The diff (changed file list + `git diff HEAD` or `git diff HEAD~1` output)
    Ask it to produce a full compliance matrix and verdict.
@@ -34,16 +34,16 @@ Check that the implementation of a subtask matches its specification document.
 
 ## Output
 
-The verbatim compliance matrix from `subtask-verifier`, plus one line:
+The verbatim compliance matrix from `task-verifier`, plus one line:
 ```
-→ Next step: [proceed to /test-gap | fix gaps then re-run /verify-subtask | proceed with caution]
+→ Next step: [proceed to /test-gap | fix gaps then re-run /verify-task | proceed with caution]
 ```
 
 ## Completion checklist
 
 - [ ] Spec file found and readable
 - [ ] Diff scope captured (changed files list non-empty or commit diff used)
-- [ ] `subtask-verifier` returned a verdict (not null / timed out)
+- [ ] `task-verifier` returned a verdict (not null / timed out)
 - [ ] On FAIL: blocking gaps listed and next step is "return to python-expert"
 - [ ] On PARTIAL: deviations listed and next step is "fix before merge"
 - [ ] On PASS: confirmation that /test-gap and /pr-review can proceed

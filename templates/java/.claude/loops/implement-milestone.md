@@ -260,8 +260,8 @@ in `## Notes & decisions`):
 2. Run `/link-check docs/roadmap/` - the run has edited status.md, READMEs, and
    possibly authored new spec files.
 3. Final `status.md` pass: gate-status line under the table (which gates ran, verdict,
-   date), and flip the roadmap index (`docs/roadmap/README.md` / `roadmap.md`) if it
-   tracks milestone state.
+   date), and flip the roadmap index (`docs/roadmap/README.md`) if it tracks milestone
+   state.
 4. **Delete the cursor** and **stop** (do NOT reschedule). Print a closing summary:
    stories delivered, gates passed, deferrals, and decisions ratified during the run.
 
@@ -308,7 +308,7 @@ authority who must sign off beyond AskUserQuestion, name that here - and adjust 
 ## Token-economy invariants
 
 All five implement-story invariants hold per task. At milestone level, three
-more compounds across the (much longer) run:
+more compound across the (much longer) run:
 
 1. **Research once, digest forever.** Phase R is the only wholesale read of the plan,
    and it happens inside subagents. After R5 the main loop touches only the cursor,
@@ -324,7 +324,7 @@ more compounds across the (much longer) run:
 ## Termination conditions
 
 | Condition                                            | Action                                                                           |
-|------------------------------------------------------|------------------------------------------------------------------------------------|
+|--------------------------------------------------------|------------------------------------------------------------------------------------|
 | All stories `✅` + exit gates pass (M5)              | Final status.md pass, delete cursor, do NOT reschedule                           |
 | Milestone already COMPLETE at Phase R                | Spot-verify, report standing, do NOT reschedule                                  |
 | Argument matches zero or >1 milestone / no plan.md   | Stop, ask the user                                                               |
@@ -347,8 +347,8 @@ pass its own gates.
 Three levels, same vocabulary: this loop *sequences stories*;
 [implement-story.md](implement-story.md) *builds one story* (and remains
 independently invocable for single-story work - this loop reuses its algorithm rather
-than wrapping its invocation); the skills - `/verify-task`, `/test-gap`,
-`/dep-audit`, `/secret-scan`, `/link-check`, `/pr-review` - are the per-checkpoint
-gates both loops call. Implementation is delegated to the dev-fleet agents in
-`agent-orchestrator.md`'s roster; `app-architect` additionally serves this loop in
-Phase R (gap-spec authoring) and the divergence protocol (spec amendments).
+than wrapping its invocation); the skills - `/verify-task`, `/secret-scan`,
+`/link-check`, `/pr-review` - are the per-checkpoint gates both loops call.
+Implementation is delegated to the dev-fleet agents in `agent-orchestrator.md`'s
+roster; `app-architect` additionally serves this loop in Phase R (gap-spec authoring) and
+the divergence protocol (spec amendments).
