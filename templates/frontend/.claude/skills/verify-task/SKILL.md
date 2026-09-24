@@ -1,6 +1,6 @@
 ---
 name: verify-task
-description: User-invoked as /verify-task <path>. Reads the task spec, gathers the implementation diff, and spawns task-verifier to produce a spec-compliance report. Run after implementation, before /pr-review and /test-gap.
+description: User-invoked as /verify-task <path>. Reads the task spec, gathers the implementation diff, and spawns task-verifier to produce a spec-compliance report. Run after implementation, before /pr-review.
 allowed-tools: Read, Grep, Glob, Bash, Agent
 invocation: /verify-task <task-path>
 ---
@@ -36,7 +36,7 @@ Check that the implementation of a task matches its specification document.
 
 The verbatim compliance matrix from `task-verifier`, plus one line:
 ```
-→ Next step: [proceed to /test-gap | fix gaps then re-run /verify-task | proceed with caution]
+→ Next step: [proceed to /pr-review | fix gaps then re-run /verify-task | proceed with caution]
 ```
 
 ## Completion checklist
@@ -46,4 +46,4 @@ The verbatim compliance matrix from `task-verifier`, plus one line:
 - [ ] `task-verifier` returned a verdict (not null / timed out)
 - [ ] On FAIL: blocking gaps listed and next step is "return to frontend-expert"
 - [ ] On PARTIAL: deviations listed and next step is "fix before merge"
-- [ ] On PASS: confirmation that /test-gap and /pr-review can proceed
+- [ ] On PASS: confirmation that /pr-review can proceed

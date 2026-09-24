@@ -80,8 +80,12 @@ Read `.claude/state/update-docs-scan.json`. The schema is:
 
 ### A2 — Check for convergence
 
-If `summary.missing_count == 0`: print
-`"update-docs scan: clean — all .md references resolve."` and **stop**.
+If `summary.missing_count == 0` **and** `.claude/state/linkify-report.md` is empty:
+print `"update-docs scan: clean — all .md references resolve."` and **stop**.
+
+If `summary.missing_count == 0` but `.claude/state/linkify-report.md` is non-empty:
+surface the unresolved bare mentions from that report and **stop** for human review
+— the registry is clean, but linkify still found prose references it could not safely resolve.
 
 If the cursor `missing` list is identical to the list seen on the **previous
 iteration** (same `source::resolved` pairs, no change): write the review

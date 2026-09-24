@@ -14,4 +14,4 @@ adopt this template - it exists to show the shape, not to be extended.
 
 | Story | Name                                             | Category | Output                       |
 |------|---------------------------------------------------|----------|------------------------------|
-| 01.0 | Generic working implementation (backends, CLI, …) | feature  | Make working PoC application |
+| 01.0 | Hello World Endpoint                              | feature  | Add a minimal health endpoint |

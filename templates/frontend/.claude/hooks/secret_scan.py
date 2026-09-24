@@ -72,8 +72,8 @@ ALLOWLIST = (
 SKIP_SUFFIXES = {".lock", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".dmp", ".db"}
 
 
-def _is_placeholder(line: str) -> bool:
-    low = line.lower()
+def _is_placeholder(value: str) -> bool:
+    low = value.lower()
     return any(token in low for token in ALLOWLIST)
 
 
@@ -86,36 +86,47 @@ def _is_memory_address(value: str) -> bool:
     return bool(_MEM_ADDRESS_RE.fullmatch(value.replace("_", "")))
 
 
-def scan_text(text: str) -> list[tuple[str, int, str]]:
-    """Return (finding_name, line_number, line_excerpt) tuples."""
-    hits: list[tuple[str, int, str]] = []
+def _matched_value(name: str, match: re.Match[str]) -> str:
+    if name in ADDRESS_EXEMPT_TYPES:
+        value = match.groupdict().get("value")
+        if value:
+            return value
+    return match.group(0)
+
+
+def scan_text(text: str) -> list[tuple[str, int]]:
+    """Return (finding_name, line_number) tuples."""
+    hits: list[tuple[str, int]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        if _is_placeholder(line):
-            continue
         for name, pattern in PATTERNS.items():
             match = pattern.search(line)
             if match is None:
                 continue
-            if name in ADDRESS_EXEMPT_TYPES:
-                value = match.groupdict().get("value")
-                if value and _is_memory_address(value):
-                    continue  # a pointer/offset named `token`, not a credential
-            hits.append((name, lineno, line.strip()[:120]))
+            value = _matched_value(name, match)
+            if _is_placeholder(value):
+                continue
+            if name in ADDRESS_EXEMPT_TYPES and _is_memory_address(value):
+                continue  # a pointer/offset named `token`, not a credential
+            hits.append((name, lineno))
     return hits
 
 
 def _content_from_event(event: dict[str, object]) -> str:
     fields = tool_input(event)
     parts: list[str] = []
-    for key in ("content", "new_string", "new_str"):
+    for key in ("content", "new_string", "newString", "new_str", "newStr"):
         val = fields.get(key)
         if isinstance(val, str):
             parts.append(val)
     edits = fields.get("edits")
     if isinstance(edits, list):
         for edit in edits:
-            if isinstance(edit, dict) and isinstance(edit.get("new_string"), str):
-                parts.append(edit["new_string"])
+            if not isinstance(edit, dict):
+                continue
+            for key in ("new_string", "newString", "new_str", "newStr"):
+                val = edit.get(key)
+                if isinstance(val, str):
+                    parts.append(val)
     return "\n".join(parts)
 
 
@@ -130,9 +141,9 @@ def _hook_mode() -> None:
     hits = scan_text(text)
     if hits:
         where = target.name if target else "<pending write>"
-        for name, lineno, excerpt in hits:
-            append_log("secret-scan.log", f"BLOCKED {where}:{lineno} [{name}] {excerpt}")
-        report = "\n".join(f"  - line {ln}: {name}" for name, ln, _ in hits)
+        for name, lineno in hits:
+            append_log("secret-scan.log", f"BLOCKED {where}:{lineno} [{name}]")
+        report = "\n".join(f"  - line {ln}: {name}" for name, ln in hits)
         block(
             f"Blocked by {{PROJECT_NAME}} secret-scan: possible secret in {where}:\n{report}\n"
             "Never commit credentials. Use environment variables / ${VAR} references "
@@ -153,10 +164,10 @@ def _cli_mode(paths: Iterable[str]) -> None:
             text = p.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        for name, lineno, excerpt in scan_text(text):
+        for name, lineno in scan_text(text):
             total += 1
             rel = p.relative_to(REPO_ROOT) if str(p).startswith(str(REPO_ROOT)) else p
-            print(f"{rel}:{lineno}: {name}: {excerpt}")
+            print(f"{rel}:{lineno}: {name}")
     if total:
         print(f"\nsecret-scan: {total} potential secret(s) found.")
         sys.exit(1)

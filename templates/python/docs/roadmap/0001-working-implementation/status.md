@@ -6,6 +6,6 @@ Tracks progress against [plan.md](plan.md). Updated as each story lands.
 
 | Story | Name                                             | Status         | Tests |
 |------|---------------------------------------------------|----------------|-------|
-| 01.0 | Generic working implementation (backends, CLI, …) | ⬜ Not started | -     |
+| 01.0 | Hello World Endpoint                              | ⬜ Not started | -     |
 
 **Legend:** ✅ Complete · 🔶 In progress / partial · ⬜ Not started

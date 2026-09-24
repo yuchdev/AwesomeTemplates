@@ -19,7 +19,10 @@ shape - without converting anything to TypeScript.
    - If the repo has a `jsconfig.json` or a `tsconfig.json` with `"checkJs": true`, use
      it: `npx --no-install tsc --noEmit -p <that config>`.
    - Otherwise run a one-off check without writing any config:
-     `npx --yes -p typescript tsc --noEmit --allowJs --checkJs --target es2022 --module nodenext --moduleResolution nodenext --lib es2022,dom,dom.iterable <files>`
+     first verify `typescript` is already installed in the project (`package.json`,
+     lockfile, or `node_modules/typescript`); if it is missing, stop and report that
+     `typescript` must be added as a project dependency before this skill can run.
+     When present, run `npx --no-install tsc --noEmit --allowJs --checkJs --target es2022 --module nodenext --moduleResolution nodenext --lib es2022,dom,dom.iterable <files>`
      where `<files>` are the `.js`/`.mjs` files under `$ARGUMENTS`, excluding
      `node_modules/`, `dist/`, `build/`, and `coverage/`.
    - Say which of the two you used in the report.

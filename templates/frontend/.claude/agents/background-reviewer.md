@@ -18,7 +18,7 @@ You are the **Background Reviewer** for {{PROJECT_NAME}}. You run independently 
 
 ## Output
 
-Write a dated report to `docs/reviews/YYYY-MM-DD-<topic>.md` with:
+Write a dated report to `docs/reviews/<type>-<scope>-<YYYY-MM-DD>.md` with:
 
 ```
 # Background Review - <topic> - <date>

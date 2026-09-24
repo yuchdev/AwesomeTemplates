@@ -156,10 +156,12 @@ and to **never echo diffs, file contents, or full test logs**. A subagent's inte
 reasoning are discarded with its context; only its final message persists in the loop, so that
 message is the only thing you pay to carry forward.
 
-<!-- TEMPLATE-INIT: once this preset (or this project) has a security-review agent or process,
-add back a "security-sensitive tasks" paragraph here naming what triggers it (e.g. auth
-middleware, anything parsing untrusted input, external-service credentials) and where it
-writes its findings. Until then, don't invent a security-review step nothing performs. -->
+**Security-sensitive tasks** (auth flows, anything parsing untrusted or attacker-influenced
+input, external-service credentials/tokens, third-party scripts, or browser storage of
+sensitive data): spawn `security-auditor` **before** coding begins. It reads the spec and
+writes a threat model to `docs/security/threat-model-<scope>.md`; the coder picks that up as
+an additional input. A CRITICAL finding blocks merge - stop the loop and require human
+sign-off.
 
 ### Step 4 - stop-and-ask when implementation needs a decision
 
@@ -203,7 +205,7 @@ do not spawn an agent that can only find nothing.** Each gate is module-scoped, 
 | Condition                                                                    | Skill                                                              |
 |-------------------------------------------------------------------------------|---------------------------------------------------------------------|
 | Any file under an API route, auth, or middleware path changed, or anywhere handling credentials/tokens | `/secret-scan <changed-module>/` |
-| Task touches docs / public API                                              | `/link-check docs/` - inbound references still resolve.           |
+| Task touches docs / public API                                              | Run `/doc-xref <changed doc path|heading|symbol>` for inbound references, then `/link-check docs/` for outbound validation. |
 
 <!-- TEMPLATE-INIT: this preset has no coverage-reporting or dependency-audit skill yet
 (compare templates/python's /test-gap and /dep-audit). If this project adds equivalents, add

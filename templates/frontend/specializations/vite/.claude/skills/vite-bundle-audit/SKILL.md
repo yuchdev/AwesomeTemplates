@@ -21,8 +21,9 @@ visitor can actually download. Every file there is public.
    - Flag any name that suggests a secret (`SECRET`, `PRIVATE`, `PASSWORD`, `TOKEN`,
      `KEY` other than a publishable/public key, `DATABASE_URL`, `SERVICE_ROLE`) as HIGH -
      it is inlined into the bundle.
-   - Run `python .claude/hooks/secret_scan.py` over the files in `dist/` to catch
-     credential-shaped strings that reached the output by any route.
+   - Run `find dist -type f -print0 | xargs -0 python .claude/hooks/secret_scan.py`
+     to scan the built files in `dist/` for credential-shaped strings that reached
+     the output by any route.
    - Confirm `envPrefix` is not `''` and `define` does not inject non-prefixed env values.
 3. **Chunk sizes**: list every JS/CSS chunk over ~250 kB (minified, before gzip) or over
    the configured `chunkSizeWarningLimit`. For each, identify the largest contributors

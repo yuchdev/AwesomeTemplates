@@ -25,7 +25,7 @@ For the change, enumerate:
 
 ## Output and the merge gate
 
-Write a threat model to `docs/security/YYYY-MM-DD-<feature>.md`:
+Write a threat model to `docs/security/threat-model-<scope>.md`:
 
 ```
 # Threat Model - <feature> - <date>

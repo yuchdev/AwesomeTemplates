@@ -163,7 +163,13 @@ def tool_input(event: dict[str, Any]) -> dict[str, Any]:
 def edited_path(event: dict[str, Any]) -> Optional[Path]:
     """Resolve the file path targeted by a Write/Edit/MultiEdit tool call."""
     fields = tool_input(event)
-    raw = fields.get("file_path") or fields.get("path") or fields.get("notebook_path")
+    raw = (
+        fields.get("file_path")
+        or fields.get("filePath")
+        or fields.get("path")
+        or fields.get("notebook_path")
+        or fields.get("notebookPath")
+    )
     if not raw:
         return None
     p = Path(raw)

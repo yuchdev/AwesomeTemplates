@@ -74,8 +74,8 @@ def main() -> None:
         lines += ["", "Open P0/P1 issues: none found (or gh not authenticated)."]
     lines += [
         "",
-        "Reminder: delegate work per your project's `.claude/CLAUDE.md` agent roster - "
-        "check it for any role that owns handling of sensitive or regulated data.",
+        "Reminder: delegate work per your project's `.claude/agents/` roster - "
+        "start with `agent-orchestrator.md` and check for any role that owns sensitive or regulated data.",
     ]
     print("\n".join(lines))
 

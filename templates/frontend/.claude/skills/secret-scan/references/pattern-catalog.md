@@ -55,14 +55,16 @@ mention wave through everything else on it.
 
 ## Placeholder allowlist (why a line is *not* flagged)
 
-A line is skipped if it contains any of these case-insensitive substrings:
+A finding is skipped only when the **matched credential value** contains one of
+these case-insensitive substrings:
 `example`, `placeholder`, `your-`, `your_`, `changeme`, `dummy`, `xxxx`, `${`,
 `<your`, `redacted`, `fake`, `test`.
 
-This is why `API_KEY=${OPENAI_API_KEY}` and `token="your-token-here"` pass — they
-read as obvious non-secrets. Consequence: the correct fix for a real hit is to
-convert it into an allowlisted form (a `${VAR}` reference), which also makes the
-scanner pass.
+This is why `API_KEY=${OPENAI_API_KEY}` and `token="your-token-here"` pass — the
+matched values read as obvious non-secrets. Because the allowlist is value-scoped,
+`example` elsewhere on the line does **not** suppress a real credential. The
+correct fix for a real hit is to convert it into an allowlisted form (a `${VAR}`
+reference), which also makes the scanner pass.
 
 ## Skipped file types
 
@@ -73,7 +75,7 @@ commit them regardless.
 
 ## Reporting rules
 
-- Print `file:line: <type>: <short excerpt>` — **never** the full secret value.
+- Print `file:line: <type>` — **never** the secret value or a source-line excerpt.
 - On any hit: instruct the user to (1) remove the literal, (2) **rotate** it if it
   ever reached a remote, (3) replace with an env/`${VAR}` reference (see `.mcp.json`)
   or a secrets manager.
