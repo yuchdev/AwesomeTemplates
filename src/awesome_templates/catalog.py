@@ -19,6 +19,11 @@ KINDS = ["agents", "hooks", "loops", "skills"]
 KIND_ALIAS = {"agent": "agents", "hook": "hooks", "loop": "loops", "skill": "skills"}
 SKIP_NAMES = {"README.md", "MIGRATION_REPORT.md"}
 
+# templates/common/ is shaped exactly like a preset (.claude/ + docs/, see
+# presets.COMMON_PRESET_NAME) but is never itself selectable - it has nothing
+# of its own to generate, only content merged into every real preset.
+RESERVED_PRESET_NAMES = {"common"}
+
 
 @dataclass
 class Catalog:
@@ -30,13 +35,14 @@ class Catalog:
 
 def list_presets(workspace: Workspace) -> list[str]:
     """Every immediate child directory of the workspace root that is a
-    complete preset (has both .claude/ and docs/)."""
+    complete preset (has both .claude/ and docs/), excluding
+    RESERVED_PRESET_NAMES."""
     if not workspace.root.is_dir():
         return []
     return sorted(
         p.name
         for p in workspace.root.iterdir()
-        if p.is_dir() and (p / ".claude").is_dir() and (p / "docs").is_dir()
+        if p.is_dir() and p.name not in RESERVED_PRESET_NAMES and (p / ".claude").is_dir() and (p / "docs").is_dir()
     )
 
 

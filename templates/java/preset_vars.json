@@ -1,0 +1,5 @@
+{
+  "EXPERT_AGENT_NAME": "java-expert",
+  "EXAMPLE_SOURCE_FILE": "src/foo/Bar.java",
+  "MILESTONE_0001_SUMMARY": "Generic working implementation (CLI jar, backend, ...)"
+}

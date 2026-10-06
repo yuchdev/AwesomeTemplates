@@ -31,7 +31,7 @@ from awesome_templates.dependencies import (
 )
 from awesome_templates.dependencies import to_json as graph_to_json
 from awesome_templates.log_helper import LogHelper, LogSeverity
-from awesome_templates.presets import copy_preset
+from awesome_templates.presets import copy_preset, load_preset_vars
 from awesome_templates.specializations import list_specializations
 from awesome_templates.templating import slugify_package, slugify_upper
 from awesome_templates.workspace import Workspace
@@ -582,6 +582,7 @@ def generate(
         auth_label = f"api-key-env:{api_key_env_value}"
 
     subs = {
+        **load_preset_vars(workspace, preset_value),
         "PROJECT_NAME": name_value,
         "PROJECT_PACKAGE": package_value or slugify_package(name_value),
         "PROJECT_SLUG_UPPER": slug_value or slugify_upper(name_value),

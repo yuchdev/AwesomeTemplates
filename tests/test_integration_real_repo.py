@@ -40,16 +40,22 @@ def test_templates_root_is_separate_from_the_package_root(real_workspace):
 
 
 def test_workspace_root_resolves_to_the_actual_preset_trees(real_workspace):
+    # "common" is a fifth, non-selectable tree (see presets.COMMON_PRESET_NAME /
+    # catalog.RESERVED_PRESET_NAMES) merged into every real preset at generate
+    # time - never itself a preset list_presets() should surface.
     assert list_presets(real_workspace) == ["cpp", "frontend", "java", "python"]
     assert (real_workspace.root / "python" / ".claude").is_dir()
-    assert (real_workspace.root / "python" / "docs" / "adr" / "template.md").is_file()
+    assert (real_workspace.root / "python" / "docs" / "adr" / "README.md").is_file()
+    assert (real_workspace.root / "common" / "docs" / "adr" / "template.md").is_file()
 
 
 def test_discover_against_real_repo_finds_expected_entities(real_workspace):
     python_catalog = discover(Workspace(root=real_workspace.path("python")))
     assert "python-expert" in python_catalog.names(".", "agents")
-    assert "task-verifier" in python_catalog.names(".", "agents")
     assert "post-mortem" not in python_catalog.names(".", "skills")  # deleted in round 2
+
+    common_catalog = discover(Workspace(root=real_workspace.path("common")))
+    assert "task-verifier" in common_catalog.names(".", "agents")
 
 
 @pytest.mark.parametrize("preset", ["python", "java", "frontend"])
@@ -175,7 +181,11 @@ def test_real_preset_agents_doc_lists_every_real_agent_file(tmp_path):
     )
     assert result.exit_code == 0, result.stdout
 
+    # A generated project's agents are merged from both templates/common/ (shared
+    # across every preset, see presets.COMMON_PRESET_NAME) and templates/python/
+    # (preset-specific) - see this file's own "every real agent file" claim.
     agent_stems = {p.stem for p in (REAL_REPO_ROOT / "templates" / "python" / ".claude" / "agents").glob("*.md")}
+    agent_stems |= {p.stem for p in (REAL_REPO_ROOT / "templates" / "common" / ".claude" / "agents").glob("*.md")}
     assert len(agent_stems) == 12  # guard the guard: pin the real preset's current agent count
     agents_doc = (proj / "docs" / "agent" / "agents.md").read_text()
     for stem in agent_stems:
