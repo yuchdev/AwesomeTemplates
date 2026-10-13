@@ -72,7 +72,7 @@ uv run awesome-templates generate . --preset python --name "Awesome Templates" -
 uv run awesome-templates generate . --preset python --name "Awesome Templates" --package awesome_templates --output-dir .scratch/django --specialization django
 
 # Full AI-resolution pass: one headless `claude` research session over every marker. --harness is mandatory here - there is no default engine.
-uv run awesome-templates generate . --preset python --name "Awesome Templates" --package awesome_templates --output-dir .scratch/resolved --resolve-markers --harness claude --json --log-severity debug
+uv run awesome-templates generate . --preset python --name "Awesome Templates" --package awesome_templates --output-dir .scratch/preset --resolve-markers --harness claude --json --log-severity debug
 
 # Targeted regression tests for the specialization-copy bug
 uv run pytest tests/test_specializations.py tests/test_integration_real_repo.py -q
