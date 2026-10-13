@@ -7,7 +7,7 @@ rules below before relying on it.
 ## Contents
 
 - **Style** - formatting, naming, namespace structure, and the project's
-  C++ standard version (e.g. C++17/20/23) and compiler flag baseline
+  C++ standard version (e.g., C++17/20/23) and compiler flag baseline
   (`-Wall -Wextra -Wpedantic` or the MSVC equivalent).
 - **Doxygen** - what requires a doc comment (every public class, function,
   template, and non-obvious data member).

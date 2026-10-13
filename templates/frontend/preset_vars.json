@@ -1,0 +1,5 @@
+{
+  "EXPERT_AGENT_NAME": "frontend-expert",
+  "EXAMPLE_SOURCE_FILE": "js/foo/bar.js",
+  "MILESTONE_0001_SUMMARY": "Working implementation (first page, layout, …)"
+}

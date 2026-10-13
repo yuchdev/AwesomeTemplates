@@ -1,4 +1,4 @@
-# Task 01.0 - Hello World Endpoint
+# Story 01.0 - Hello World Endpoint
 
 **Parent milestone:** [plan.md](../plan.md)
 **Status:** ⬜ Not started
@@ -8,7 +8,7 @@
 Add a minimal `GET /health` endpoint that returns `{"status": "ok"}`, backed
 by a small config model for the service name, with a regression test.
 
-## Subtasks
+## Tasks
 
 | #  | Document                                  | Status         | Blocks |
 |----|--------------------------------------------|----------------|--------|

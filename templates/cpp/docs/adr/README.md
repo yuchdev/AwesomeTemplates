@@ -6,9 +6,9 @@ are in `assets/`.
 
 ## Inventory
 
-| ADR | Title | Status | Date |
-|-----|-------|--------|------|
-| _none yet_ | Add a row per ADR as they land | | |
+| ADR        | Title                          | Status | Date |
+|------------|--------------------------------|--------|------|
+| _none yet_ | Add a row per ADR as they land |        |      |
 
 ## Template
 

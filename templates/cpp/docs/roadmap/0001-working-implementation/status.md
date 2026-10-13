@@ -1,11 +1,11 @@
 # Milestone 0001 - Working Implementation - Status
 
-Tracks progress against [plan.md](plan.md). Updated as each task lands.
+Tracks progress against [plan.md](plan.md). Updated as each story lands.
 
 ## Current status
 
-| Task | Name                 | Status         | Tests |
-|------|----------------------|----------------|-------|
-| 01.0 | Hello World Endpoint | ⬜ Not started | -     |
+| Story | Name                                             | Status         | Tests |
+|------|---------------------------------------------------|----------------|-------|
+| 01.0 | Generic working implementation (backends, CLI, …) | ⬜ Not started | -     |
 
 **Legend:** ✅ Complete · 🔶 In progress / partial · ⬜ Not started

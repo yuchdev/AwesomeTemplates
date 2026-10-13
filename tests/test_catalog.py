@@ -28,9 +28,11 @@ def test_discover_at_templates_root_keys_by_preset(fixture_workspace):
 
 
 def test_discover_real_repo_presets(real_workspace):
+    # task-verifier lives in templates/common/ now (see test_discover_real_repo_common
+    # below) - discover() against a single preset's own source tree never sees it,
+    # since that merge only happens in presets.copy_preset at generate time.
     python_catalog = discover(Workspace(root=real_workspace.path("python")))
     assert "python-expert" in python_catalog.names(".", "agents")
-    assert "subtask-verifier" in python_catalog.names(".", "agents")
 
     java_catalog = discover(Workspace(root=real_workspace.path("java")))
     assert {
@@ -43,7 +45,16 @@ def test_discover_real_repo_presets(real_workspace):
         "incident-analyst",
         "java-expert",
         "security-auditor",
-        "subtask-verifier",
         "test-documenter",
         "testing-expert",
     } <= set(java_catalog.names(".", "agents"))
+
+
+def test_discover_real_repo_common(real_workspace):
+    common_catalog = discover(Workspace(root=real_workspace.path("common")))
+    assert "task-verifier" in common_catalog.names(".", "agents")
+    assert "verify-task" in common_catalog.names(".", "skills")
+
+
+def test_list_presets_excludes_common(real_workspace):
+    assert "common" not in list_presets(real_workspace)
