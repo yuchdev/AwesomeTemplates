@@ -1,0 +1,5 @@
+{
+  "EXPERT_AGENT_NAME": "swift-expert",
+  "EXAMPLE_SOURCE_FILE": "Sources/Foo/Bar.swift",
+  "MILESTONE_0001_SUMMARY": "Generic working implementation (app shell, native core, …)"
+}
