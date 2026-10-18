@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -9,6 +12,30 @@ from awesome_templates.workspace import Workspace
 
 REAL_REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_TEMPLATES_ROOT = REAL_REPO_ROOT / "templates"
+
+
+@pytest.fixture(autouse=True)
+def _which_finds_extensionless_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On Windows, `shutil.which` only matches names carrying a `PATHEXT`
+    extension, so the extensionless executable stubs the harness tests drop on
+    a scoped PATH (they are only ever resolved, never run) are invisible to it.
+    Fall back to an exact-name file match on PATH so those tests see the same
+    thing they do on POSIX. A no-op elsewhere."""
+    if sys.platform != "win32":
+        return
+    real_which = shutil.which
+
+    def which(cmd, mode=os.F_OK | os.X_OK, path=None):
+        found = real_which(cmd, mode, path)
+        if found or os.path.splitext(cmd)[1]:
+            return found
+        for directory in (path if path is not None else os.environ.get("PATH", "")).split(os.pathsep):
+            candidate = os.path.join(directory, cmd)
+            if directory and os.path.isfile(candidate):
+                return candidate
+        return None
+
+    monkeypatch.setattr(shutil, "which", which)
 
 
 @pytest.fixture
