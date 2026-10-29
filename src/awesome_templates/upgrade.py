@@ -5,14 +5,18 @@ pinning last year's models. This module finds the model pins an existing project
 (Claude `.claude/agents`, Copilot `.github/agents`, Junie `.junie/agents`, Codex `.codex/config.toml`),
 judges each against *its own vendor's* recommended list, and plans a rewrite to that vendor's target.
 It is the project-side sibling of `model_policy` (which audits this repo's templates) and reads the
-same `pyproject.toml` data, so there is still exactly one place that names models.
+same `model-policy.toml` data, so there is still exactly one place that names models.
 
 **The matcher is deliberately not a table of old -> new pairs.** Such a table grows with every release
-and with every vendor. Instead each pin goes through three independent per-vendor facts - which vendor
-owns it (the harness it was found in), is it in that vendor's `recommended` list, and what does
-`model_policy.UpgradeRule.target_for` say its family maps to - so the cost is one set lookup plus a
-handful of regexes per pin, whatever the number of past versions. A model released tomorrow needs no
-edit to be upgraded *from*; only the target moves when a vendor ships a successor.
+and with every vendor. Instead each pin goes through independent facts - which vendor owns it (the
+harness it was found in), is it in that vendor's `recommended` list, and what does
+`ModelPolicy.upgrade_target` say for this *agent role* on this vendor - so the cost is a few dict
+lookups per pin, whatever the number of past versions. The role is the agent file's stem: a
+`cpp-expert` moves to a vendor's flagship tier while a `docs-updater` moves to its cheaper one, because
+upgrading every agent to the most expensive model would be wrong. A pin whose role is unknown (a user's
+own agent, Codex's single config) falls back to the old model's family, then the vendor default. A model
+released tomorrow needs no edit to be upgraded *from*; only a tier's model moves when a vendor ships a
+successor.
 
 **Only Claude's pin location is verified.** The Copilot/Junie/Codex adapters encode the locations
 `harnesses.py` documents, but their `model` field has not been confirmed against the real tools, so
@@ -76,6 +80,7 @@ class PinSite:
     path: Path
     line: int  # 1-based
     model: str
+    role: Optional[str] = None  # agent file stem; None where the file is not one agent (TOML config)
 
 
 @dataclass(frozen=True)
@@ -121,7 +126,8 @@ def find_pins(root: Path, site: HarnessSite) -> list[PinSite]:
                     break
             match = pattern.match(raw) if in_block else None
             if match and match.group(3).strip():
-                pins.append(PinSite(site.name, path, number, match.group(3).strip()))
+                role = path.stem if site.style == "frontmatter" else None
+                pins.append(PinSite(site.name, path, number, match.group(3).strip(), role))
     return pins
 
 
@@ -158,7 +164,6 @@ def plan_upgrade(
             )
             continue
         recommended = policy.recommended.get(site.vendor, frozenset())
-        rule = policy.upgrade.get(site.vendor)
         for pin in find_pins(root, site):
             if pin.model in FLOATING_ALIASES or pin.model in recommended:
                 plan.current += 1
@@ -170,7 +175,7 @@ def plan_upgrade(
                 warnings.append(message)
                 log.warning(message)
                 continue
-            target = rule.target_for(pin.model) if rule else None
+            target = policy.upgrade_target(site.vendor, pin.model, pin.role)
             if target is None or target == pin.model:
                 plan.unresolved.append(pin)
             else:

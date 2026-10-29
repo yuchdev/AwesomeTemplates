@@ -40,9 +40,10 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   imports `anthropic` (pinned by
   `tests/test_markers.py::test_docgen_import_does_not_pull_anthropic`) even though `resolver.py`
   imports *it* to reuse `list_agents`/`list_skills`/`list_test_files` rather than re-deriving them.
-- `model_policy.py` — the outdated-model check. `load_policy` reads `[tool.awesome_templates.model_policy]`
-  from `pyproject.toml` (`mode` = `off|warn|error`, `[...model_policy.recommended]` = per-vendor model-ID lists whose union is the allowlist, `vendors` = env var names for the live check; an absent table
-  is `off`, a malformed one raises `ModelPolicyError` so a typo can't silently disable the check).
+- `model_policy.py` — the outdated-model check. `load_policy` reads the standalone `model-policy.toml`
+  (`mode` = `off|warn|error`, `[recommended]` = per-vendor model-ID lists whose union is the allowlist, `vendors` = env var
+  names for the live check, `[roles]` = agent role -> tier, `[upgrade.<vendor>]` = tier/role/family targets; an absent or
+  empty file is `off`, a malformed one raises `ModelPolicyError` so a typo can't silently disable the check).
   `scan_agents_dir` reads each agent's `model:` via `docgen.parse_frontmatter` (public so this module
   doesn't grow a second frontmatter parser); a missing `model:` and the floating aliases in
   `FLOATING_ALIASES` are never findings. `scan_generation` covers exactly what `copy_preset` copies
@@ -56,8 +57,9 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   network; only `check-models --live` and `tests/test_live_models.py` (`--live-models`) call it.
 - `upgrade.py` — plans and applies model-pin bumps in an existing project. `SITES` lists each harness's marker dir,
   file globs and whether its pin location is `verified` (only Claude); `plan_upgrade` classifies each pin via
-  `ModelPolicy.recommended[vendor]` and `UpgradeRule.target_for` (parsed by `model_policy._parse_upgrade`, which
-  rejects targets outside `recommended`); `apply_changes` re-matches each line before a minimal in-place rewrite;
+  `ModelPolicy.recommended[vendor]` and `ModelPolicy.upgrade_target(vendor, model, role)` (role override -> role's
+  tier -> old-model family/default; parsed by `model_policy._parse_upgrade`, which rejects targets outside
+  `recommended`); `model_policy.render_matrix`/`splice_matrix` keep `docs/model-upgrade-matrix.md` in sync; `apply_changes` re-matches each line before a minimal in-place rewrite;
   `dirty_files(run=)` is the uncommitted-changes guard. Flag validation lives in `validate_harness_names`, not
   `cli.sanity_check`, which is specific to `generate`'s AI-stage flags.
 - `templating.py` — the substitution engine: a flat regex find/replace over the small fixed placeholder

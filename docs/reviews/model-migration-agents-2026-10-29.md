@@ -106,7 +106,7 @@ the specializations are bumped.
    (`sed -i '' -e 's/^model: claude-opus-4-8$/model: claude-opus-5-5/'` on those files) so a
    specialized project is not a mixed fleet. Same for the root `.claude/agents/` if desired.
    `uv run awesome-templates check-models` now lists exactly these 16 (policy added after this
-   review: `[tool.awesome_templates.model_policy]` in `pyproject.toml`, currently `mode = "warn"`;
+   review: `model-policy.toml` (originally a `pyproject.toml` table), currently `mode = "warn"`;
    `check-models --live` / `pytest --live-models` additionally verify each ID against the vendor's Models API).
    Once they are bumped, switch the mode to `"error"` so a stale pin can no longer ship.
 2. **Fix the Java leak:** replace "Verity" with `{{PROJECT_NAME}}` and swap the goal/proof/streak

@@ -38,6 +38,8 @@ uv run awesome-templates graph --remove
 
 uv run awesome-templates check-models                # whole-tree sweep for outdated `model:` pins
 uv run awesome-templates check-models --preset python --json
+uv run awesome-templates model-matrix --check        # role x vendor upgrade table in docs/ matches model-policy.toml
+uv run awesome-templates model-matrix --write        # regenerate it after editing model-policy.toml
 uv run awesome-templates upgrade ../some-project     # report outdated model pins in an existing project
 uv run awesome-templates upgrade ../some-project --apply   # rewrite them (refuses uncommitted files without --force)
 uv run awesome-templates check-models --live         # ALSO asks vendor Models APIs; needs *_API_KEY env vars
@@ -127,9 +129,12 @@ not gate on a number.
 - **`docgen.py`** - deterministic, no-network doc generation that runs on *every* `generate`.
   Regenerates `docs/agent/{agents,skills,hooks}.md` and the "Actual Test Layout" section.
   Must never import `anthropic`.
-- **`model_policy.py`** - the outdated-model check: reads `[tool.awesome_templates.model_policy]`
-  from `pyproject.toml` (`mode = off|warn|error`; `[...model_policy.recommended]` holds one model-ID list per vendor,
-  the single place templates' models are named; their union is the allowlist), scans agent
+- **`model_policy.py`** - the outdated-model check: reads the standalone
+  `model-policy.toml` (repo root, *not* `pyproject.toml`: `mode = off|warn|error`; `[recommended]` holds one model-ID
+  list per vendor, the single place templates' models are named, and their union is the allowlist; `[roles]` maps
+  every shipped agent role to a cost tier and `[upgrade.<vendor>.tiers]` maps tier -> model, so `upgrade` picks the
+  target by **role x vendor**. `docs/model-upgrade-matrix.md` renders that table and must equal it - edit the TOML,
+  then `model-matrix --write`; tests fail on drift or on an agent role missing from `[roles]`), scans agent
   frontmatter `model:` pins, and either appends to `warnings` or raises `ModelPolicyError`.
   `generate` checks exactly what it copies (`common/` + the preset + chosen specializations),
   before the dry-run branch and before any write, so `error` blocks a run cleanly; `check-models`
@@ -223,7 +228,7 @@ the preset does not ship; a hook importing a name its `_common.py` does not defi
   `::test_docgen_import_does_not_pull_anthropic`; `model_policy` is pinned the same way in
   `tests/test_model_policy.py`.
 - **Distributed agents pin current models.** Every agent a plain `generate --preset <p>` copies
-  (`common/` + the preset) must pin a model in `model_policy.recommended`; pinned by
+  (`common/` + the preset) must pin a model in `model-policy.toml`'s `recommended`; pinned by
   `tests/test_integration_real_repo.py::test_real_preset_and_common_agents_pin_only_current_models`.
   Specializations are checked by `check-models` and by `generate` when selected, not by that test.
 - **`SME REVIEW NEEDED` is never silently resolved.** `resolver.render` emits the unreviewed

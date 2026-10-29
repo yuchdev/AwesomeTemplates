@@ -12,16 +12,15 @@ from awesome_templates.cli import app
 runner = CliRunner()
 
 POLICY = """
-[tool.awesome_templates.model_policy]
 mode = "warn"
-[tool.awesome_templates.model_policy.recommended]
+[recommended]
 anthropic = ["claude-opus-5-5", "claude-sonnet-5-5"]
-copilot = ["Sol 6.1"]
-[tool.awesome_templates.model_policy.upgrade.anthropic]
+copilot = ["GPT-6.1 Sol"]
+[upgrade.anthropic]
 families = { opus = "^claude-opus-", sonnet = "^claude-sonnet-" }
 targets = { opus = "claude-opus-5-5", sonnet = "claude-sonnet-5-5" }
-[tool.awesome_templates.model_policy.upgrade.copilot]
-default = "Sol 6.1"
+[upgrade.copilot]
+default = "GPT-6.1 Sol"
 """
 
 
@@ -29,7 +28,7 @@ default = "Sol 6.1"
 def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     policy = tmp_path / "policy.toml"
     policy.write_text(POLICY)
-    monkeypatch.setattr(cli_module, "PYPROJECT_PATH", policy)
+    monkeypatch.setattr(cli_module, "MODEL_POLICY_PATH", policy)
     root = tmp_path / "proj"
     for rel, model in {
         ".claude/agents/a.md": "claude-opus-4-8",
@@ -71,7 +70,7 @@ def test_apply_reports_actual_writes_and_fails_when_application_is_incomplete(
 def test_naming_an_unverified_harness_upgrades_it(project: Path):
     result = runner.invoke(app, ["upgrade", str(project), "--harness", "copilot", "--apply"])
     assert result.exit_code == 0, result.stdout
-    assert "model: Sol 6.1\n" in (project / ".github/agents/c.md").read_text()
+    assert "model: GPT-6.1 Sol\n" in (project / ".github/agents/c.md").read_text()
     assert "model: claude-opus-4-8\n" in (project / ".claude/agents/a.md").read_text()
 
 
@@ -100,7 +99,25 @@ def test_unknown_harness_and_missing_dir_fail(project: Path, tmp_path: Path):
 
 def test_policy_off_refuses(project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     off = tmp_path / "off.toml"
-    off.write_text('[tool.awesome_templates.model_policy]\nmode = "off"\n')
-    monkeypatch.setattr(cli_module, "PYPROJECT_PATH", off)
+    off.write_text('mode = "off"\n')
+    monkeypatch.setattr(cli_module, "MODEL_POLICY_PATH", off)
     result = runner.invoke(app, ["upgrade", str(project)])
     assert result.exit_code == 1 and "policy is off" in " ".join(result.stdout.split())
+
+
+def test_model_matrix_prints_check_and_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    policy = tmp_path / "policy.toml"
+    policy.write_text(
+        'mode = "warn"\n[recommended]\nanthropic = ["m-deep", "m-std"]\n[roles]\na = "deep"\n'
+        '[upgrade.anthropic.tiers]\ndeep = "m-deep"\nstandard = "m-std"\n'
+    )
+    doc = tmp_path / "matrix.md"
+    doc.write_text("x\n<!-- model-matrix:begin (generated from model-policy.toml; run `awesome-templates model-matrix --write`) -->\n<!-- model-matrix:end -->\n")
+    monkeypatch.setattr(cli_module, "MODEL_POLICY_PATH", policy)
+    monkeypatch.setattr(cli_module, "MODEL_MATRIX_DOC_PATH", doc)
+    assert "| `a` | deep | `m-deep` |" in runner.invoke(app, ["model-matrix"]).stdout
+    assert runner.invoke(app, ["model-matrix", "--check"]).exit_code == 1  # empty block is drift
+    assert runner.invoke(app, ["model-matrix", "--write"]).exit_code == 0
+    assert "`m-deep`" in doc.read_text()
+    assert runner.invoke(app, ["model-matrix", "--check"]).exit_code == 0
+    assert runner.invoke(app, ["model-matrix", "--write", "--check"]).exit_code == 1

@@ -7,21 +7,26 @@ the value: `docgen` only copies it into `docs/agent/agents.md`. This module is t
 asks "is this still a current model?", kept apart from `docgen` (which describes what shipped,
 never judges it) and from `cli.py` (which should only decide what to do with a verdict).
 
-**Policy lives in `pyproject.toml`**, not in code, so a maintainer retires a model by editing one
-list, with no release of the generator:
+**Policy lives in `model-policy.toml`** (repo root), not in code and not in `pyproject.toml` - it
+outgrew that file once `upgrade` needed per-role tables - so a maintainer retires a model by editing
+one list, with no release of the generator:
 
-    [tool.awesome_templates.model_policy]
     mode = "warn"                      # off | warn | error
 
-    [tool.awesome_templates.model_policy.recommended]
+    [recommended]
     anthropic = ["claude-opus-5-5", "claude-sonnet-5-5"]
     openai = []
     google = []
 
-    [tool.awesome_templates.model_policy.vendors]      # live check only: env var NAMES, never keys
+    [vendors]                          # live check only: env var NAMES, never keys
     anthropic = { key_env = "ANTHROPIC_API_KEY" }
 
-- `off`   - no check (also the behaviour when the table is absent: no config, no policy).
+    [roles]                            # agent role (file stem) -> cost tier, vendor-independent
+    cpp-expert = "deep"
+    [upgrade.anthropic.tiers]          # per vendor: tier -> model
+    deep = "claude-opus-5-5"
+
+- `off`   - no check (also the behaviour when the file is absent or empty: no config, no policy).
 - `warn`  - findings become entries in `generate`'s `warnings`; generation proceeds.
 - `error` - findings abort `generate` before anything is written (the same "refuse, don't
   half-write" stance as the non-empty `.claude/` check).
@@ -36,6 +41,12 @@ maintain per model release and a typo'd ID is caught as well as a retired one. T
 deliberately never findings: a missing `model:` line (the agent inherits the session's model, so
 it cannot be stale) and the floating aliases Claude Code resolves to the newest model itself
 (`opus`, `sonnet`, `haiku`, `inherit`).
+
+**Upgrade targets are chosen by role and vendor, never by old model.** `[roles]` gives each agent
+role a tier (`deep`, `standard`...) once; each vendor's `[upgrade.<vendor>.tiers]` says which model
+serves a tier. So `cpp-expert` can land on a vendor's flagship while `docs-updater` lands on its cheaper
+model, and a new release edits one tier line per vendor. `docs/model-upgrade-matrix.md` renders the
+resulting role x vendor table (`render_matrix`) and a test keeps it equal to this file.
 
 **What a `generate` run is checked against** is exactly what it copies - `templates/common/`, the
 chosen preset, and the chosen specializations - not the whole tree. Blocking a Java run because an
@@ -85,10 +96,12 @@ class PolicyMode(str, enum.Enum):
 
 @dataclass(frozen=True)
 class UpgradeRule:
-    """How one vendor's outdated model is replaced - three small facts, no old->new edges.
+    """How one vendor's outdated model is replaced - small facts, no old->new edges.
 
-    `families` is an ordered list of (name, regex) classifying an *old* ID (`opus`, `sonnet`...);
-    `targets` maps a family name to the model to move to; `default` catches an ID that matches no
+    `tiers` maps a cost tier to the model serving it and `roles` overrides that for one agent role;
+    both are consulted first (see `ModelPolicy.upgrade_target`). The rest is the fallback for a pin
+    whose role is unknown: `families` is an ordered list of (name, regex) classifying an *old* ID,
+    `targets` maps a family name to the model to move to, `default` catches an ID that matches no
     family or whose family has no target. A new release edits one target; a past release needs no
     entry at all, so the table never grows with the number of versions or vendors.
     """
@@ -96,6 +109,8 @@ class UpgradeRule:
     families: tuple[tuple[str, re.Pattern[str]], ...] = ()
     targets: Mapping[str, str] = field(default_factory=dict)
     default: Optional[str] = None
+    tiers: Mapping[str, str] = field(default_factory=dict)
+    roles: Mapping[str, str] = field(default_factory=dict)
 
     def target_for(self, model: str) -> Optional[str]:
         for name, pattern in self.families:
@@ -107,13 +122,32 @@ class UpgradeRule:
 @dataclass(frozen=True)
 class ModelPolicy:
     """`current` is every recommended ID across vendors; `recommended` keeps the per-vendor split and
-    `key_envs` the env var *name* holding each vendor's key for the live check (both optional)."""
+    `key_envs` the env var *name* holding each vendor's key for the live check (both optional).
+    `role_tiers` maps an agent role (file stem) to its vendor-independent cost tier."""
 
     mode: PolicyMode
     current: frozenset[str]
     recommended: Mapping[str, frozenset[str]] = field(default_factory=dict)
     key_envs: Mapping[str, str] = field(default_factory=dict)
     upgrade: Mapping[str, UpgradeRule] = field(default_factory=dict)
+    role_tiers: Mapping[str, str] = field(default_factory=dict)
+
+    def upgrade_target(self, vendor: str, model: str, role: Optional[str] = None) -> Optional[str]:
+        """The model a stale `model` pin on `vendor` should move to, or None if nothing is configured.
+
+        Order: the vendor's explicit override for `role`, then the vendor's model for the role's tier,
+        then the old-ID family/default fallback (an agent that is not a known role, e.g. a user's own).
+        """
+        rule = self.upgrade.get(vendor)
+        if rule is None:
+            return None
+        if role is not None:
+            if role in rule.roles:
+                return rule.roles[role]
+            tier = self.role_tiers.get(role)
+            if tier is not None and tier in rule.tiers:
+                return rule.tiers[tier]
+        return rule.target_for(model)
 
 
 @dataclass(frozen=True)
@@ -124,27 +158,26 @@ class ModelFinding:
     model: str
 
 
-def load_policy(pyproject: Path) -> ModelPolicy:
-    """Read `[tool.awesome_templates.model_policy]` from `pyproject`.
+def load_policy(path: Path) -> ModelPolicy:
+    """Read the model policy from the standalone TOML file `path` (`model-policy.toml`).
 
-    A missing file or missing table is `off`, not an error: the generator can run from an
-    install that has no repo `pyproject.toml` beside it, and a repo that never configured a
-    policy has not asked for one. A *present but malformed* table is an error - silently
-    treating `mode = "eror"` as `off` would turn a typo into a disabled safety check.
+    A missing or empty file is `off`, not an error: the generator can run from an install that has no
+    policy file beside it, and a repo that never configured one has not asked for one. A *present but
+    malformed* file is an error - silently treating `mode = "eror"` as `off` would turn a typo into a
+    disabled safety check.
 
-    :raises ModelPolicyError: unreadable/invalid TOML, an unknown `mode`, or `current` that is not a
-        non-empty list of strings while the mode is `warn`/`error` (nothing could be judged).
+    :raises ModelPolicyError: unreadable/invalid TOML, an unknown `mode`, no recommended model while
+        the mode is `warn`/`error` (nothing could be judged), or an inconsistent upgrade protocol
+        (a target outside `recommended`, a role whose tier a vendor does not define, a bad regex).
     """
-    if not pyproject.is_file():
+    if not path.is_file():
         return ModelPolicy(PolicyMode.off, frozenset())
     try:
-        with pyproject.open("rb") as fh:
-            data = tomllib.load(fh)
+        with path.open("rb") as fh:
+            table = tomllib.load(fh)
     except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise ModelPolicyError(f"cannot read model policy from '{pyproject}': {exc}") from exc
-
-    table = data.get("tool", {}).get("awesome_templates", {}).get("model_policy")
-    if table is None:
+        raise ModelPolicyError(f"cannot read model policy from '{path}': {exc}") from exc
+    if not table:
         return ModelPolicy(PolicyMode.off, frozenset())
 
     raw_mode = table.get("mode", "warn")
@@ -152,48 +185,47 @@ def load_policy(pyproject: Path) -> ModelPolicy:
         mode = PolicyMode(str(raw_mode).lower())
     except ValueError:
         choices = ", ".join(m.value for m in PolicyMode)
-        raise ModelPolicyError(
-            f"{pyproject}: [tool.awesome_templates.model_policy] mode = {raw_mode!r} is not one of: {choices}"
-        ) from None
+        raise ModelPolicyError(f"{path}: mode = {raw_mode!r} is not one of: {choices}") from None
 
-    if "current" in table:
-        raise ModelPolicyError(
-            f"{pyproject}: [tool.awesome_templates.model_policy] current was replaced by the per-vendor "
-            "[tool.awesome_templates.model_policy.recommended] table (e.g. anthropic = [...])"
-        )
-    recommended = _parse_recommended(table.get("recommended", {}), pyproject)
+    recommended = _parse_recommended(table.get("recommended", {}), path)
     current = frozenset(m for ids in recommended.values() for m in ids)
     if mode is not PolicyMode.off and not current:
-        raise ModelPolicyError(
-            f"{pyproject}: [tool.awesome_templates.model_policy.recommended] must list at least one model "
-            f"ID when mode is '{mode.value}'"
-        )
-    return ModelPolicy(
-        mode,
-        current,
-        recommended,
-        _parse_key_envs(table.get("vendors", {}), pyproject),
-        _parse_upgrade(table.get("upgrade", {}), recommended, pyproject),
-    )
+        raise ModelPolicyError(f"{path}: [recommended] must list at least one model ID when mode is '{mode.value}'")
+    role_tiers = _parse_roles(table.get("roles", {}), path)
+    upgrade = _parse_upgrade(table.get("upgrade", {}), recommended, path)
+    _check_role_tiers(role_tiers, upgrade, path)
+    return ModelPolicy(mode, current, recommended, _parse_key_envs(table.get("vendors", {}), path), upgrade, role_tiers)
 
 
-def _parse_upgrade(
-    raw: object, recommended: Mapping[str, frozenset[str]], pyproject: Path
-) -> dict[str, UpgradeRule]:
-    """Parse `[...model_policy.upgrade.<vendor>]`. A target (or default) that is not itself in that
-    vendor's `recommended` list is rejected here, so `upgrade` can never write a model the policy
+def _str_table(raw: object, where: str) -> dict[str, str]:
+    """A table whose keys and values are all non-empty strings."""
+    if not isinstance(raw, dict) or not all(isinstance(v, str) and v.strip() for v in raw.values()):
+        raise ModelPolicyError(f"{where} must be a table of name = \"non-empty string\"")
+    return dict(raw)
+
+
+def _parse_roles(raw: object, path: Path) -> dict[str, str]:
+    return _str_table(raw, f"{path}: [roles]")
+
+
+def _parse_upgrade(raw: object, recommended: Mapping[str, frozenset[str]], path: Path) -> dict[str, UpgradeRule]:
+    """Parse `[upgrade.<vendor>]`. Every model it names (tier, role override, family target, default)
+    must itself be in that vendor's `recommended` list, so `upgrade` can never write a model the policy
     would flag on the very next run."""
-    where = f"{pyproject}: [tool.awesome_templates.model_policy.upgrade]"
+    where = f"{path}: [upgrade]"
     if not isinstance(raw, dict):
         raise ModelPolicyError(f"{where} must be a table of vendor tables")
     rules = {}
     for vendor, spec in raw.items():
         if not isinstance(spec, dict):
             raise ModelPolicyError(f"{where} {vendor} must be a table")
-        families_raw, targets = spec.get("families", {}), spec.get("targets", {})
-        default = spec.get("default")
-        if not isinstance(families_raw, dict) or not isinstance(targets, dict):
+        families_raw = spec.get("families", {})
+        if not isinstance(families_raw, dict) or not isinstance(spec.get("targets", {}), dict):
             raise ModelPolicyError(f"{where} {vendor}: families and targets must be tables")
+        targets = _str_table(spec.get("targets", {}), f"{where} {vendor}.targets")
+        tiers = _str_table(spec.get("tiers", {}), f"{where} {vendor}.tiers")
+        roles = _str_table(spec.get("roles", {}), f"{where} {vendor}.roles")
+        default = spec.get("default")
         families = []
         for name, regex in families_raw.items():
             try:
@@ -203,19 +235,29 @@ def _parse_upgrade(
         unknown = sorted(set(targets) - set(families_raw))
         if unknown:
             raise ModelPolicyError(f"{where} {vendor}: targets name unknown families: {', '.join(unknown)}")
-        wanted = [*targets.values(), *([default] if default is not None else [])]
+        wanted = [*targets.values(), *tiers.values(), *roles.values(), *([default] if default is not None else [])]
         for target in wanted:
             if not isinstance(target, str) or target not in recommended.get(vendor, frozenset()):
                 raise ModelPolicyError(
-                    f"{where} {vendor}: upgrade target {target!r} must be listed under "
-                    f"[tool.awesome_templates.model_policy.recommended] {vendor}"
+                    f"{where} {vendor}: upgrade target {target!r} must be listed under [recommended] {vendor}"
                 )
-        rules[vendor] = UpgradeRule(tuple(families), dict(targets), default)
+        rules[vendor] = UpgradeRule(tuple(families), targets, default, tiers, roles)
     return rules
 
 
-def _parse_recommended(raw: object, pyproject: Path) -> dict[str, frozenset[str]]:
-    where = f"{pyproject}: [tool.awesome_templates.model_policy.recommended]"
+def _check_role_tiers(role_tiers: Mapping[str, str], upgrade: Mapping[str, UpgradeRule], path: Path) -> None:
+    """Every tier a role uses must be defined by each vendor that declares tiers at all - otherwise
+    that role would silently fall through to the coarse fallback for that vendor."""
+    for vendor, rule in upgrade.items():
+        if not rule.tiers:
+            continue
+        missing = sorted({t for t in role_tiers.values() if t not in rule.tiers})
+        if missing:
+            raise ModelPolicyError(f"{path}: [upgrade.{vendor}.tiers] does not define tier(s) used by [roles]: {', '.join(missing)}")
+
+
+def _parse_recommended(raw: object, path: Path) -> dict[str, frozenset[str]]:
+    where = f"{path}: [recommended]"
     if not isinstance(raw, dict):
         raise ModelPolicyError(f"{where} must be a table of vendor = [model IDs]")
     parsed = {}
@@ -226,8 +268,8 @@ def _parse_recommended(raw: object, pyproject: Path) -> dict[str, frozenset[str]
     return parsed
 
 
-def _parse_key_envs(raw: object, pyproject: Path) -> dict[str, str]:
-    where = f"{pyproject}: [tool.awesome_templates.model_policy.vendors]"
+def _parse_key_envs(raw: object, path: Path) -> dict[str, str]:
+    where = f"{path}: [vendors]"
     if not isinstance(raw, dict):
         raise ModelPolicyError(f"{where} must be a table of vendor = {{ key_env = \"NAME\" }}")
     envs = {}
@@ -267,6 +309,10 @@ def scan_generation(
 
 def scan_all(workspace: Workspace, policy: ModelPolicy) -> list[ModelFinding]:
     """Findings across the whole template tree: common, every preset, every specialization."""
+    return [f for d in _agent_dirs(workspace) for f in scan_agents_dir(d, policy)]
+
+
+def _agent_dirs(workspace: Workspace) -> list[Path]:
     dirs = [workspace.path(COMMON_PRESET_NAME, ".claude", "agents")]
     for preset in list_presets(workspace):
         dirs.append(workspace.path(preset, ".claude", "agents"))
@@ -274,7 +320,47 @@ def scan_all(workspace: Workspace, policy: ModelPolicy) -> list[ModelFinding]:
             specialization_root(workspace, preset, name) / ".claude" / "agents"
             for name in list_specializations(workspace, preset)
         )
-    return [f for d in dirs for f in scan_agents_dir(d, policy)]
+    return dirs
+
+
+def discover_roles(workspace: Workspace) -> frozenset[str]:
+    """Every agent role (file stem) the template tree ships - the set `[roles]` must cover."""
+    return frozenset(p.stem for d in _agent_dirs(workspace) if d.is_dir() for p in d.glob("*.md"))
+
+
+# `docs/model-upgrade-matrix.md` holds the rendered table between these markers; everything outside
+# them is hand-written prose.
+MATRIX_BEGIN = "<!-- model-matrix:begin (generated from model-policy.toml; run `awesome-templates model-matrix --write`) -->"
+MATRIX_END = "<!-- model-matrix:end -->"
+
+
+def render_matrix(policy: ModelPolicy) -> str:
+    """The role x vendor table: for each role, its tier and the model each vendor moves it to.
+
+    Pure function of the policy, so the doc can be regenerated byte-identically and compared. Vendors
+    that declare neither tiers nor role overrides have no column - they cannot answer for a role.
+    A final row shows what an agent that is not a known role falls back to.
+    """
+    vendors = sorted(v for v, r in policy.upgrade.items() if r.tiers or r.roles)
+    header = ["Role", "Tier", *vendors]
+    rows = [header, ["---"] * len(header)]
+    for role in sorted(policy.role_tiers):
+        cells = [policy.upgrade_target(v, "", role) or "-" for v in vendors]
+        rows.append([f"`{role}`", policy.role_tiers[role], *(f"`{c}`" if c != "-" else c for c in cells)])
+    fallback = [policy.upgrade[v].default for v in vendors]
+    rows.append(["*any other role*", "-", *(f"`{c}`" if c else "-" for c in fallback)])
+    return "\n".join("| " + " | ".join(r) + " |" for r in rows)
+
+
+def splice_matrix(doc: str, policy: ModelPolicy) -> str:
+    """`doc` with the text between the matrix markers replaced by the current rendering.
+
+    :raises ModelPolicyError: the markers are missing, so there is nowhere to put the table.
+    """
+    start, end = doc.find(MATRIX_BEGIN), doc.find(MATRIX_END)
+    if start < 0 or end < start:
+        raise ModelPolicyError("model-upgrade-matrix doc has no matrix begin/end markers")
+    return doc[: start + len(MATRIX_BEGIN)] + "\n" + render_matrix(policy) + "\n" + doc[end:]
 
 
 _VENDOR_PREFIXES = (("claude-", "anthropic"), ("gpt-", "openai"), ("chatgpt-", "openai"), ("gemini-", "google"))
@@ -330,7 +416,7 @@ def enforce(
         current = ", ".join(sorted(policy.current))
         raise ModelPolicyError(
             f"{len(lines)} template agent(s) pin an outdated model (model_policy.mode = 'error' in "
-            f"pyproject.toml; current: {current}):\n  " + "\n  ".join(lines)
+            f"model-policy.toml; current: {current}):\n  " + "\n  ".join(lines)
         )
     for line in lines:
         warnings.append(line)

@@ -23,17 +23,17 @@ def _set_model(path: Path, model: str) -> None:
 
 
 def _policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> None:
-    pyproject = tmp_path / "policy-pyproject.toml"
-    pyproject.write_text(body, encoding="utf-8")
-    monkeypatch.setattr(cli_module, "PYPROJECT_PATH", pyproject)
+    policy_file = tmp_path / "model-policy.toml"
+    policy_file.write_text(body, encoding="utf-8")
+    monkeypatch.setattr(cli_module, "MODEL_POLICY_PATH", policy_file)
 
 
 def _mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
     _policy(
         tmp_path,
         monkeypatch,
-        f'[tool.awesome_templates.model_policy]\nmode = "{mode}"\n'
-        f'[tool.awesome_templates.model_policy.recommended]\nanthropic = ["{NEW}"]\n',
+        f'mode = "{mode}"\n'
+        f'[recommended]\nanthropic = ["{NEW}"]\n',
     )
 
 
@@ -138,14 +138,14 @@ def test_generate_off_mode_ignores_stale_pins(stale_core, tmp_path, monkeypatch)
     assert not any("outdated model" in w for w in json.loads(result.stdout)["warnings"])
 
 
-def test_generate_without_a_policy_table_checks_nothing(stale_core, tmp_path, monkeypatch):
-    _policy(tmp_path, monkeypatch, "[project]\nname = 'x'\n")
+def test_generate_with_an_empty_policy_file_checks_nothing(stale_core, tmp_path, monkeypatch):
+    _policy(tmp_path, monkeypatch, "")
     _, result = _generate(tmp_path, "--json")
     assert result.exit_code == 0, result.stdout
 
 
 def test_generate_fails_loudly_on_a_malformed_policy(stale_core, tmp_path, monkeypatch):
-    _policy(tmp_path, monkeypatch, '[tool.awesome_templates.model_policy]\nmode = "eror"\n[tool.awesome_templates.model_policy.recommended]\nanthropic = ["a"]\n')
+    _policy(tmp_path, monkeypatch, 'mode = "eror"\n[recommended]\nanthropic = ["a"]\n')
     out, result = _generate(tmp_path)
     assert result.exit_code == 1
     assert "eror" in result.stdout
@@ -235,9 +235,9 @@ def _live_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str) -> 
     _policy(
         tmp_path,
         monkeypatch,
-        f'[tool.awesome_templates.model_policy]\nmode = "{mode}"\n'
-        f'[tool.awesome_templates.model_policy.recommended]\nanthropic = ["{NEW}"]\n'
-        '[tool.awesome_templates.model_policy.vendors]\nanthropic = { key_env = "FAKE_KEY" }\n',
+        f'mode = "{mode}"\n'
+        f'[recommended]\nanthropic = ["{NEW}"]\n'
+        '[vendors]\nanthropic = { key_env = "FAKE_KEY" }\n',
     )
 
 

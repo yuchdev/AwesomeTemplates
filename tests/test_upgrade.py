@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from awesome_templates import upgrade
+from awesome_templates import model_policy, upgrade
 from awesome_templates.model_policy import (
     ModelPolicy,
     ModelPolicyError,
@@ -25,11 +25,11 @@ def _policy() -> ModelPolicy:
     anthropic = UpgradeRule(families, {"opus": NEW_OPUS, "sonnet": NEW_SONNET}, default=NEW_OPUS)
     recommended = {
         "anthropic": frozenset({NEW_OPUS, NEW_SONNET}),
-        "copilot": frozenset({"Sol 6.1"}),
+        "copilot": frozenset({"GPT-6.1 Sol"}),
         "junie": frozenset({"junie-new"}),
         "codex": frozenset({"codex-new"}),
     }
-    rules = {"anthropic": anthropic, "copilot": UpgradeRule(default="Sol 6.1")}
+    rules = {"anthropic": anthropic, "copilot": UpgradeRule(default="GPT-6.1 Sol")}
     return ModelPolicy(PolicyMode.warn, frozenset().union(*recommended.values()), recommended, {}, rules)
 
 
@@ -58,6 +58,55 @@ def test_target_follows_family_not_version(old: str, expected: str):
     assert _policy().upgrade["anthropic"].target_for(old) == expected
 
 
+def _role_policy() -> ModelPolicy:
+    """Roles on two tiers across a tiered vendor (anthropic) and one with a tier missing (copilot)."""
+    base = _policy()
+    rules = {
+        "anthropic": UpgradeRule(
+            base.upgrade["anthropic"].families,
+            base.upgrade["anthropic"].targets,
+            NEW_OPUS,
+            tiers={"deep": NEW_OPUS, "standard": NEW_SONNET},
+        ),
+        "copilot": UpgradeRule(
+            default="GPT-6 Luna", tiers={"deep": "GPT-6.1 Sol", "standard": "GPT-6 Luna"}, roles={"special": "GPT-6.1 Sol"}
+        ),
+    }
+    roles = {"cpp-expert": "deep", "docs-updater": "standard", "special": "standard", "lightweight": "light"}
+    return ModelPolicy(base.mode, base.current, base.recommended, {}, rules, roles)
+
+
+@pytest.mark.parametrize(
+    ("vendor", "role", "expected"),
+    [
+        ("anthropic", "cpp-expert", NEW_OPUS),
+        ("anthropic", "docs-updater", NEW_SONNET),
+        ("copilot", "cpp-expert", "GPT-6.1 Sol"),
+        ("copilot", "docs-updater", "GPT-6 Luna"),
+        ("copilot", "special", "GPT-6.1 Sol"),  # a per-vendor role override beats the role's tier
+        ("copilot", "lightweight", "GPT-6 Luna"),  # tier the vendor does not define -> default, not a guess
+        ("copilot", "unknown-role", "GPT-6 Luna"),
+    ],
+)
+def test_target_depends_on_role_and_vendor(vendor: str, role: str, expected: str):
+    assert _role_policy().upgrade_target(vendor, "whatever-old", role) == expected
+
+
+def test_role_target_ignores_the_old_model_but_unknown_roles_keep_its_family():
+    policy = _role_policy()
+    assert policy.upgrade_target("anthropic", "claude-sonnet-4-6", "cpp-expert") == NEW_OPUS  # role wins
+    assert policy.upgrade_target("anthropic", "claude-sonnet-4-6", "my-own-agent") == NEW_SONNET  # family
+    assert policy.upgrade_target("anthropic", "claude-sonnet-4-6") == NEW_SONNET  # no role at all
+    assert policy.upgrade_target("nobody", "x", "cpp-expert") is None
+
+
+def test_plan_picks_the_target_by_the_agents_role_not_just_its_old_model(tmp_path: Path):
+    _agent(tmp_path, ".github/agents/cpp-expert.md", "GPT-4.1")
+    _agent(tmp_path, ".github/agents/docs-updater.md", "GPT-4.1")
+    plan = upgrade.plan_upgrade(tmp_path, _role_policy(), ["copilot"])
+    assert {c.site.role: c.new_model for c in plan.changes} == {"cpp-expert": "GPT-6.1 Sol", "docs-updater": "GPT-6 Luna"}
+
+
 def test_rule_without_a_default_has_no_target_for_unknown_models():
     rule = UpgradeRule((("opus", re.compile("^o")),), {"opus": "x"})
     assert rule.target_for("zzz") is None
@@ -65,7 +114,7 @@ def test_rule_without_a_default_has_no_target_for_unknown_models():
 
 def test_every_old_copilot_model_collapses_to_the_default():
     rule = _policy().upgrade["copilot"]
-    assert {rule.target_for(m) for m in ("GPT-4.1", "o1", "anything")} == {"Sol 6.1"}
+    assert {rule.target_for(m) for m in ("GPT-4.1", "o1", "anything")} == {"GPT-6.1 Sol"}
 
 
 # --- plan ------------------------------------------------------------------------------------
@@ -91,7 +140,7 @@ def test_unverified_harness_is_skipped_unless_named(tmp_path: Path):
     auto = upgrade.plan_upgrade(tmp_path, _policy())
     assert auto.changes == [] and auto.skipped[0][0] == "copilot" and "not verified" in auto.skipped[0][1]
     named = upgrade.plan_upgrade(tmp_path, _policy(), ["copilot"])
-    assert [(c.site.model, c.new_model) for c in named.changes] == [("GPT-4.1", "Sol 6.1")]
+    assert [(c.site.model, c.new_model) for c in named.changes] == [("GPT-4.1", "GPT-6.1 Sol")]
 
 
 def test_named_harness_missing_from_the_project_is_reported(tmp_path: Path):
@@ -155,7 +204,7 @@ def test_unquoted_value_with_a_space_round_trips(tmp_path: Path):
     path = _agent(tmp_path, ".github/agents/a.md", "GPT 4.1")
     plan = upgrade.plan_upgrade(tmp_path, _policy(), ["copilot"])
     upgrade.apply_changes(plan.changes)
-    assert "model: Sol 6.1\n" in path.read_text()
+    assert "model: GPT-6.1 Sol\n" in path.read_text()
 
 
 # --- git guard -------------------------------------------------------------------------------
@@ -221,15 +270,15 @@ def test_dirty_files_with_no_paths_does_not_call_git(tmp_path: Path):
 # --- config + hygiene ------------------------------------------------------------------------
 
 BASE = (
-    '[tool.awesome_templates.model_policy]\nmode = "warn"\n'
-    '[tool.awesome_templates.model_policy.recommended]\nanthropic = ["claude-opus-5-5"]\n'
+    'mode = "warn"\n'
+    '[recommended]\nanthropic = ["claude-opus-5-5"]\n'
 )
 
 
 def test_load_policy_parses_upgrade_rules(tmp_path: Path):
     f = tmp_path / "p.toml"
     f.write_text(
-        BASE + '[tool.awesome_templates.model_policy.upgrade.anthropic]\n'
+        BASE + '[upgrade.anthropic]\n'
         'families = { opus = "^claude-opus-" }\ntargets = { opus = "claude-opus-5-5" }\n'
     )
     assert load_policy(f).upgrade["anthropic"].target_for("claude-opus-1") == "claude-opus-5-5"
@@ -245,9 +294,54 @@ def test_load_policy_parses_upgrade_rules(tmp_path: Path):
 )
 def test_load_policy_rejects_bad_upgrade_rules(tmp_path: Path, body: str, match: str):
     f = tmp_path / "p.toml"
-    f.write_text(BASE + f"[tool.awesome_templates.model_policy.upgrade.anthropic]\n{body}\n")
+    f.write_text(BASE + f"[upgrade.anthropic]\n{body}\n")
     with pytest.raises(ModelPolicyError, match=match):
         load_policy(f)
+
+
+def test_load_policy_parses_roles_and_tiers(tmp_path: Path):
+    f = tmp_path / "p.toml"
+    f.write_text(
+        BASE + '[roles]\ncpp-expert = "deep"\n[upgrade.anthropic.tiers]\ndeep = "claude-opus-5-5"\n'
+        '[upgrade.anthropic.roles]\nspecial = "claude-opus-5-5"\n'
+    )
+    policy = load_policy(f)
+    assert policy.role_tiers == {"cpp-expert": "deep"}
+    assert policy.upgrade_target("anthropic", "x", "cpp-expert") == "claude-opus-5-5"
+    assert policy.upgrade_target("anthropic", "x", "special") == "claude-opus-5-5"
+
+
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        ('[roles]\na = "deep"\n[upgrade.anthropic.tiers]\nstandard = "claude-opus-5-5"', "does not define tier"),
+        ('[upgrade.anthropic.tiers]\ndeep = "claude-opus-9"', "must be listed"),
+        ('[upgrade.anthropic.roles]\nx = "claude-opus-9"', "must be listed"),
+        ('[roles]\na = 3', "non-empty string"),
+    ],
+)
+def test_load_policy_rejects_inconsistent_role_tables(tmp_path: Path, body: str, match: str):
+    f = tmp_path / "p.toml"
+    f.write_text(BASE + body + "\n")
+    with pytest.raises(ModelPolicyError, match=match):
+        load_policy(f)
+
+
+def test_render_matrix_lists_each_role_with_each_vendors_model_and_a_fallback_row():
+    lines = model_policy.render_matrix(_role_policy()).splitlines()
+    assert lines[0] == "| Role | Tier | anthropic | copilot |"
+    assert f"| `cpp-expert` | deep | `{NEW_OPUS}` | `GPT-6.1 Sol` |" in lines
+    assert f"| `docs-updater` | standard | `{NEW_SONNET}` | `GPT-6 Luna` |" in lines
+    assert lines[-1].startswith("| *any other role*")
+
+
+def test_splice_matrix_replaces_only_the_marked_block_and_is_idempotent():
+    doc = f"intro\n{model_policy.MATRIX_BEGIN}\nstale\n{model_policy.MATRIX_END}\noutro\n"
+    once = model_policy.splice_matrix(doc, _role_policy())
+    assert "stale" not in once and once.startswith("intro\n") and once.endswith("\noutro\n")
+    assert model_policy.splice_matrix(once, _role_policy()) == once
+    with pytest.raises(ModelPolicyError, match="markers"):
+        model_policy.splice_matrix("no markers", _role_policy())
 
 
 def test_validate_harness_names():

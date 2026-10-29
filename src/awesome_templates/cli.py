@@ -75,8 +75,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # two are never confused with each other.
 TEMPLATES_ROOT = REPO_ROOT / "templates"
 # Where the outdated-model policy is read from (see model_policy.py). A module constant, like
-# TEMPLATES_ROOT, so tests can point it at a synthetic pyproject.toml.
-PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
+# TEMPLATES_ROOT, so tests can point it at a synthetic policy file. Its own file, not pyproject.toml:
+# the per-role upgrade tables made it too large to live there.
+MODEL_POLICY_PATH = REPO_ROOT / "model-policy.toml"
+# The human-readable role x vendor table that must stay equal to MODEL_POLICY_PATH (`model-matrix`).
+MODEL_MATRIX_DOC_PATH = REPO_ROOT / "docs" / "model-upgrade-matrix.md"
 
 # rich_markup_mode=None forces classic Click help rendering (plain text into
 # the formatter buffer) instead of typer's default Rich-panel help, which
@@ -427,10 +430,10 @@ def check_models_cmd(
         False,
         "--live",
         help="also ask each vendor's Models API whether every recommended and pinned ID is served "
-        "(needs the API key env vars named in pyproject.toml; vendors without a key are skipped)",
+        "(needs the API key env vars named in model-policy.toml; vendors without a key are skipped)",
     ),
 ) -> None:
-    """Report template agents pinning a model outside pyproject.toml's model_policy.recommended.
+    """Report template agents pinning a model outside model-policy.toml's `recommended` list.
 
     Honors the same policy `generate` does: `off` checks nothing, `warn` reports and exits 0,
     `error` reports and exits 1 - so `check-models` is the whole-tree sweep to run in CI or before
@@ -438,7 +441,7 @@ def check_models_cmd(
     and is never implied: `generate` never goes online."""
     workspace = _workspace()
     try:
-        policy = model_policy.load_policy(PYPROJECT_PATH)
+        policy = model_policy.load_policy(MODEL_POLICY_PATH)
     except ModelPolicyError as exc:
         _fail(str(exc))
         return
@@ -488,7 +491,7 @@ def check_models_cmd(
     elif policy.mode is model_policy.PolicyMode.off:
         # No square brackets here: Rich would read a TOML table header as a markup tag.
         console.print(
-            "model policy is off - nothing checked (see tool.awesome_templates.model_policy in pyproject.toml)"
+            "model policy is off - nothing checked (see model-policy.toml)"
         )
     elif not findings:
         console.print(f"All template agents pin a current model ({', '.join(sorted(policy.current))}).")
@@ -527,8 +530,8 @@ def upgrade_cmd(
 ) -> None:
     """Bump outdated model pins in an existing project, per vendor.
 
-    Each pin is judged against its own harness's vendor in pyproject.toml's model_policy and moved to
-    that vendor's configured target (see model_policy.upgrade). Report mode exits 1 while anything is
+    Each pin is judged against its own harness's vendor in model-policy.toml and moved to the model
+    that vendor assigns to the agent's role (docs/model-upgrade-matrix.md), else its family/default. Report mode exits 1 while anything is
     outdated, so it doubles as a CI gate; `--apply` rewrites only the matched `model` lines and refuses
     files with uncommitted changes unless `--force`. Incomplete writes are reported and exit 1. Offline:
     never calls a vendor API."""
@@ -538,12 +541,12 @@ def upgrade_cmd(
     try:
         if harness:
             upgrade.validate_harness_names(harness)
-        policy = model_policy.load_policy(PYPROJECT_PATH)
+        policy = model_policy.load_policy(MODEL_POLICY_PATH)
     except (ValueError, ModelPolicyError) as exc:
         _fail(str(exc))
         return
     if policy.mode is model_policy.PolicyMode.off:
-        _fail("model policy is off - nothing to judge pins against (see tool.awesome_templates.model_policy)")
+        _fail("model policy is off - nothing to judge pins against (see model-policy.toml)")
         return
 
     warnings: list[str] = []
@@ -614,6 +617,37 @@ def upgrade_cmd(
         apply and not plan.unresolved and written == len(plan.changes)
     ):
         raise typer.Exit(code=1)
+
+
+@app.command("model-matrix")
+def model_matrix_cmd(
+    write: bool = typer.Option(False, "--write", help=f"rewrite the table in {MODEL_MATRIX_DOC_PATH.name}"),
+    check: bool = typer.Option(False, "--check", help="exit 1 if the doc's table differs from model-policy.toml"),
+) -> None:
+    """Show the role x vendor upgrade table derived from model-policy.toml.
+
+    The same table is kept in docs/model-upgrade-matrix.md for humans; `--write` regenerates it and
+    `--check` fails when the two have drifted (the test suite runs the same comparison)."""
+    if write and check:
+        _fail("--write and --check are mutually exclusive")
+        return
+    try:
+        policy = model_policy.load_policy(MODEL_POLICY_PATH)
+        if not (write or check):
+            typer.echo(model_policy.render_matrix(policy))
+            return
+        current = MODEL_MATRIX_DOC_PATH.read_text(encoding="utf-8")
+        updated = model_policy.splice_matrix(current, policy)
+    except (ModelPolicyError, OSError) as exc:
+        _fail(str(exc))
+        return
+    if write:
+        MODEL_MATRIX_DOC_PATH.write_text(updated, encoding="utf-8")
+        typer.echo(f"wrote {model_policy.display_path(MODEL_MATRIX_DOC_PATH, REPO_ROOT)}")
+    elif updated != current:
+        _fail(f"{model_policy.display_path(MODEL_MATRIX_DOC_PATH, REPO_ROOT)} is out of date - run model-matrix --write")
+    else:
+        typer.echo("model matrix is in sync")
 
 
 @app.command()
@@ -792,7 +826,7 @@ def generate(
     # the way a real run would, and in `error` mode it fires before anything is written.
     model_warnings: list[str] = []
     try:
-        policy = model_policy.load_policy(PYPROJECT_PATH)
+        policy = model_policy.load_policy(MODEL_POLICY_PATH)
         model_policy.enforce(
             model_policy.scan_generation(workspace, preset_value, specializations_value, policy),
             policy,

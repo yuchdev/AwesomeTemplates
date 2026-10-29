@@ -41,7 +41,7 @@ def _agent(agents_dir: Path, name: str, model: Optional[str]) -> Path:
 
 
 def _pyproject(tmp_path: Path, body: str) -> Path:
-    path = tmp_path / "pyproject.toml"
+    path = tmp_path / "model-policy.toml"
     path.write_text(body, encoding="utf-8")
     return path
 
@@ -54,20 +54,20 @@ def test_load_policy_missing_file_is_off(tmp_path: Path):
     assert policy.mode is PolicyMode.off
 
 
-def test_load_policy_missing_table_is_off(tmp_path: Path):
+def test_load_policy_empty_file_is_off(tmp_path: Path):
     # A repo that never configured a policy has not asked for one.
-    assert load_policy(_pyproject(tmp_path, "[project]\nname = 'x'\n")).mode is PolicyMode.off
+    assert load_policy(_pyproject(tmp_path, "")).mode is PolicyMode.off
 
 
-HEAD = "[tool.awesome_templates.model_policy]"
-REC = "[tool.awesome_templates.model_policy.recommended]"
+HEAD = ""
+REC = "[recommended]"
 
 
 def test_load_policy_reads_mode_and_unions_vendors(tmp_path: Path):
     path = _pyproject(
         tmp_path,
         f'{HEAD}\nmode = "ERROR"\n{REC}\nanthropic = ["claude-opus-5-5"]\nopenai = ["gpt-x"]\n'
-        '[tool.awesome_templates.model_policy.vendors]\nopenai = { key_env = "OAI_KEY" }\n',
+        '[vendors]\nopenai = { key_env = "OAI_KEY" }\n',
     )
     policy = load_policy(path)
     assert policy.mode is PolicyMode.error  # case-insensitive
@@ -97,15 +97,9 @@ def test_load_policy_active_mode_requires_real_recommendations(tmp_path: Path, b
         load_policy(path)
 
 
-def test_load_policy_rejects_the_legacy_flat_current_list(tmp_path: Path):
-    path = _pyproject(tmp_path, f'{HEAD}\nmode = "warn"\ncurrent = ["claude-opus-5-5"]\n')
-    with pytest.raises(ModelPolicyError, match="recommended"):
-        load_policy(path)
-
-
 def test_load_policy_rejects_a_vendor_without_key_env(tmp_path: Path):
     path = _pyproject(
-        tmp_path, f'{HEAD}\n{REC}\nanthropic = ["a"]\n[tool.awesome_templates.model_policy.vendors]\nanthropic = {{}}\n'
+        tmp_path, f'{HEAD}\n{REC}\nanthropic = ["a"]\n[vendors]\nanthropic = {{}}\n'
     )
     with pytest.raises(ModelPolicyError, match="key_env"):
         load_policy(path)
@@ -131,7 +125,7 @@ def test_vendor_of_prefers_the_recommended_table():
 
 
 def test_load_policy_off_does_not_need_current(tmp_path: Path):
-    path = _pyproject(tmp_path, '[tool.awesome_templates.model_policy]\nmode = "off"\n')
+    path = _pyproject(tmp_path, 'mode = "off"\n')
     assert load_policy(path).mode is PolicyMode.off
 
 
