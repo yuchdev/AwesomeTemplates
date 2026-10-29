@@ -59,6 +59,15 @@ def test_apply_writes_and_a_second_run_is_clean(project: Path):
     assert runner.invoke(app, ["upgrade", str(project)]).exit_code == 0
 
 
+def test_apply_reports_actual_writes_and_fails_when_application_is_incomplete(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(cli_module.upgrade, "apply_changes", lambda changes, warnings: 1)
+    result = runner.invoke(app, ["upgrade", str(project), "--apply"])
+    assert result.exit_code == 1
+    assert "1/2 pin(s) updated" in " ".join(result.stdout.split())
+
+
 def test_naming_an_unverified_harness_upgrades_it(project: Path):
     result = runner.invoke(app, ["upgrade", str(project), "--harness", "copilot", "--apply"])
     assert result.exit_code == 0, result.stdout

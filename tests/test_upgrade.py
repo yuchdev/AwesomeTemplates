@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -161,7 +162,7 @@ def test_unquoted_value_with_a_space_round_trips(tmp_path: Path):
 
 
 class _Run:
-    def __init__(self, stdout: str = "", returncode: int = 0, raises: bool = False):
+    def __init__(self, stdout: bytes = b"", returncode: int = 0, raises: bool = False):
         self.result = subprocess.CompletedProcess([], returncode, stdout, "")
         self.raises, self.calls = raises, []
 
@@ -174,8 +175,37 @@ class _Run:
 
 def test_dirty_files_reports_only_modified_targets(tmp_path: Path):
     a, b = tmp_path / ".claude/agents/a.md", tmp_path / ".claude/agents/b.md"
-    run = _Run(" M .claude/agents/a.md\n")
+    run = _Run(b" M .claude/agents/a.md\0")
     assert upgrade.dirty_files(tmp_path, [a, b], run=run) == [a]
+
+
+def test_dirty_files_uses_paths_relative_to_relative_git_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.chdir(tmp_path)
+    root = Path("project")
+    a, b = root / ".claude/agents/a.md", root / ".claude/agents/b.md"
+    run = _Run(b" M .claude/agents/a.md\0")
+    assert upgrade.dirty_files(root, [a, b], run=run) == [a]
+    assert run.calls[0][-2:] == [".claude/agents/a.md", ".claude/agents/b.md"]
+
+
+def test_dirty_files_requires_exact_status_path_match(tmp_path: Path):
+    target = tmp_path / "nested/agents/a.md"
+    run = _Run(b" M agents/a.md\0")
+    assert upgrade.dirty_files(tmp_path, [target], run=run) == []
+
+
+@pytest.mark.parametrize("status", [b"R ", b"C "])
+def test_dirty_files_consumes_both_rename_or_copy_paths(tmp_path: Path, status: bytes):
+    old, new = tmp_path / "before.md", tmp_path / "after.md"
+    run = _Run(status + b" after.md\0before.md\0")
+    assert upgrade.dirty_files(tmp_path, [old, new], run=run) == [old, new]
+
+
+def test_dirty_files_preserves_unusual_filename_bytes(tmp_path: Path):
+    relative = os.fsdecode(b".claude/agents/\xff.md")
+    target = tmp_path / relative
+    run = _Run(b" M .claude/agents/\xff.md\0")
+    assert upgrade.dirty_files(tmp_path, [target], run=run) == [target]
 
 
 @pytest.mark.parametrize("run", [_Run(returncode=128), _Run(raises=True)])

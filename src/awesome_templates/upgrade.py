@@ -26,6 +26,7 @@ content cannot be reformatted. Stdlib-only and offline; it must never import `an
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from collections.abc import Callable, Sequence
@@ -210,21 +211,58 @@ def apply_changes(changes: Sequence[Change], *, warnings: Optional[list[str]] = 
 def dirty_files(
     root: Path, paths: Sequence[Path], *, run: Callable[..., subprocess.CompletedProcess] = subprocess.run
 ) -> list[Path]:
-    """The subset of `paths` with uncommitted changes in `root`'s git repo. Not a repo (or git absent)
-    returns `[]`: there is no history to protect, so the check cannot refuse. Takes `run=` like
-    `headless.py`, so tests need no real git."""
+    """Return requested paths with uncommitted changes in `root`'s git repo.
+
+    Uses paths relative to the `git -C root` working directory and NUL-delimited status bytes, so
+    rename/copy paths and unusual filename bytes are handled exactly. Not a repo (or git absent)
+    returns `[]`: there is no history to protect, so the check cannot refuse.
+
+    :param root: Project directory whose Git worktree to inspect.
+    :param paths: Candidate paths, absolute or relative to the current working directory.
+    :param run: Subprocess runner, injectable so tests need no real Git.
+    :returns: The requested paths that Git reports as dirty.
+    """
     if not paths:
         return []
+    pathspecs = [os.path.relpath(path, root) for path in paths]
     try:
         result = run(
-            ["git", "-C", str(root), "status", "--porcelain", "--", *map(str, paths)],
+            [
+                "git",
+                "-C",
+                str(root),
+                "--literal-pathspecs",
+                "status",
+                "--porcelain",
+                "-z",
+                "--",
+                *pathspecs,
+            ],
             capture_output=True,
-            text=True,
             check=False,
         )
     except OSError:
         return []
     if result.returncode != 0:
         return []
-    names = {line[3:].strip().strip('"') for line in result.stdout.splitlines() if line.strip()}
-    return [p for p in paths if any(str(p).endswith(n) for n in names)]
+    entries = result.stdout.split(b"\0")
+    dirty_names: set[bytes] = set()
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if not entry:
+            continue
+        if len(entry) < 4:
+            continue
+        dirty_names.add(entry[3:])
+        if (b"R" in entry[:2] or b"C" in entry[:2]) and index < len(entries):
+            dirty_names.add(entries[index])
+            index += 1
+    requested_names = {os.fsencode(pathspec) for pathspec in pathspecs}
+    matched_names = dirty_names & requested_names
+    return [
+        path
+        for path, pathspec in zip(paths, pathspecs, strict=True)
+        if os.fsencode(pathspec) in matched_names
+    ]

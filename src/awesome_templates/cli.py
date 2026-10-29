@@ -503,7 +503,10 @@ def check_models_cmd(
         if skipped_vendors:
             console.print(f"live check skipped (no API key in the environment): {', '.join(skipped_vendors)}")
         if not unserved:
-            console.print("Live check: every recommended and pinned model is served by its vendor.")
+            if skipped_vendors:
+                console.print("Live check: every model checked is served by its vendor; skipped vendors were not checked.")
+            else:
+                console.print("Live check: every recommended and pinned model is served by its vendor.")
 
     if (findings or unserved) and policy.mode is model_policy.PolicyMode.error:
         raise typer.Exit(code=1)
@@ -527,7 +530,8 @@ def upgrade_cmd(
     Each pin is judged against its own harness's vendor in pyproject.toml's model_policy and moved to
     that vendor's configured target (see model_policy.upgrade). Report mode exits 1 while anything is
     outdated, so it doubles as a CI gate; `--apply` rewrites only the matched `model` lines and refuses
-    files with uncommitted changes unless `--force`. Offline: never calls a vendor API."""
+    files with uncommitted changes unless `--force`. Incomplete writes are reported and exit 1. Offline:
+    never calls a vendor API."""
     if not path.is_dir():
         _fail(f"'{path}' is not a directory")
         return
@@ -586,7 +590,6 @@ def upgrade_cmd(
             )
         )
     else:
-        verb = "updated" if apply else "would update"
         for c in plan.changes:
             console.print(
                 f"{c.site.harness}: {rel(c.site.path)}:{c.site.line} {c.site.model} -> {c.new_model}", soft_wrap=True
@@ -600,11 +603,16 @@ def upgrade_cmd(
             console.print(f"skipped {h}: {reason}", soft_wrap=True)
         for w in warnings:
             console.print(f"[yellow]{w}[/yellow]", soft_wrap=True)
-        console.print(
-            f"{len(plan.changes)} pin(s) {verb}, {len(plan.unresolved)} unresolved, {plan.current} already current"
+        change_summary = (
+            f"{written}/{len(plan.changes)} pin(s) updated"
+            if apply
+            else f"{len(plan.changes)} pin(s) would update"
         )
+        console.print(f"{change_summary}, {len(plan.unresolved)} unresolved, {plan.current} already current")
 
-    if (plan.changes or plan.unresolved) and not (apply and not plan.unresolved):
+    if (plan.changes or plan.unresolved) and not (
+        apply and not plan.unresolved and written == len(plan.changes)
+    ):
         raise typer.Exit(code=1)
 
 

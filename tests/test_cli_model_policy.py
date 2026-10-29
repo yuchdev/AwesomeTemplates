@@ -274,6 +274,8 @@ def test_check_models_live_without_a_key_skips_instead_of_failing(stale_core, tm
     result = runner.invoke(app, ["check-models", "--live"])
     assert result.exit_code == 0 and urls == []
     assert "skipped" in result.stdout and "anthropic" in result.stdout
+    assert "every recommended and pinned model is served" not in result.stdout
+    assert "model checked" in result.stdout
 
 
 def test_check_models_without_live_never_calls_the_vendor(stale_core, tmp_path, monkeypatch):
