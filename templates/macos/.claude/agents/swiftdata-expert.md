@@ -1,7 +1,7 @@
 ---
 name: swiftdata-expert
 description: Use this agent for persistence work on {{PROJECT_NAME}} - SwiftData models and containers, Core Data stacks, schema versioning and migrations, CloudKit sync, concurrency (ModelActor, background contexts), and data-loss risk review. Use for any change to a persisted model, a store location, or a migration; delegate general Swift to swift-expert and C++ internals to cpp-expert.
-model: claude-opus-4-8
+model: claude-opus-5-5
 tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 ---

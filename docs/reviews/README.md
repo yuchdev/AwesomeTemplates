@@ -13,6 +13,7 @@ audits, secret scans, performance-regression findings, and license checks.
 | Document                               | Description               |
 |----------------------------------------|---------------------------|
 | [example-report.md](example-report.md) | Example efficiency audit. |
+| [model-migration-agents-2026-10-29.md](model-migration-agents-2026-10-29.md) | Preset agents moved to Opus 5.5 / Sonnet 5.5, with per-agent review findings. |
 
 ## What a review report must contain
 

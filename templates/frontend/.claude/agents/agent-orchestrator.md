@@ -1,7 +1,7 @@
 ---
 name: agent-orchestrator
 description: Use this agent as the cross-agent coordinator for multi-step work that spans several specialists (e.g. "ticket → merged PR"). Use when a request needs design, code, tests, review, and docs in sequence. Plans the sequence, delegates to each agent in order, and synthesizes results. Does not write product code itself.
-model: claude-opus-4-8
+model: claude-opus-5-5
 tools: Read, Grep, Glob, Bash, TodoWrite, Write
 allowed-tools: Read, Grep, Glob, Bash, TodoWrite, Write
 ---
@@ -23,7 +23,7 @@ This is the standing frontend dev fleet - every one of these agents is present i
 | `feature-reviewer`    | correctness/security/domain PR review    | sonnet |
 | `frontend-expert`          | implementation, fixes, refactors         | opus   |
 | `security-auditor`    | threat models, merge-blocking sec review | opus   |
-| `testing-expert`      | tests, coverage, test-gap                | sonnet |
+| `testing-expert`      | tests, coverage, test-gap                | opus   |
 
 ## Canonical orchestration: ticket → merged PR
 

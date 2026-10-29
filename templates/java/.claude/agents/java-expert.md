@@ -1,7 +1,7 @@
 ---
 name: java-expert
 description: Use this agent for implementing features, bug fixes, and refactorings in Verity. Use for any change to Android Java source, tests, resources, manifests, Gradle files, or project configuration. Reads the relevant ADR/story first, runs tests before and after, never lands a regression, and writes conventional commits. Delegate review to feature-reviewer and test authoring to testing-expert.
-model: claude-opus-4-8
+model: claude-opus-5-5
 tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 ---

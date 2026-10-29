@@ -1,7 +1,7 @@
 ---
 name: swift-expert
 description: Use this agent for implementing features, bug fixes, and refactorings in {{PROJECT_NAME}}'s Swift code. Use for any change to Swift sources, Swift Package Manager manifests, Xcode project settings, SwiftUI/AppKit UI, entitlements, or Swift tests. Reads the relevant ADR/story first, builds and tests before and after, never lands a regression, and writes conventional commits. Owns the Swift side of any Swift/C++ boundary; delegate C++ internals to cpp-expert, review to feature-reviewer, and test authoring to testing-expert.
-model: claude-opus-4-8
+model: claude-opus-5-5
 tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 ---
