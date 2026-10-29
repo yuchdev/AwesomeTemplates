@@ -7,11 +7,14 @@ the value: `docgen` only copies it into `docs/agent/agents.md`. This module is t
 asks "is this still a current model?", kept apart from `docgen` (which describes what shipped,
 never judges it) and from `cli.py` (which should only decide what to do with a verdict).
 
-**Policy lives in `model-policy.toml`** (repo root), not in code and not in `pyproject.toml` - it
-outgrew that file once `upgrade` needed per-role tables - so a maintainer retires a model by editing
-one list, with no release of the generator:
+**Strictness lives in `model-policy.toml`** (repo root); **the model data lives in `models.json`**
+(seeded from `data/models.template.json`, see `model_state`) - it outgrew both `pyproject.toml` and a
+TOML file once `upgrade` needed per-role tables and the live check needed a fetched, timestamped
+cache. `load_policy` takes the TOML plus that data as `fallback`; a TOML that carries its own
+`[recommended]` table is a self-contained policy and the fallback is ignored. The data has this shape
+(the same tables a self-contained TOML would hold), so a maintainer retires a model by editing one list:
 
-    mode = "warn"                      # off | warn | error
+    mode = "warn"                      # off | warn | error   (TOML only)
 
     [recommended]
     anthropic = ["claude-opus-5-5", "claude-sonnet-5-5"]
@@ -46,7 +49,7 @@ it cannot be stale) and the floating aliases Claude Code resolves to the newest 
 role a tier (`deep`, `standard`...) once; each vendor's `[upgrade.<vendor>.tiers]` says which model
 serves a tier. So `cpp-expert` can land on a vendor's flagship while `docs-updater` lands on its cheaper
 model, and a new release edits one tier line per vendor. `docs/model-upgrade-matrix.md` renders the
-resulting role x vendor table (`render_matrix`) and a test keeps it equal to this file.
+resulting role x vendor table (`render_matrix`) and a test keeps it equal to the data template.
 
 **What a `generate` run is checked against** is exactly what it copies - `templates/common/`, the
 chosen preset, and the chosen specializations - not the whole tree. Blocking a Java run because an
@@ -80,6 +83,8 @@ from awesome_templates.workspace import Workspace
 
 # Claude Code resolves these itself to its newest model of that tier (or the parent session's, for
 # `inherit`), so pinning one can never go stale and they are exempt from the allowlist.
+DEFAULT_MAX_AGE_HOURS = 24
+
 FLOATING_ALIASES = frozenset({"opus", "sonnet", "haiku", "inherit"})
 
 
@@ -131,6 +136,7 @@ class ModelPolicy:
     key_envs: Mapping[str, str] = field(default_factory=dict)
     upgrade: Mapping[str, UpgradeRule] = field(default_factory=dict)
     role_tiers: Mapping[str, str] = field(default_factory=dict)
+    live_max_age_hours: float = 24.0
 
     def upgrade_target(self, vendor: str, model: str, role: Optional[str] = None) -> Optional[str]:
         """The model a stale `model` pin on `vendor` should move to, or None if nothing is configured.
@@ -158,15 +164,23 @@ class ModelFinding:
     model: str
 
 
-def load_policy(path: Path) -> ModelPolicy:
-    """Read the model policy from the standalone TOML file `path` (`model-policy.toml`).
+_DATA_TABLES = ("recommended", "vendors", "roles", "upgrade")
+
+
+def load_policy(path: Path, *, fallback: Optional[Mapping[str, object]] = None) -> ModelPolicy:
+    """Read the model policy from the TOML file `path` (`model-policy.toml`), plus `fallback` data.
+
+    `fallback` is the parsed `models.json` (see `model_state.load_data`): when the TOML has no
+    `[recommended]` table, the `recommended`/`vendors`/`roles`/`upgrade` tables come from it. When it
+    does, the TOML is complete on its own and the fallback is not consulted - mixing the two would let
+    a project's pinned list be validated against someone else's upgrade targets.
 
     A missing or empty file is `off`, not an error: the generator can run from an install that has no
     policy file beside it, and a repo that never configured one has not asked for one. A *present but
     malformed* file is an error - silently treating `mode = "eror"` as `off` would turn a typo into a
     disabled safety check.
 
-    :raises ModelPolicyError: unreadable/invalid TOML, an unknown `mode`, no recommended model while
+    :raises ModelPolicyError: unreadable/invalid TOML, an unknown `mode`, a bad `[live]`, no recommended model while
         the mode is `warn`/`error` (nothing could be judged), or an inconsistent upgrade protocol
         (a target outside `recommended`, a role whose tier a vendor does not define, a bad regex).
     """
@@ -179,6 +193,8 @@ def load_policy(path: Path) -> ModelPolicy:
         raise ModelPolicyError(f"cannot read model policy from '{path}': {exc}") from exc
     if not table:
         return ModelPolicy(PolicyMode.off, frozenset())
+    if fallback is not None and "recommended" not in table:
+        table = {**{k: fallback[k] for k in _DATA_TABLES if k in fallback}, **table}
 
     raw_mode = table.get("mode", "warn")
     try:
@@ -194,7 +210,23 @@ def load_policy(path: Path) -> ModelPolicy:
     role_tiers = _parse_roles(table.get("roles", {}), path)
     upgrade = _parse_upgrade(table.get("upgrade", {}), recommended, path)
     _check_role_tiers(role_tiers, upgrade, path)
-    return ModelPolicy(mode, current, recommended, _parse_key_envs(table.get("vendors", {}), path), upgrade, role_tiers)
+    return ModelPolicy(
+        mode,
+        current,
+        recommended,
+        _parse_key_envs(table.get("vendors", {}), path),
+        upgrade,
+        role_tiers,
+        _parse_max_age(table.get("live", {}), path),
+    )
+
+
+def _parse_max_age(raw: object, path: Path) -> float:
+    """`[live] max_age_hours`: how long a cached vendor model list is reused. Zero means always ask."""
+    hours = raw.get("max_age_hours", DEFAULT_MAX_AGE_HOURS) if isinstance(raw, dict) else None
+    if isinstance(hours, bool) or not isinstance(hours, (int, float)) or hours < 0:
+        raise ModelPolicyError(f"{path}: [live] max_age_hours must be a number >= 0")
+    return float(hours)
 
 
 def _str_table(raw: object, where: str) -> dict[str, str]:
@@ -330,7 +362,7 @@ def discover_roles(workspace: Workspace) -> frozenset[str]:
 
 # `docs/model-upgrade-matrix.md` holds the rendered table between these markers; everything outside
 # them is hand-written prose.
-MATRIX_BEGIN = "<!-- model-matrix:begin (generated from model-policy.toml; run `awesome-templates model-matrix --write`) -->"
+MATRIX_BEGIN = "<!-- model-matrix:begin (generated from models.template.json; run `awesome-templates model-matrix --write`) -->"
 MATRIX_END = "<!-- model-matrix:end -->"
 
 

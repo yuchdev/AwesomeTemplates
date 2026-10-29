@@ -40,10 +40,10 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   imports `anthropic` (pinned by
   `tests/test_markers.py::test_docgen_import_does_not_pull_anthropic`) even though `resolver.py`
   imports *it* to reuse `list_agents`/`list_skills`/`list_test_files` rather than re-deriving them.
-- `model_policy.py` — the outdated-model check. `load_policy` reads the standalone `model-policy.toml`
-  (`mode` = `off|warn|error`, `[recommended]` = per-vendor model-ID lists whose union is the allowlist, `vendors` = env var
-  names for the live check, `[roles]` = agent role -> tier, `[upgrade.<vendor>]` = tier/role/family targets; an absent or
-  empty file is `off`, a malformed one raises `ModelPolicyError` so a typo can't silently disable the check).
+- `model_policy.py` — the outdated-model check. `load_policy(toml, fallback=data)` reads `model-policy.toml`
+  (`mode` = `off|warn|error`, `[live] max_age_hours`) and takes `recommended` (per-vendor model-ID lists whose union is the
+  allowlist), `vendors` (env var names), `roles` (agent role -> tier) and `upgrade.<vendor>` (tier/role/family targets) from
+  the `models.json` data unless the TOML has its own `[recommended]`; an absent or empty TOML is `off`, a malformed one raises `ModelPolicyError` so a typo can't silently disable the check).
   `scan_agents_dir` reads each agent's `model:` via `docgen.parse_frontmatter` (public so this module
   doesn't grow a second frontmatter parser); a missing `model:` and the floating aliases in
   `FLOATING_ALIASES` are never findings. `scan_generation` covers exactly what `copy_preset` copies
@@ -51,6 +51,10 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   `enforce` appends to `warnings` in `warn` mode or raises in `error` mode. `cli.generate` calls it
   before the `--dry-run` branch, so `error` fails dry runs too and fires before anything is written.
   Stdlib-only; never imports `anthropic` (pinned in `tests/test_model_policy.py`).
+- `model_state.py` — persistence for the `init` command: `default_state_path`, `init_state` (seed/reseed from
+  `data/models.template.json`), `load_data` (state file else template, plus a stale-revision note), `refresh` (per-vendor
+  `live.<vendor> = {fetched_at, served}`, request only when stale, a failure keeps the old cache), atomic `save`.
+  `model_catalog.verify(cache=...)` consumes `served(data)`. Imports `model_catalog`, never `anthropic`.
 - `model_catalog.py` — opt-in live check, the second fault mode beside `model_policy`'s allowlist: `fetch_supported`
   lists the IDs a vendor serves (Anthropic/OpenAI/Google, paginated, key only in headers), `verify` diffs
   `recommended ∪ pinned` against that and skips vendors with no key. Takes `fetch=` so tests never hit the

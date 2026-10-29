@@ -156,11 +156,14 @@ def verify(
     *,
     env: Optional[Mapping[str, str]] = None,
     fetch: Fetch = http_get,
+    cache: Optional[Mapping[str, frozenset[str]]] = None,
 ) -> VerifyResult:
     """Compare `recommended ∪ pinned` to what each vendor serves.
 
-    A vendor with IDs to check but no key in `env` lands in `skipped_vendors` (the caller decides
-    whether that is a skip or a failure); a vendor with no IDs is never contacted.
+    A vendor listed in `cache` (the persisted `models.json` lists, see `model_state`) is judged from it
+    with no key and no request. Otherwise a vendor with IDs to check but no key in `env` lands in
+    `skipped_vendors` (the caller decides whether that is a skip or a failure); a vendor with no IDs is
+    never contacted.
 
     :raises ModelCatalogError: a vendor request failed, or a pin matches no known vendor.
     """
@@ -171,11 +174,14 @@ def verify(
     unserved: list[UnservedModel] = []
     skipped: list[str] = []
     for vendor in sorted(grouped):
-        key = env.get(policy.key_envs.get(vendor, ""), "")
-        if vendor not in FETCHERS or not key:  # harness-native vendors (copilot...) have no list API
-            skipped.append(vendor)
-            continue
-        supported = fetch_supported(vendor, key, fetch=fetch)
+        if cache is not None and vendor in cache:
+            supported = cache[vendor]
+        else:
+            key = env.get(policy.key_envs.get(vendor, ""), "")
+            if vendor not in FETCHERS or not key:  # harness-native vendors (copilot...) have no list API
+                skipped.append(vendor)
+                continue
+            supported = fetch_supported(vendor, key, fetch=fetch)
         unserved.extend(UnservedModel(vendor, m) for m in sorted(grouped[vendor] - supported))
     return VerifyResult(unserved, skipped)
 

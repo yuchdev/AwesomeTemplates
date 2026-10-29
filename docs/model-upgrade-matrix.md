@@ -1,12 +1,14 @@
 # Model upgrade matrix
 
 Which model `awesome-templates upgrade` moves an outdated agent pin to, by **agent role** and
-**vendor**. The source of truth is [`model-policy.toml`](../model-policy.toml); the table below is
-generated from it and must stay equal to it.
+**vendor**. The source of truth is
+[`models.template.json`](../src/awesome_templates/data/models.template.json) (seed of the per-user
+`~/.local/state/awesome/models.json`, see `awesome-templates init`); the table below is generated from it
+and must stay equal to it.
 
 ```bash
 uv run awesome-templates model-matrix            # print the table
-uv run awesome-templates model-matrix --write    # refresh the block below after editing the TOML
+uv run awesome-templates model-matrix --write    # refresh the block below after editing the template
 uv run awesome-templates model-matrix --check    # exit 1 on drift (the test suite runs this too)
 ```
 
@@ -14,8 +16,8 @@ uv run awesome-templates model-matrix --check    # exit 1 on drift (the test sui
 
 A role is an agent's file stem (`cpp-expert.md` -> `cpp-expert`). It resolves in this order, per vendor:
 
-1. `[upgrade.<vendor>.roles]` - an explicit override for that role, if any.
-2. `[upgrade.<vendor>.tiers]` at the role's tier from `[roles]` (`deep` = flagship work such as design,
+1. `upgrade.<vendor>.roles` - an explicit override for that role, if any.
+2. `upgrade.<vendor>.tiers` at the role's tier from `roles` (`deep` = flagship work such as design,
    security and hard-domain implementation; `standard` = review, documentation, verification;
    `light` = mechanical work, unused so far).
 3. For an agent that is not a known role (a project's own): the old model's family, then the vendor
@@ -25,12 +27,12 @@ The flagship model is deliberately not the answer for everything: `cpp-expert` g
 top tier, `docs-updater` to its cheaper one. Only a pin that is **outdated** is rewritten; a pin
 already in `recommended` is left alone even if a different tier would now be chosen for the role.
 
-Adding a new agent role means adding it to `[roles]`; a test fails until you do. Copilot's `GPT-6.1 Sol` and `GPT-6 Luna` are the display names from GitHub's supported-models page;
-the runtime IDs are not documented, so verify the exact string in the Copilot CLI.
+Adding a new agent role means adding it to `roles` in the template; a test fails until you do. Copilot's
+`GPT-6.1 Sol` and `GPT-6 Luna` are the display names from GitHub's supported-models page; the runtime IDs are not documented, so verify the exact string in the Copilot CLI.
 
 ## Matrix
 
-<!-- model-matrix:begin (generated from model-policy.toml; run `awesome-templates model-matrix --write`) -->
+<!-- model-matrix:begin (generated from models.template.json; run `awesome-templates model-matrix --write`) -->
 | Role | Tier | anthropic | copilot |
 | --- | --- | --- | --- |
 | `agent-orchestrator` | deep | `claude-opus-5-5` | `GPT-6.1 Sol` |
@@ -39,6 +41,7 @@ the runtime IDs are not documented, so verify the exact string in the Copilot CL
 | `appkit-expert` | deep | `claude-opus-5-5` | `GPT-6.1 Sol` |
 | `background-reviewer` | standard | `claude-sonnet-5-5` | `GPT-6 Luna` |
 | `boost-expert` | deep | `claude-opus-5-5` | `GPT-6.1 Sol` |
+| `cpp-code-documenter` | standard | `claude-sonnet-5-5` | `GPT-6 Luna` |
 | `cpp-expert` | deep | `claude-opus-5-5` | `GPT-6.1 Sol` |
 | `django-expert` | deep | `claude-opus-5-5` | `GPT-6.1 Sol` |
 | `docs-updater` | standard | `claude-sonnet-5-5` | `GPT-6 Luna` |

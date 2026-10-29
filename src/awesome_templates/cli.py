@@ -15,6 +15,7 @@ from __future__ import annotations
 import enum
 import json
 import os
+from datetime import timedelta
 from pathlib import Path
 from typing import List, Optional
 
@@ -23,7 +24,7 @@ from rich.console import Console
 from rich.table import Table
 from typer.core import TyperGroup
 
-from awesome_templates import docgen, harnesses, model_catalog, model_policy, upgrade
+from awesome_templates import docgen, harnesses, model_catalog, model_policy, model_state, upgrade
 from awesome_templates.catalog import KINDS, discover, list_presets
 from awesome_templates.config import ConfigError, load_config
 from awesome_templates.dependencies import (
@@ -34,6 +35,7 @@ from awesome_templates.dependencies import (
 from awesome_templates.dependencies import to_json as graph_to_json
 from awesome_templates.log_helper import LogHelper, LogSeverity
 from awesome_templates.model_policy import ModelPolicy, ModelPolicyError
+from awesome_templates.model_state import ModelStateError
 from awesome_templates.presets import copy_preset, load_preset_vars
 from awesome_templates.specializations import list_specializations
 from awesome_templates.templating import slugify_package, slugify_upper
@@ -78,6 +80,9 @@ TEMPLATES_ROOT = REPO_ROOT / "templates"
 # TEMPLATES_ROOT, so tests can point it at a synthetic policy file. Its own file, not pyproject.toml:
 # the per-role upgrade tables made it too large to live there.
 MODEL_POLICY_PATH = REPO_ROOT / "model-policy.toml"
+# Per-user models.json (seeded by `init`, then holds each vendor's cached live model list). A module
+# constant so tests can point it at a tmp path and never touch the real home directory.
+MODELS_STATE_PATH = model_state.default_state_path()
 # The human-readable role x vendor table that must stay equal to MODEL_POLICY_PATH (`model-matrix`).
 MODEL_MATRIX_DOC_PATH = REPO_ROOT / "docs" / "model-upgrade-matrix.md"
 
@@ -419,6 +424,80 @@ def graph_cmd(
         )
 
 
+def _load_policy() -> tuple[ModelPolicy, dict, list[str]]:
+    """Policy + the models data behind it (state file, else the packaged template) + staleness notes.
+
+    :raises ModelPolicyError: / :raises ModelStateError: the caller turns either into `_fail`.
+    """
+    data, notes = model_state.load_data(MODELS_STATE_PATH)
+    return model_policy.load_policy(MODEL_POLICY_PATH, fallback=data), data, notes
+
+
+@app.command("init")
+def init_cmd(
+    refresh: bool = typer.Option(False, "--refresh", help="ask the vendors even if the cached lists are still fresh"),
+    reseed: bool = typer.Option(
+        False, "--reseed", help="replace models.json's policy tables with the packaged template (keeps cached lists)"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="emit machine-readable JSON"),
+) -> None:
+    """Create the per-user models.json and load each vendor's list of available models into it.
+
+    The file is `$XDG_STATE_HOME/awesome/models.json` (default `~/.local/state/awesome/models.json`),
+    seeded from the packaged template. A vendor is asked only if its API key env var is set and its
+    cached list is older than `[live] max_age_hours` in model-policy.toml (or with `--refresh`); later
+    `check-models --live` runs read that cache instead of calling the vendor. Keys are read from the
+    environment and never written. Exit 1 if any vendor request failed."""
+    try:
+        status = model_state.init_state(MODELS_STATE_PATH, reseed=reseed)
+        policy, data, notes = _load_policy()
+        vendors = sorted(set(policy.key_envs) | set(policy.recommended))
+        data, report = model_state.refresh(
+            data,
+            policy.key_envs,
+            vendors,
+            max_age=timedelta(hours=policy.live_max_age_hours),
+            force=refresh,
+        )
+        if report.refreshed:
+            model_state.save(MODELS_STATE_PATH, data)
+    except (ModelPolicyError, ModelStateError) as exc:
+        _fail(str(exc))
+        return
+    if json_out:
+        typer.echo(
+            json.dumps(
+                {
+                    "path": str(MODELS_STATE_PATH),
+                    "state": status,
+                    "refreshed": report.refreshed,
+                    "from_cache": report.fresh,
+                    "no_key": report.no_key,
+                    "no_list_api": report.no_client,
+                    "failed": report.failed,
+                    "notes": notes,
+                },
+                indent=2,
+            )
+        )
+    else:
+        typer.echo(f"{MODELS_STATE_PATH} ({status})")
+        for vendor, count in report.refreshed.items():
+            typer.echo(f"  {vendor}: requested, {count} models served")
+        for vendor, when in report.fresh.items():
+            typer.echo(f"  {vendor}: cached {when}, no request (--refresh to force)")
+        for vendor in report.no_key:
+            typer.echo(f"  {vendor}: skipped, {policy.key_envs.get(vendor, 'no key env var configured')} not set")
+        for vendor in report.no_client:
+            typer.echo(f"  {vendor}: no public model-list API, nothing to fetch")
+        for vendor, error in sorted(report.failed.items()):
+            typer.echo(f"  {vendor}: FAILED {error}")
+        for note in notes:
+            typer.echo(note)
+    if report.failed:
+        raise typer.Exit(code=1)
+
+
 @app.command("check-models")
 def check_models_cmd(
     preset: Optional[str] = typer.Option(
@@ -441,10 +520,12 @@ def check_models_cmd(
     and is never implied: `generate` never goes online."""
     workspace = _workspace()
     try:
-        policy = model_policy.load_policy(MODEL_POLICY_PATH)
-    except ModelPolicyError as exc:
+        policy, data, notes = _load_policy()
+    except (ModelPolicyError, ModelStateError) as exc:
         _fail(str(exc))
         return
+    for note in notes:
+        console.print(f"[yellow]{note}[/yellow]", soft_wrap=True)
 
     if preset is not None:
         preset = _resolve_preset(workspace, preset)
@@ -455,6 +536,8 @@ def check_models_cmd(
     lines = [model_policy.format_finding(f, REPO_ROOT) for f in findings]
     unserved: list[model_catalog.UnservedModel] = []
     skipped_vendors: list[str] = []
+    refreshed: list[str] = []
+    cached: list[str] = []
     if live and policy.mode is not model_policy.PolicyMode.off:
         # Judge every pin, not just the outdated ones: a typo'd ID is outdated AND unserved, a valid
         # but unlisted one is only outdated. An empty `current` makes the scan return every pin.
@@ -463,12 +546,25 @@ def check_models_cmd(
             pins = model_policy.scan_generation(workspace, preset, list_specializations(workspace, preset), every_pin)
         else:
             pins = model_policy.scan_all(workspace, every_pin)
+        pinned = sorted({f.model for f in pins})
         try:
-            outcome = model_catalog.verify(policy, sorted({f.model for f in pins}))
-        except model_catalog.ModelCatalogError as exc:
+            # Ask a vendor only when its cached list in models.json is older than [live] max_age_hours.
+            model_state.init_state(MODELS_STATE_PATH)
+            wanted = [v for v in model_catalog.ids_to_verify(policy, pinned) if v != "?"]
+            data, report = model_state.refresh(
+                data, policy.key_envs, wanted, max_age=timedelta(hours=policy.live_max_age_hours)
+            )
+            if report.refreshed:
+                model_state.save(MODELS_STATE_PATH, data)
+            if report.failed:
+                _fail("; ".join(f"{v}: {e}" for v, e in sorted(report.failed.items())))
+                return
+            outcome = model_catalog.verify(policy, pinned, cache=model_state.served(data))
+        except (model_catalog.ModelCatalogError, ModelStateError) as exc:
             _fail(str(exc))
             return
         unserved, skipped_vendors = outcome.unserved, outcome.skipped_vendors
+        refreshed, cached = sorted(report.refreshed), sorted(report.fresh)
     unserved_lines = [model_catalog.format_unserved(u) for u in unserved]
     if json_out:
         typer.echo(
@@ -483,6 +579,8 @@ def check_models_cmd(
                         "checked": live,
                         "unserved": [{"vendor": u.vendor, "model": u.model} for u in unserved],
                         "skipped_vendors": skipped_vendors,
+                        "requested": refreshed,
+                        "from_cache": cached,
                     },
                 },
                 indent=2,
@@ -541,8 +639,8 @@ def upgrade_cmd(
     try:
         if harness:
             upgrade.validate_harness_names(harness)
-        policy = model_policy.load_policy(MODEL_POLICY_PATH)
-    except (ValueError, ModelPolicyError) as exc:
+        policy, _data, _notes = _load_policy()
+    except (ValueError, ModelPolicyError, ModelStateError) as exc:
         _fail(str(exc))
         return
     if policy.mode is model_policy.PolicyMode.off:
@@ -632,13 +730,15 @@ def model_matrix_cmd(
         _fail("--write and --check are mutually exclusive")
         return
     try:
-        policy = model_policy.load_policy(MODEL_POLICY_PATH)
+        # The packaged template, never the per-user state: the doc is a repo artifact and must not
+        # depend on whatever a given machine's models.json happens to hold.
+        policy = model_policy.load_policy(MODEL_POLICY_PATH, fallback=model_state.load_template())
         if not (write or check):
             typer.echo(model_policy.render_matrix(policy))
             return
         current = MODEL_MATRIX_DOC_PATH.read_text(encoding="utf-8")
         updated = model_policy.splice_matrix(current, policy)
-    except (ModelPolicyError, OSError) as exc:
+    except (ModelPolicyError, ModelStateError, OSError) as exc:
         _fail(str(exc))
         return
     if write:
@@ -826,7 +926,8 @@ def generate(
     # the way a real run would, and in `error` mode it fires before anything is written.
     model_warnings: list[str] = []
     try:
-        policy = model_policy.load_policy(MODEL_POLICY_PATH)
+        policy, _data, model_notes = _load_policy()
+        model_warnings.extend(model_notes)
         model_policy.enforce(
             model_policy.scan_generation(workspace, preset_value, specializations_value, policy),
             policy,
@@ -834,7 +935,7 @@ def generate(
             relative_to=REPO_ROOT,
             log=log,
         )
-    except ModelPolicyError as exc:
+    except (ModelPolicyError, ModelStateError) as exc:
         _fail(str(exc))
         return
 

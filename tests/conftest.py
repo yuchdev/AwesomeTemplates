@@ -38,6 +38,15 @@ def _which_finds_extensionless_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(shutil, "which", which)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_models_state(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the CLI's per-user `models.json` at an empty temp path for every test, so no test reads or
+    writes the real `~/.local/state/awesome/` (a missing file falls back to the packaged template)."""
+    import awesome_templates.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "MODELS_STATE_PATH", tmp_path_factory.mktemp("state") / "awesome" / "models.json")
+
+
 @pytest.fixture
 def real_workspace() -> Workspace:
     """Points at THIS repo's actual template tree (templates/) - for

@@ -107,12 +107,18 @@ def _files(root: Path, site: HarnessSite) -> list[Path]:
     return sorted({p for pattern in site.globs for p in root.glob(pattern) if p.is_file()})
 
 
-def find_pins(root: Path, site: HarnessSite) -> list[PinSite]:
+def find_pins(root: Path, site: HarnessSite, warnings: Optional[list[str]] = None) -> list[PinSite]:
     """Every `model` pin the site's files carry (frontmatter block only for markdown; any `model =`
-    string for TOML)."""
+    string for TOML). A file that cannot be read as UTF-8 is reported in `warnings` and skipped, so one
+    bad file never aborts the scan of the rest."""
     pins = []
     for path in _files(root, site):
-        lines = path.read_text(encoding="utf-8").splitlines()
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            if warnings is not None:
+                warnings.append(f"{path}: unreadable, skipped ({type(exc).__name__})")
+            continue
         in_block = site.style == "toml"
         pattern = _TOML_MODEL_RE if site.style == "toml" else _FRONTMATTER_MODEL_RE
         for number, raw in enumerate(lines, start=1):
@@ -164,7 +170,7 @@ def plan_upgrade(
             )
             continue
         recommended = policy.recommended.get(site.vendor, frozenset())
-        for pin in find_pins(root, site):
+        for pin in find_pins(root, site, warnings):
             if pin.model in FLOATING_ALIASES or pin.model in recommended:
                 plan.current += 1
                 continue
@@ -195,7 +201,12 @@ def apply_changes(changes: Sequence[Change], *, warnings: Optional[list[str]] = 
     for change in changes:
         by_path.setdefault(change.site.path, []).append(change)
     for path, file_changes in by_path.items():
-        lines = path.read_bytes().decode("utf-8").splitlines(keepends=True)
+        try:
+            lines = path.read_bytes().decode("utf-8").splitlines(keepends=True)
+        except (OSError, UnicodeDecodeError) as exc:
+            warnings.append(f"{path}: unreadable at apply time, left alone ({type(exc).__name__})")
+            continue
+        edited = False
         for change in file_changes:
             site = SITES[change.site.harness]
             pattern = _TOML_MODEL_RE if site.style == "toml" else _FRONTMATTER_MODEL_RE
@@ -209,7 +220,9 @@ def apply_changes(changes: Sequence[Change], *, warnings: Optional[list[str]] = 
                 body[: match.start(3)] + change.new_model + body[match.end(3) :] + raw[len(body) :]
             )
             written += 1
-        path.write_bytes("".join(lines).encode("utf-8"))
+            edited = True
+        if edited:
+            path.write_bytes("".join(lines).encode("utf-8"))
     return written
 
 

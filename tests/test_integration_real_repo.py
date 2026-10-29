@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from awesome_templates import model_policy
+from awesome_templates import model_policy, model_state
 from awesome_templates.catalog import discover, list_presets
 from awesome_templates.cli import app
 from awesome_templates.dependencies import build_dependency_graph
@@ -32,6 +32,12 @@ from awesome_templates.workspace import Workspace
 REAL_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 runner = CliRunner()
+
+
+def _real_policy() -> model_policy.ModelPolicy:
+    """The repo's policy: model-policy.toml (strictness) over the packaged models.template.json (data).
+    Never the per-user state file, so these checks cannot depend on whose machine they run on."""
+    return load_policy(REAL_REPO_ROOT / "model-policy.toml", fallback=model_state.load_template())
 
 
 def test_templates_root_is_separate_from_the_package_root(real_workspace):
@@ -284,7 +290,7 @@ def test_real_specializations_ship_only_agents_and_skills():
 def test_real_repo_ships_an_active_model_policy():
     # The check is only worth anything while model-policy.toml actually turns it on: a deleted file
     # would silently read as `off`. `current` must also stay non-empty (load_policy enforces it).
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = _real_policy()
     assert policy.mode is not PolicyMode.off
     assert policy.current
 
@@ -292,9 +298,9 @@ def test_real_repo_ships_an_active_model_policy():
 @pytest.mark.parametrize("preset", ["cpp", "frontend", "java", "macos", "python"])
 def test_real_preset_and_common_agents_pin_only_current_models(preset):
     # Pins the model migration: a plain `generate --preset <p>` copies common/ + the preset, and none
-    # of those agents may pin a model outside model-policy.toml's `recommended` lists. Specializations are
+    # of those agents may pin a model outside the template's `recommended` lists. Specializations are
     # deliberately not covered here - they are the known-stale set `check-models` reports.
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = _real_policy()
     findings = scan_generation(_REAL_TEMPLATES, preset, [], policy)
     assert [model_policy.format_finding(f, REAL_REPO_ROOT) for f in findings] == []
 
@@ -309,7 +315,7 @@ def test_real_check_models_command_runs_against_the_real_tree():
 
 
 def test_real_recommended_lists_are_well_formed():
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = _real_policy()
     for vendor, ids in policy.recommended.items():
         assert all(m == m.strip() and m for m in ids), vendor
         assert model_policy.vendor_of(next(iter(ids)), policy) == vendor if ids else True
@@ -319,7 +325,7 @@ def test_real_recommended_lists_are_well_formed():
 
 
 def test_real_upgrade_rules_send_every_old_claude_tier_to_a_recommended_model():
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = _real_policy()
     rule = policy.upgrade["anthropic"]
     for old in ("claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-3-5", "claude-opus-99-9"):
         assert rule.target_for(old) in policy.recommended["anthropic"], old
@@ -330,14 +336,14 @@ def test_every_shipped_agent_role_has_an_upgrade_tier():
     # "Every existing agent role has an update protocol": a role missing from [roles] would silently
     # fall through to the coarse family/default fallback; a role listed but no longer shipped is a
     # stale row in the matrix. Both directions are failures.
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = _real_policy()
     shipped = model_policy.discover_roles(Workspace(REAL_REPO_ROOT / "templates"))
-    assert sorted(shipped - set(policy.role_tiers)) == [], "add these roles to [roles] in model-policy.toml"
+    assert sorted(shipped - set(policy.role_tiers)) == [], "add these roles to `roles` in models.template.json"
     assert sorted(set(policy.role_tiers) - shipped) == [], "these [roles] entries match no shipped agent"
 
 
 def test_real_role_upgrade_targets_are_recommended_for_every_role_and_vendor():
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = _real_policy()
     for vendor, rule in policy.upgrade.items():
         if not rule.tiers and not rule.roles:
             continue
@@ -345,8 +351,8 @@ def test_real_role_upgrade_targets_are_recommended_for_every_role_and_vendor():
             assert policy.upgrade_target(vendor, "old", role) in policy.recommended[vendor], (vendor, role)
 
 
-def test_model_upgrade_matrix_doc_matches_model_policy_toml():
-    policy = load_policy(REAL_REPO_ROOT / "model-policy.toml")
+def test_model_upgrade_matrix_doc_matches_the_data_template():
+    policy = _real_policy()
     doc = (REAL_REPO_ROOT / "docs" / "model-upgrade-matrix.md").read_text(encoding="utf-8")
     assert model_policy.splice_matrix(doc, policy) == doc, "run: uv run awesome-templates model-matrix --write"
 

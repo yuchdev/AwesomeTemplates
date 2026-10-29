@@ -1,96 +1,18 @@
-# Model policy: which models the templates may pin, and how `upgrade` moves a stale pin.
-# Read by src/awesome_templates/model_policy.py; the human-readable view of [roles] x [upgrade.*.tiers]
-# is docs/model-upgrade-matrix.md, which `awesome-templates model-matrix --check` (and the test suite)
-# keep in sync with this file. Regenerate it with `awesome-templates model-matrix --write`.
+# Model policy: how strictly the generator treats an outdated `model:` pin.
+#
+# The model DATA - recommended IDs per vendor, agent roles and tiers, upgrade targets, API key env var
+# names, and the cached list of models each vendor serves - moved out of this file into models.json:
+#   seed (versioned, edit this to retire/adopt a model):  src/awesome_templates/data/models.template.json
+#   per-user copy (created by `awesome-templates init`):   ~/.local/state/awesome/models.json
+# Read by src/awesome_templates/model_policy.py. If you add a `[recommended]` table here the file becomes
+# a self-contained policy and models.json is ignored (used by tests and for pinning a project's own set).
 #
 # mode = "off"   - no check
 # mode = "warn"  - `generate` reports outdated pins in its warnings and carries on
 # mode = "error" - `generate` refuses to write anything while an agent it would copy is outdated
-# To retire a model: delete it from `recommended`. To adopt one: add it under its vendor.
 mode = "warn"
 
-# The ONE place templates' models are named. A pin outside this list is "outdated". Floating aliases
-# (opus/sonnet/haiku/inherit) and agents with no `model:` are exempt.
-[recommended]
-anthropic = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
-openai = []
-google = []
-# Harness-native names have no vendor prefix. These are the display names in GitHub's "Supported models"
-# page (docs.github.com/en/copilot/reference/ai-models/supported-models; GPT-6.1 Sol: github.blog changelog
-# 2026-09-29). Copilot's docs do not publish runtime model IDs and VS Code notes they can differ from the
-# display names, so confirm the exact string in the Copilot CLI's model list before relying on it.
-copilot = ["GPT-6.1 Sol", "GPT-6 Luna"]
-
-# Env var NAMES (never keys) for the opt-in live check (`check-models --live`).
-[vendors]
-anthropic = { key_env = "ANTHROPIC_API_KEY" }
-openai = { key_env = "OPENAI_API_KEY" }
-google = { key_env = "GEMINI_API_KEY" }
-
-# --- upgrade protocol --------------------------------------------------------------------------
-# An agent ROLE is its file stem (`cpp-expert.md` -> `cpp-expert`). Each role has a cost TIER that
-# does not depend on the vendor; each vendor says which model serves each tier. So the model for
-# (role, vendor) is  upgrade.<vendor>.roles[role]  ->  upgrade.<vendor>.tiers[roles[role]]  ->
-# the family/default fallback below (for agents that are not in [roles], e.g. a user's own).
-#   deep     - flagship: design, security, implementation in hard domains
-#   standard - routine review, documentation, verification
-#   light    - mechanical / high-volume work (no role uses it yet)
-# Every role shipped under templates/ must be listed here; a test enforces it.
-[roles]
-agent-orchestrator = "deep"
-android-expert = "deep"
-app-architect = "deep"
-appkit-expert = "deep"
-background-reviewer = "standard"
-boost-expert = "deep"
-cpp-expert = "deep"
-django-expert = "deep"
-docs-updater = "standard"
-docs-writer = "standard"
-feature-reviewer = "standard"
-frontend-expert = "deep"
-incident-analyst = "deep"
-java-expert = "deep"
-javascript-expert = "deep"
-ml-expert = "deep"
-python-expert = "deep"
-qt-expert = "deep"
-react-expert = "deep"
-release-engineer = "deep"
-scraping-expert = "deep"
-security-auditor = "deep"
-spring-expert = "deep"
-swift-expert = "deep"
-swiftdata-expert = "deep"
-swiftui-expert = "deep"
-task-verifier = "standard"
-test-documenter = "standard"
-testing-expert = "deep"
-typescript-expert = "deep"
-vite-expert = "deep"
-vue-expert = "deep"
-
-# Per vendor: `tiers` (tier -> model), optional `roles` (role -> model, beats the tier), and the
-# fallback for a pin whose role is unknown: `families` classify the OLD id by regex, `targets` send each
-# family to a model, `default` catches the rest. NO old->new pairs anywhere. Every model named here
-# must be in `recommended`.
-[upgrade.anthropic]
-families = { opus = "^claude-opus-", sonnet = "^claude-sonnet-", haiku = "^claude-haiku-" }
-targets = { opus = "claude-opus-5-5", sonnet = "claude-sonnet-5-5", haiku = "claude-haiku-5-5" }
-default = "claude-opus-5-5"
-
-[upgrade.anthropic.tiers]
-deep = "claude-opus-5-5"
-standard = "claude-sonnet-5-5"
-light = "claude-haiku-5-5"
-
-[upgrade.copilot]
-default = "GPT-6 Luna" # an unlisted role must not silently get the most expensive model
-
-[upgrade.copilot.tiers]
-deep = "GPT-6.1 Sol"
-standard = "GPT-6 Luna"
-# `light` is deliberately absent: GPT-6 Luna is already Copilot's lowest-cost GPT-6 model, so a `light`
-# role falls through to `default` rather than to a guess.
-
-# codex / junie: add `[upgrade.<vendor>]` once their model values are known.
+[live]
+# `init` and `check-models --live` reuse the cached vendor lists in models.json when they are younger
+# than this, and make no request. `init --refresh` ignores it.
+max_age_hours = 24

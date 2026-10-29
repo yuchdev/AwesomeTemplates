@@ -36,6 +36,8 @@ uv run awesome-templates graph templates/python
 uv run awesome-templates graph --inline --force      # MUTATES templates/** in place
 uv run awesome-templates graph --remove
 
+uv run awesome-templates init                        # create ~/.local/state/awesome/models.json from the template + cache each keyed vendor's model list
+uv run awesome-templates init --refresh              # ignore the cache age and ask the vendors again
 uv run awesome-templates check-models                # whole-tree sweep for outdated `model:` pins
 uv run awesome-templates check-models --preset python --json
 uv run awesome-templates model-matrix --check        # role x vendor upgrade table in docs/ matches model-policy.toml
@@ -129,17 +131,23 @@ not gate on a number.
 - **`docgen.py`** - deterministic, no-network doc generation that runs on *every* `generate`.
   Regenerates `docs/agent/{agents,skills,hooks}.md` and the "Actual Test Layout" section.
   Must never import `anthropic`.
-- **`model_policy.py`** - the outdated-model check: reads the standalone
-  `model-policy.toml` (repo root, *not* `pyproject.toml`: `mode = off|warn|error`; `[recommended]` holds one model-ID
-  list per vendor, the single place templates' models are named, and their union is the allowlist; `[roles]` maps
-  every shipped agent role to a cost tier and `[upgrade.<vendor>.tiers]` maps tier -> model, so `upgrade` picks the
-  target by **role x vendor**. `docs/model-upgrade-matrix.md` renders that table and must equal it - edit the TOML,
-  then `model-matrix --write`; tests fail on drift or on an agent role missing from `[roles]`), scans agent
+- **`model_policy.py`** - the outdated-model check: reads
+  `model-policy.toml` (strictness only: `mode = off|warn|error`, `[live] max_age_hours`) plus the model **data** from
+  `models.json`: `recommended` holds one model-ID list per vendor (the single place templates' models are named; their
+  union is the allowlist), `roles` maps every shipped agent role to a cost tier and `upgrade.<vendor>.tiers` maps tier ->
+  model, so `upgrade` picks the target by **role x vendor**. The maintainer edits the packaged seed
+  `src/awesome_templates/data/models.template.json`; `docs/model-upgrade-matrix.md` renders it and must equal it
+  (`model-matrix --write`; tests fail on drift or on an agent role missing from `roles`). A TOML with its own
+  `[recommended]` is a self-contained policy and ignores models.json, scans agent
   frontmatter `model:` pins, and either appends to `warnings` or raises `ModelPolicyError`.
   `generate` checks exactly what it copies (`common/` + the preset + chosen specializations),
   before the dry-run branch and before any write, so `error` blocks a run cleanly; `check-models`
   sweeps the whole tree. A missing `model:` and the aliases `opus`/`sonnet`/`haiku`/`inherit` are
   exempt. To retire a model, delete it from `recommended`. Must never import `anthropic`.
+- **`model_state.py`** - the per-user `models.json` (`$XDG_STATE_HOME/awesome/` or `~/.local/state/awesome/`): `init`
+  seeds it from the template, `refresh` stores each vendor's served-model list with a `fetched_at` timestamp and makes no
+  request while it is younger than `max_age_hours`; `--reseed` replaces the policy tables but keeps the cache. Commands
+  read it (falling back to the template); tests and the matrix doc read the template only. Never stores keys.
 - **`model_catalog.py`** - the opt-in reality check: asks Anthropic/OpenAI/Google Models APIs (stdlib
   `urllib`, `fetch=` injectable) which IDs they serve and flags any recommended or pinned ID that is
   missing. Reached only by `check-models --live` and `pytest --live-models`, never by `generate`; keys
@@ -170,7 +178,7 @@ not gate on a number.
   list[str]` already is. Writes to stderr.
 - **`dependencies.py`** - maintainer-only graph tool for this repo's own catalog. Not part of
   `generate`; never invoke it implicitly from another command.
-- **`cli.py`** - the Typer app. Commands: `list`, `graph`, `check-models`, `upgrade`, `generate`.
+- **`cli.py`** - the Typer app. Commands: `list`, `graph`, `init`, `check-models`, `model-matrix`, `upgrade`, `generate`.
 
 `src/flake8_project_rules/` is a separate, standalone package: a flake8 plugin implementing
 custom AST rules X001-X011, covered by `tests/flake8_lint/`. It is unrelated to the generator

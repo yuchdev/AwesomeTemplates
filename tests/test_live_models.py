@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from awesome_templates import model_catalog, model_policy
+from awesome_templates import model_catalog, model_policy, model_state
 from awesome_templates.model_policy import ModelPolicy, PolicyMode, scan_all
 from awesome_templates.workspace import Workspace
 from tests.conftest import REAL_REPO_ROOT, REAL_TEMPLATES_ROOT
@@ -25,7 +25,7 @@ VENDORS = sorted(model_catalog.FETCHERS)
 
 @pytest.mark.parametrize("vendor", VENDORS)
 def test_vendor_serves_every_recommended_and_pinned_model(vendor: str, request: pytest.FixtureRequest):
-    policy = model_policy.load_policy(REAL_REPO_ROOT / "model-policy.toml")
+    policy = model_policy.load_policy(REAL_REPO_ROOT / "model-policy.toml", fallback=model_state.load_template())
     pins = sorted({f.model for f in scan_all(Workspace(REAL_TEMPLATES_ROOT), ModelPolicy(PolicyMode.warn, frozenset()))})
     to_check = model_catalog.ids_to_verify(policy, pins).get(vendor, set())
     if not to_check:
@@ -41,6 +41,6 @@ def test_vendor_serves_every_recommended_and_pinned_model(vendor: str, request: 
     served = model_catalog.fetch_supported(vendor, os.environ[env_name])
     missing = sorted(to_check - served)
     assert not missing, (
-        f"{vendor} does not serve {missing}; fix model-policy.toml's recommended or the agent pin. "
+        f"{vendor} does not serve {missing}; fix `recommended` in models.template.json or the agent pin. "
         f"Sample of served IDs: {sorted(served)[:10]}"
     )

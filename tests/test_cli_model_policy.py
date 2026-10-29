@@ -217,17 +217,20 @@ def test_check_models_rejects_unknown_preset(stale_core, tmp_path, monkeypatch):
 
 
 def _fake_vendor(monkeypatch: pytest.MonkeyPatch, served: list[str], *, env: dict[str, str]) -> list[str]:
-    """Route `check-models --live` through a fake Anthropic Models API; returns the requested URLs."""
+    """Route `check-models --live` through a fake Anthropic Models API; returns the requested URLs.
+
+    Fakes the HTTP boundary (`model_catalog.http_get`) and the environment, so the real state-file
+    cache logic runs; `MODELS_STATE_PATH` is already isolated per test by `conftest`."""
     urls: list[str] = []
-    real_verify = cli_module.model_catalog.verify
 
     def fetch(url, headers):
         urls.append(url)
         return json.dumps({"data": [{"id": m} for m in served], "has_more": False}).encode()
 
-    monkeypatch.setattr(
-        cli_module.model_catalog, "verify", lambda policy, pinned: real_verify(policy, pinned, env=env, fetch=fetch)
-    )
+    monkeypatch.setattr(cli_module.model_catalog, "http_get", fetch)
+    monkeypatch.delenv("FAKE_KEY", raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
     return urls
 
 
@@ -283,3 +286,76 @@ def test_check_models_without_live_never_calls_the_vendor(stale_core, tmp_path, 
     urls = _fake_vendor(monkeypatch, [], env={"FAKE_KEY": "k"})
     assert runner.invoke(app, ["check-models"]).exit_code == 0
     assert urls == []
+
+
+def test_check_models_live_reuses_the_cached_list_and_skips_the_request(stale_core, tmp_path, monkeypatch):
+    _live_policy(tmp_path, monkeypatch, "warn")
+    _set_model(stale_core.path("demo", ".claude", "agents", "widget-verifier.md"), NEW)
+    urls = _fake_vendor(monkeypatch, [NEW], env={"FAKE_KEY": "k"})
+    assert runner.invoke(app, ["check-models", "--live"]).exit_code == 0
+    assert len(urls) == 1
+    second = runner.invoke(app, ["check-models", "--live", "--json"])
+    assert len(urls) == 1  # fresh cache: no second request
+    live = json.loads(second.stdout)["live"]
+    assert live["from_cache"] == ["anthropic"] and live["requested"] == [] and live["unserved"] == []
+    assert cli_module.MODELS_STATE_PATH.is_file()
+
+
+# --- init ------------------------------------------------------------------------------------
+
+
+def test_init_creates_models_json_requests_each_keyed_vendor_once_and_then_uses_the_cache(
+    stale_core, tmp_path, monkeypatch
+):
+    _live_policy(tmp_path, monkeypatch, "warn")
+    urls = _fake_vendor(monkeypatch, [NEW, OLD], env={"FAKE_KEY": "k"})
+    first = runner.invoke(app, ["init", "--json"])
+    assert first.exit_code == 0, first.stdout
+    report = json.loads(first.stdout)
+    assert report["state"] == "created" and report["refreshed"] == {"anthropic": 2}
+    stored = json.loads(cli_module.MODELS_STATE_PATH.read_text())
+    assert stored["live"]["anthropic"]["served"] == sorted([NEW, OLD])
+
+    again = json.loads(runner.invoke(app, ["init", "--json"]).stdout)
+    assert again["state"] == "exists" and "anthropic" in again["from_cache"] and again["refreshed"] == {}
+    assert len(urls) == 1  # the second run made no request
+
+    forced = json.loads(runner.invoke(app, ["init", "--refresh", "--json"]).stdout)
+    assert forced["refreshed"] == {"anthropic": 2} and len(urls) == 2
+
+
+def test_init_without_a_key_still_creates_the_file_and_asks_nobody(stale_core, tmp_path, monkeypatch):
+    _live_policy(tmp_path, monkeypatch, "warn")
+    urls = _fake_vendor(monkeypatch, [], env={})
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0 and urls == [] and cli_module.MODELS_STATE_PATH.is_file()
+    assert "not set" in result.stdout
+
+
+def test_init_exits_one_when_a_vendor_request_fails_but_keeps_the_file(stale_core, tmp_path, monkeypatch):
+    _live_policy(tmp_path, monkeypatch, "warn")
+
+    def boom(url, headers):
+        raise cli_module.model_catalog.ModelCatalogError("api.anthropic.com: HTTP 503")
+
+    monkeypatch.setattr(cli_module.model_catalog, "http_get", boom)
+    monkeypatch.setenv("FAKE_KEY", "k")
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 1 and "FAILED" in result.stdout and cli_module.MODELS_STATE_PATH.is_file()
+
+
+def test_init_refuses_a_corrupt_state_file_instead_of_overwriting_it(stale_core, tmp_path, monkeypatch):
+    _live_policy(tmp_path, monkeypatch, "warn")
+    cli_module.MODELS_STATE_PATH.parent.mkdir(parents=True)
+    cli_module.MODELS_STATE_PATH.write_text("{broken")
+    assert runner.invoke(app, ["init"]).exit_code == 1
+    assert cli_module.MODELS_STATE_PATH.read_text() == "{broken"
+
+
+def test_init_reseed_keeps_the_cached_lists(stale_core, tmp_path, monkeypatch):
+    _live_policy(tmp_path, monkeypatch, "warn")
+    _fake_vendor(monkeypatch, [NEW], env={"FAKE_KEY": "k"})
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["init", "--reseed", "--json"])
+    assert json.loads(result.stdout)["state"] == "reseeded"
+    assert "anthropic" in json.loads(cli_module.MODELS_STATE_PATH.read_text())["live"]

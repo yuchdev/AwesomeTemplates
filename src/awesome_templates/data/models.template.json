@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "revision": "2026-10-29",
+  "notes": [
+    "Seed for ~/.local/state/awesome/models.json, copied there by `awesome-templates init`. Edit THIS file in the repo to retire/adopt a model; users pick the change up with `init --reseed`.",
+    "recommended: the allowlist; a pin outside it is outdated. roles: agent role (file stem) -> cost tier. upgrade.<vendor>: tiers (tier -> model), roles (role -> model override), and families/targets/default as the fallback for roles not listed. Every model named under upgrade must be in recommended.",
+    "copilot names are the display names from docs.github.com/en/copilot/reference/ai-models/supported-models; GitHub publishes no runtime IDs, so confirm the exact string in the Copilot CLI.",
+    "live: written by `init` / `check-models --live` - per vendor {fetched_at, served[]}. Never edit by hand; never holds API keys."
+  ],
+  "recommended": {
+    "anthropic": [
+      "claude-fable-5-1",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+    ],
+    "openai": [],
+    "google": [],
+    "copilot": [
+      "GPT-6.1 Sol",
+      "GPT-6 Luna"
+    ]
+  },
+  "vendors": {
+    "anthropic": {
+      "key_env": "ANTHROPIC_API_KEY"
+    },
+    "openai": {
+      "key_env": "OPENAI_API_KEY"
+    },
+    "google": {
+      "key_env": "GEMINI_API_KEY"
+    }
+  },
+  "roles": {
+    "agent-orchestrator": "deep",
+    "android-expert": "deep",
+    "app-architect": "deep",
+    "appkit-expert": "deep",
+    "background-reviewer": "standard",
+    "boost-expert": "deep",
+    "cpp-code-documenter": "standard",
+    "cpp-expert": "deep",
+    "django-expert": "deep",
+    "docs-updater": "standard",
+    "docs-writer": "standard",
+    "feature-reviewer": "standard",
+    "frontend-expert": "deep",
+    "incident-analyst": "deep",
+    "java-expert": "deep",
+    "javascript-expert": "deep",
+    "ml-expert": "deep",
+    "python-expert": "deep",
+    "qt-expert": "deep",
+    "react-expert": "deep",
+    "release-engineer": "deep",
+    "scraping-expert": "deep",
+    "security-auditor": "deep",
+    "spring-expert": "deep",
+    "swift-expert": "deep",
+    "swiftdata-expert": "deep",
+    "swiftui-expert": "deep",
+    "task-verifier": "standard",
+    "test-documenter": "standard",
+    "testing-expert": "deep",
+    "typescript-expert": "deep",
+    "vite-expert": "deep",
+    "vue-expert": "deep"
+  },
+  "upgrade": {
+    "anthropic": {
+      "families": {
+        "opus": "^claude-opus-",
+        "sonnet": "^claude-sonnet-",
+        "haiku": "^claude-haiku-"
+      },
+      "targets": {
+        "opus": "claude-opus-5-5",
+        "sonnet": "claude-sonnet-5-5",
+        "haiku": "claude-haiku-5-5"
+      },
+      "default": "claude-opus-5-5",
+      "tiers": {
+        "deep": "claude-opus-5-5",
+        "standard": "claude-sonnet-5-5",
+        "light": "claude-haiku-5-5"
+      }
+    },
+    "copilot": {
+      "default": "GPT-6 Luna",
+      "tiers": {
+        "deep": "GPT-6.1 Sol",
+        "standard": "GPT-6 Luna"
+      }
+    }
+  },
+  "live": {}
+}

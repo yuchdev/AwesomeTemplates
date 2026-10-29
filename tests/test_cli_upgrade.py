@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 import awesome_templates.cli as cli_module
+from awesome_templates import model_policy
 from awesome_templates.cli import app
 
 runner = CliRunner()
@@ -112,7 +113,7 @@ def test_model_matrix_prints_check_and_write(tmp_path: Path, monkeypatch: pytest
         '[upgrade.anthropic.tiers]\ndeep = "m-deep"\nstandard = "m-std"\n'
     )
     doc = tmp_path / "matrix.md"
-    doc.write_text("x\n<!-- model-matrix:begin (generated from model-policy.toml; run `awesome-templates model-matrix --write`) -->\n<!-- model-matrix:end -->\n")
+    doc.write_text(f"x\n{model_policy.MATRIX_BEGIN}\n{model_policy.MATRIX_END}\n")
     monkeypatch.setattr(cli_module, "MODEL_POLICY_PATH", policy)
     monkeypatch.setattr(cli_module, "MODEL_MATRIX_DOC_PATH", doc)
     assert "| `a` | deep | `m-deep` |" in runner.invoke(app, ["model-matrix"]).stdout
