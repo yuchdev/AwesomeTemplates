@@ -1,7 +1,7 @@
 ---
 name: release-engineer
 description: Use this agent for everything between "the build is green" and "a user can install it" on {{PROJECT_NAME}} - code signing, Hardened Runtime, entitlements, notarization and stapling, DMG/pkg packaging, Sparkle or App Store delivery, versioning, and release notes. Use before any release candidate and whenever signing, entitlements, bundle layout, or the update channel changes. Does not write feature code; delegate that to swift-expert or cpp-expert.
-model: claude-opus-4-8
+model: claude-opus-5-5
 tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 ---

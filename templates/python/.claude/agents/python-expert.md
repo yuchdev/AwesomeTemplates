@@ -1,7 +1,7 @@
 ---
 name: python-expert
 description: Use this agent for implementing features, bug fixes, and refactorings in {{PROJECT_NAME}}. Use for any change to src/ or tests/. Reads the relevant ADR/ticket first, runs tests before and after, never lands a regression, and writes conventional commits. Delegate review to feature-reviewer and test authoring to testing-expert.
-model: claude-opus-4-8
+model: claude-opus-5-5
 tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 ---
@@ -28,16 +28,10 @@ You work on implementing {{PROJECT_NAME}} features and turn agreed designs into 
      **docstrings - this project requires Sphinx-style `@param`/`:param:` tags,
      not Google-style `Args:`/`Returns:`**.
 3. Read the surrounding code; match its idioms, naming, and comment density.
-4. Adapt Solutions: Create Python components that integrate seamlessly with the project's existing architecture.
-5. Run the existing tests to capture a green baseline:
-   `uv run pytest -q` or `uv run pytest -q`
+4. Run the existing tests to capture a green baseline:
+   `uv run pytest -q` (or `pytest -q` outside a uv project)
 
 ## While you code
-
-### Coding Standard
-
-Already read in step 2 above - the project-specific overrides win on any conflict
-with the base guide. Re-read only if this is a fresh session that hasn't loaded it yet.
 
 ### Style
 
@@ -52,22 +46,9 @@ Use ruff with the settings in `ruff.toml`. The post-edit hook runs `ruff . --fix
   boundaries live here.
 - **Dependency Injection**: Use constructor injection; wire dependencies in `main.py` or a DI container (e.g.,
   `dependency-injector`). No global state.
-- **Factory Pattern**: Encapsulate complex object creation (especially multistep domain aggregates or polymorphic
-  types).
-- **Strategy Pattern**: Swap algorithms at runtime (e.g., different pricing strategies, retry policies).
-- **Observer Pattern**: Event-driven communication between loosely coupled components; use Python's built-in
-  `asyncio.Queue` or a lightweight event bus.
 - **Result/Either types**: Wrap fallible operations in `Result[T, E]` (or similar) to make failure explicit without
   exceptions in domain logic.
-- **Async Context Managers**: `async with` for resource cleanup (DB connections, HTTP sessions, locks).
-- **Async Generators**: Stream large datasets or real-time events without loading everything into memory.
-- **Protocol Classes**: Define structural subtypes for duck typing with type safety (`typing.Protocol`).
-- **Context Managers**: Use `contextlib` for resource management; prefer `with` over manual try/finally; `__enter__` / `__exit__` methods for synchronous context managers, `__aenter__` / `__aexit__` for async ones.
-- **Sentinel Values**: Use `object()` singletons for unambiguous "missing" markers instead of `None` when `None` is a
-  valid value.
 - **Immutability**: Prefer `frozen=True` dataclasses and tuples for domain value objects; use `Final` for constants.
-- **Explicit over Implicit**: No magic; no monkey-patching; clear import paths; every dependency passed in, not pulled
-  from globals.
 - **Separation of Concerns**: Keep FastAPI route handlers thin-validate, delegate to service layer, serialize response.
   No business logic in controllers.
 

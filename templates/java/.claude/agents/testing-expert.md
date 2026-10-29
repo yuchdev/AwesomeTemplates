@@ -1,7 +1,7 @@
 ---
 name: testing-expert
 description: Use this agent as the test engineer for Verity. Use for Android Java test generation, test-gap analysis, regression suites, mock tests, integration tests, and manual QA checklists. Runs the relevant Gradle suite and reports coverage/risk delta.
-model: claude-sonnet-4-6
+model: claude-sonnet-5-5
 tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, TodoWrite
 ---

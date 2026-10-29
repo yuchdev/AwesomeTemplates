@@ -18,10 +18,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from awesome_templates import model_policy
 from awesome_templates.catalog import discover, list_presets
 from awesome_templates.cli import app
 from awesome_templates.dependencies import build_dependency_graph
 from awesome_templates.markers import scan_tree
+from awesome_templates.model_catalog import FETCHERS
+from awesome_templates.model_policy import PolicyMode, load_policy, scan_generation
 from awesome_templates.specializations import disallowed_kinds_present, list_specializations
 from awesome_templates.templating import PLACEHOLDER_RE
 from awesome_templates.workspace import Workspace
@@ -276,3 +279,48 @@ def test_real_specializations_ship_only_agents_and_skills():
         if (found := disallowed_kinds_present(_REAL_TEMPLATES, preset, specialization))
     }
     assert offenders == {}
+
+
+def test_real_repo_ships_an_active_model_policy():
+    # The check is only worth anything while pyproject.toml actually turns it on: a deleted table
+    # would silently read as `off`. `current` must also stay non-empty (load_policy enforces it).
+    policy = load_policy(REAL_REPO_ROOT / "pyproject.toml")
+    assert policy.mode is not PolicyMode.off
+    assert policy.current
+
+
+@pytest.mark.parametrize("preset", ["cpp", "frontend", "java", "macos", "python"])
+def test_real_preset_and_common_agents_pin_only_current_models(preset):
+    # Pins the model migration: a plain `generate --preset <p>` copies common/ + the preset, and none
+    # of those agents may pin a model outside pyproject.toml's `current` list. Specializations are
+    # deliberately not covered here - they are the known-stale set `check-models` reports.
+    policy = load_policy(REAL_REPO_ROOT / "pyproject.toml")
+    findings = scan_generation(_REAL_TEMPLATES, preset, [], policy)
+    assert [model_policy.format_finding(f, REAL_REPO_ROOT) for f in findings] == []
+
+
+def test_real_check_models_command_runs_against_the_real_tree():
+    # Smoke test of the whole-tree sweep: it must run and emit well-formed JSON whatever the mode.
+    result = runner.invoke(app, ["check-models", "--json"])
+    assert result.exit_code in (0, 1), result.stdout
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"mode", "current", "findings", "live"}
+    assert payload["live"]["checked"] is False  # no --live, so no network
+
+
+def test_real_recommended_lists_are_well_formed():
+    policy = load_policy(REAL_REPO_ROOT / "pyproject.toml")
+    for vendor, ids in policy.recommended.items():
+        assert all(m == m.strip() and m for m in ids), vendor
+        assert model_policy.vendor_of(next(iter(ids)), policy) == vendor if ids else True
+    assert policy.current == frozenset(m for ids in policy.recommended.values() for m in ids)
+    # A key env var is only meaningful for a vendor the live check can query.
+    assert set(policy.key_envs) <= set(FETCHERS)
+
+
+def test_real_upgrade_rules_send_every_old_claude_tier_to_a_recommended_model():
+    policy = load_policy(REAL_REPO_ROOT / "pyproject.toml")
+    rule = policy.upgrade["anthropic"]
+    for old in ("claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-3-5", "claude-opus-99-9"):
+        assert rule.target_for(old) in policy.recommended["anthropic"], old
+    assert policy.upgrade["copilot"].target_for("anything") in policy.recommended["copilot"]

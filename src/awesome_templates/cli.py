@@ -5,6 +5,8 @@
 Command tree:
   awesome_templates list
   awesome_templates graph [...]
+  awesome_templates check-models [...]
+  awesome_templates upgrade [...]
   awesome_templates generate [...]
 """
 
@@ -21,7 +23,7 @@ from rich.console import Console
 from rich.table import Table
 from typer.core import TyperGroup
 
-from awesome_templates import docgen, harnesses
+from awesome_templates import docgen, harnesses, model_catalog, model_policy, upgrade
 from awesome_templates.catalog import KINDS, discover, list_presets
 from awesome_templates.config import ConfigError, load_config
 from awesome_templates.dependencies import (
@@ -31,6 +33,7 @@ from awesome_templates.dependencies import (
 )
 from awesome_templates.dependencies import to_json as graph_to_json
 from awesome_templates.log_helper import LogHelper, LogSeverity
+from awesome_templates.model_policy import ModelPolicy, ModelPolicyError
 from awesome_templates.presets import copy_preset, load_preset_vars
 from awesome_templates.specializations import list_specializations
 from awesome_templates.templating import slugify_package, slugify_upper
@@ -71,6 +74,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # under templates/, kept separate from this package's own source/docs so the
 # two are never confused with each other.
 TEMPLATES_ROOT = REPO_ROOT / "templates"
+# Where the outdated-model policy is read from (see model_policy.py). A module constant, like
+# TEMPLATES_ROOT, so tests can point it at a synthetic pyproject.toml.
+PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 
 # rich_markup_mode=None forces classic Click help rendering (plain text into
 # the formatter buffer) instead of typer's default Rich-panel help, which
@@ -410,6 +416,206 @@ def graph_cmd(
         )
 
 
+@app.command("check-models")
+def check_models_cmd(
+    preset: Optional[str] = typer.Option(
+        None,
+        help="check only this preset (plus common/ and all of its specializations); default: the whole tree",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="emit machine-readable JSON"),
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="also ask each vendor's Models API whether every recommended and pinned ID is served "
+        "(needs the API key env vars named in pyproject.toml; vendors without a key are skipped)",
+    ),
+) -> None:
+    """Report template agents pinning a model outside pyproject.toml's model_policy.recommended.
+
+    Honors the same policy `generate` does: `off` checks nothing, `warn` reports and exits 0,
+    `error` reports and exits 1 - so `check-models` is the whole-tree sweep to run in CI or before
+    a release, while `generate` only checks what it is about to copy. `--live` adds the network check
+    and is never implied: `generate` never goes online."""
+    workspace = _workspace()
+    try:
+        policy = model_policy.load_policy(PYPROJECT_PATH)
+    except ModelPolicyError as exc:
+        _fail(str(exc))
+        return
+
+    if preset is not None:
+        preset = _resolve_preset(workspace, preset)
+        findings = model_policy.scan_generation(workspace, preset, list_specializations(workspace, preset), policy)
+    else:
+        findings = model_policy.scan_all(workspace, policy)
+
+    lines = [model_policy.format_finding(f, REPO_ROOT) for f in findings]
+    unserved: list[model_catalog.UnservedModel] = []
+    skipped_vendors: list[str] = []
+    if live and policy.mode is not model_policy.PolicyMode.off:
+        # Judge every pin, not just the outdated ones: a typo'd ID is outdated AND unserved, a valid
+        # but unlisted one is only outdated. An empty `current` makes the scan return every pin.
+        every_pin = ModelPolicy(model_policy.PolicyMode.warn, frozenset())
+        if preset is not None:
+            pins = model_policy.scan_generation(workspace, preset, list_specializations(workspace, preset), every_pin)
+        else:
+            pins = model_policy.scan_all(workspace, every_pin)
+        try:
+            outcome = model_catalog.verify(policy, sorted({f.model for f in pins}))
+        except model_catalog.ModelCatalogError as exc:
+            _fail(str(exc))
+            return
+        unserved, skipped_vendors = outcome.unserved, outcome.skipped_vendors
+    unserved_lines = [model_catalog.format_unserved(u) for u in unserved]
+    if json_out:
+        typer.echo(
+            json.dumps(
+                {
+                    "mode": policy.mode.value,
+                    "current": sorted(policy.current),
+                    "findings": [
+                        {"path": model_policy.display_path(f.path, REPO_ROOT), "model": f.model} for f in findings
+                    ],
+                    "live": {
+                        "checked": live,
+                        "unserved": [{"vendor": u.vendor, "model": u.model} for u in unserved],
+                        "skipped_vendors": skipped_vendors,
+                    },
+                },
+                indent=2,
+            )
+        )
+    elif policy.mode is model_policy.PolicyMode.off:
+        # No square brackets here: Rich would read a TOML table header as a markup tag.
+        console.print(
+            "model policy is off - nothing checked (see tool.awesome_templates.model_policy in pyproject.toml)"
+        )
+    elif not findings:
+        console.print(f"All template agents pin a current model ({', '.join(sorted(policy.current))}).")
+    else:
+        for line in lines:
+            console.print(f"[yellow]{line}[/yellow]", soft_wrap=True)
+        console.print(f"{len(lines)} outdated pin(s); current: {', '.join(sorted(policy.current))}")
+
+    if live and not json_out and policy.mode is not model_policy.PolicyMode.off:
+        for line in unserved_lines:
+            console.print(f"[yellow]{line}[/yellow]", soft_wrap=True)
+        if skipped_vendors:
+            console.print(f"live check skipped (no API key in the environment): {', '.join(skipped_vendors)}")
+        if not unserved:
+            if skipped_vendors:
+                console.print("Live check: every model checked is served by its vendor; skipped vendors were not checked.")
+            else:
+                console.print("Live check: every recommended and pinned model is served by its vendor.")
+
+    if (findings or unserved) and policy.mode is model_policy.PolicyMode.error:
+        raise typer.Exit(code=1)
+
+
+@app.command("upgrade")
+def upgrade_cmd(
+    path: Path = typer.Argument(Path("."), help="an existing project containing an agentic pipeline"),
+    harness: Optional[List[str]] = typer.Option(
+        None,
+        "--harness",
+        help="scan only this harness (repeatable: claude, copilot, junie, codex); default: every verified "
+        "harness found. Naming an unverified one tries it anyway.",
+    ),
+    apply: bool = typer.Option(False, "--apply", help="write the changes (default: report only)"),
+    force: bool = typer.Option(False, "--force", help="with --apply, edit files that have uncommitted git changes"),
+    json_out: bool = typer.Option(False, "--json", help="emit machine-readable JSON"),
+) -> None:
+    """Bump outdated model pins in an existing project, per vendor.
+
+    Each pin is judged against its own harness's vendor in pyproject.toml's model_policy and moved to
+    that vendor's configured target (see model_policy.upgrade). Report mode exits 1 while anything is
+    outdated, so it doubles as a CI gate; `--apply` rewrites only the matched `model` lines and refuses
+    files with uncommitted changes unless `--force`. Incomplete writes are reported and exit 1. Offline:
+    never calls a vendor API."""
+    if not path.is_dir():
+        _fail(f"'{path}' is not a directory")
+        return
+    try:
+        if harness:
+            upgrade.validate_harness_names(harness)
+        policy = model_policy.load_policy(PYPROJECT_PATH)
+    except (ValueError, ModelPolicyError) as exc:
+        _fail(str(exc))
+        return
+    if policy.mode is model_policy.PolicyMode.off:
+        _fail("model policy is off - nothing to judge pins against (see tool.awesome_templates.model_policy)")
+        return
+
+    warnings: list[str] = []
+    plan = upgrade.plan_upgrade(path, policy, harness or None, warnings=warnings)
+    written = 0
+    if apply and plan.changes:
+        blocked = [] if force else upgrade.dirty_files(path, sorted({c.site.path for c in plan.changes}))
+        if blocked:
+            _fail(
+                "refusing to edit files with uncommitted changes (commit them or pass --force): "
+                + ", ".join(model_policy.display_path(p, path) for p in blocked)
+            )
+            return
+        written = upgrade.apply_changes(plan.changes, warnings=warnings)
+
+    def rel(p: Path) -> str:
+        return model_policy.display_path(p, path)
+
+    if json_out:
+        typer.echo(
+            json.dumps(
+                {
+                    "applied": apply,
+                    "written": written,
+                    "current": plan.current,
+                    "changes": [
+                        {
+                            "harness": c.site.harness,
+                            "path": rel(c.site.path),
+                            "line": c.site.line,
+                            "from": c.site.model,
+                            "to": c.new_model,
+                        }
+                        for c in plan.changes
+                    ],
+                    "unresolved": [
+                        {"harness": u.harness, "path": rel(u.path), "line": u.line, "model": u.model}
+                        for u in plan.unresolved
+                    ],
+                    "skipped": [{"harness": h, "reason": r} for h, r in plan.skipped],
+                    "warnings": warnings,
+                },
+                indent=2,
+            )
+        )
+    else:
+        for c in plan.changes:
+            console.print(
+                f"{c.site.harness}: {rel(c.site.path)}:{c.site.line} {c.site.model} -> {c.new_model}", soft_wrap=True
+            )
+        for u in plan.unresolved:
+            console.print(
+                f"[yellow]{u.harness}: {rel(u.path)}:{u.line} {u.model} is outdated but no upgrade target is configured[/yellow]",
+                soft_wrap=True,
+            )
+        for h, reason in plan.skipped:
+            console.print(f"skipped {h}: {reason}", soft_wrap=True)
+        for w in warnings:
+            console.print(f"[yellow]{w}[/yellow]", soft_wrap=True)
+        change_summary = (
+            f"{written}/{len(plan.changes)} pin(s) updated"
+            if apply
+            else f"{len(plan.changes)} pin(s) would update"
+        )
+        console.print(f"{change_summary}, {len(plan.unresolved)} unresolved, {plan.current} already current")
+
+    if (plan.changes or plan.unresolved) and not (
+        apply and not plan.unresolved and written == len(plan.changes)
+    ):
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def generate(
     target_dir: Path = typer.Argument(  # noqa: B008 - Typer requires the call in the default position
@@ -581,6 +787,23 @@ def generate(
     elif api_key_env_value:
         auth_label = f"api-key-env:{api_key_env_value}"
 
+    # Outdated-model gate (model_policy.py): checks exactly the agent sources this run would copy.
+    # Like the credential check above it runs before the `if dry_run:` branch, so --dry-run fails
+    # the way a real run would, and in `error` mode it fires before anything is written.
+    model_warnings: list[str] = []
+    try:
+        policy = model_policy.load_policy(PYPROJECT_PATH)
+        model_policy.enforce(
+            model_policy.scan_generation(workspace, preset_value, specializations_value, policy),
+            policy,
+            model_warnings,
+            relative_to=REPO_ROOT,
+            log=log,
+        )
+    except ModelPolicyError as exc:
+        _fail(str(exc))
+        return
+
     subs = {
         **load_preset_vars(workspace, preset_value),
         "PROJECT_NAME": name_value,
@@ -600,6 +823,7 @@ def generate(
             "harness": harness_value,
             "auth": auth_label,
             "port_to": port_to.value if port_to else None,
+            "model_warnings": model_warnings,
         }
         if resolve_value:
             from awesome_templates.markers import scan_tree
@@ -618,6 +842,8 @@ def generate(
                 console.print(f"Would AI-resolve {payload['markers_to_resolve']} marker(s)")
             if port_to:
                 console.print(f"Port to: {port_to.value}")
+            for w in model_warnings:
+                console.print(f"[yellow]warning:[/yellow] {w}")
         return
 
     existing = [d for d in (".claude", "docs", "scripts") if (out_dir / d).exists() and any((out_dir / d).iterdir())]
@@ -625,7 +851,7 @@ def generate(
         _fail(f"{', '.join(str(out_dir / d) for d in existing)} already has content - pass --force to overwrite")
         return
 
-    warnings: list[str] = []
+    warnings: list[str] = list(model_warnings)
     try:
         written = copy_preset(
             workspace,

@@ -118,3 +118,29 @@ def fixture_workspace(tmp_path: Path) -> Workspace:
     (other / "docs").mkdir(parents=True)
 
     return Workspace(root=root)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("live models")
+    group.addoption(
+        "--live-models",
+        action="store_true",
+        default=False,
+        help="run tests that call vendor Models APIs (needs API keys and network; off by default)",
+    )
+    group.addoption(
+        "--live-models-strict",
+        action="store_true",
+        default=False,
+        help="with --live-models, a vendor whose API key env var is unset fails instead of skipping",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Keep the default run offline: `live_models` tests are skipped unless explicitly requested."""
+    if config.getoption("--live-models") or os.environ.get("RUN_LIVE_MODELS") == "1":
+        return
+    skip = pytest.mark.skip(reason="live vendor check; opt in with --live-models (or RUN_LIVE_MODELS=1)")
+    for item in items:
+        if "live_models" in item.keywords:
+            item.add_marker(skip)
