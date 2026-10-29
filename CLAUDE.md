@@ -36,9 +36,16 @@ uv run awesome-templates graph templates/python
 uv run awesome-templates graph --inline --force      # MUTATES templates/** in place
 uv run awesome-templates graph --remove
 
+uv run awesome-templates check-models                # whole-tree sweep for outdated `model:` pins
+uv run awesome-templates check-models --preset python --json
+uv run awesome-templates upgrade ../some-project     # report outdated model pins in an existing project
+uv run awesome-templates upgrade ../some-project --apply   # rewrite them (refuses uncommitted files without --force)
+uv run awesome-templates check-models --live         # ALSO asks vendor Models APIs; needs *_API_KEY env vars
+
 uv run pytest --cov=awesome_templates                # full suite
 uv run pytest tests/test_catalog.py::test_name_here  # single test
 uv run pytest tests/test_integration_real_repo.py    # exercises the real templates/ tree
+uv run pytest --live-models                          # opt-in: vendor Models API checks (network + keys)
 uv run ruff check src/ tests/
 ```
 
@@ -120,6 +127,25 @@ not gate on a number.
 - **`docgen.py`** - deterministic, no-network doc generation that runs on *every* `generate`.
   Regenerates `docs/agent/{agents,skills,hooks}.md` and the "Actual Test Layout" section.
   Must never import `anthropic`.
+- **`model_policy.py`** - the outdated-model check: reads `[tool.awesome_templates.model_policy]`
+  from `pyproject.toml` (`mode = off|warn|error`; `[...model_policy.recommended]` holds one model-ID list per vendor,
+  the single place templates' models are named; their union is the allowlist), scans agent
+  frontmatter `model:` pins, and either appends to `warnings` or raises `ModelPolicyError`.
+  `generate` checks exactly what it copies (`common/` + the preset + chosen specializations),
+  before the dry-run branch and before any write, so `error` blocks a run cleanly; `check-models`
+  sweeps the whole tree. A missing `model:` and the aliases `opus`/`sonnet`/`haiku`/`inherit` are
+  exempt. To retire a model, delete it from `recommended`. Must never import `anthropic`.
+- **`model_catalog.py`** - the opt-in reality check: asks Anthropic/OpenAI/Google Models APIs (stdlib
+  `urllib`, `fetch=` injectable) which IDs they serve and flags any recommended or pinned ID that is
+  missing. Reached only by `check-models --live` and `pytest --live-models`, never by `generate`; keys
+  come from the env var *names* in `[...model_policy.vendors]`. Cannot see deprecation, so it
+  complements rather than replaces `recommended`. Must never import `anthropic`.
+- **`upgrade.py`** - `upgrade` command's engine: scans an *existing* project's harness dirs (Claude
+  verified; Copilot/Junie/Codex locations unverified, run only when named with `--harness`) for `model`
+  pins, judges each against its own vendor's `recommended` list and moves it to the vendor's target from
+  `[...model_policy.upgrade.<vendor>]` (family regexes + per-family targets + default; **no old->new
+  pairs**, so cost never grows with release count). Single-line in-place edits; report-only unless
+  `--apply`. Offline; must never import `anthropic`.
 - **`markers.py`** - the pure, network-free scan and splice of marker comments. `MARKER_KINDS`
   is `TEMPLATE-INIT` and `SME REVIEW NEEDED`. `Marker` is frozen and carries character
   offsets, so `apply_replacements` splices by exact position in descending order.
@@ -139,7 +165,7 @@ not gate on a number.
   list[str]` already is. Writes to stderr.
 - **`dependencies.py`** - maintainer-only graph tool for this repo's own catalog. Not part of
   `generate`; never invoke it implicitly from another command.
-- **`cli.py`** - the Typer app. Commands: `list`, `graph`, `generate`.
+- **`cli.py`** - the Typer app. Commands: `list`, `graph`, `check-models`, `upgrade`, `generate`.
 
 `src/flake8_project_rules/` is a separate, standalone package: a flake8 plugin implementing
 custom AST rules X001-X011, covered by `tests/flake8_lint/`. It is unrelated to the generator
@@ -194,7 +220,12 @@ the preset does not ship; a hook importing a name its `_common.py` does not defi
 - **The offline path stays offline.** `anthropic` is imported only from `ai/client.py`, only
   lazily; `cli.py` imports `resolver`/`headless` lazily inside the `--resolve-markers` branch.
   Pinned by `tests/test_markers.py::test_cli_import_does_not_pull_anthropic` and
-  `::test_docgen_import_does_not_pull_anthropic`.
+  `::test_docgen_import_does_not_pull_anthropic`; `model_policy` is pinned the same way in
+  `tests/test_model_policy.py`.
+- **Distributed agents pin current models.** Every agent a plain `generate --preset <p>` copies
+  (`common/` + the preset) must pin a model in `model_policy.recommended`; pinned by
+  `tests/test_integration_real_repo.py::test_real_preset_and_common_agents_pin_only_current_models`.
+  Specializations are checked by `check-models` and by `generate` when selected, not by that test.
 - **`SME REVIEW NEEDED` is never silently resolved.** `resolver.render` emits the unreviewed
   draft blockquote regardless of the model's confidence, and counts it under
   `ResolveSummary.human_review` rather than `resolved`/`todos`.

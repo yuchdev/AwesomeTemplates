@@ -42,8 +42,51 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # objects, not the accidental-shared-state footgun the rule targets.
 "src/awesome_templates/cli.py" = ["B008"]
 
+# Outdated-model policy for the `model:` pin in every templates/**/.claude/agents/*.md
+# (see src/awesome_templates/model_policy.py). `current` is an allowlist: a pin outside it is
+# "outdated". Floating aliases (opus/sonnet/haiku/inherit) and agents with no `model:` are exempt.
+#   mode = "off"   - no check
+#   mode = "warn"  - `generate` reports outdated pins in its warnings and carries on
+#   mode = "error" - `generate` refuses to write anything while an agent it would copy is outdated
+# To retire a model: delete it from `recommended`. To adopt one: add it under its vendor.
+# `recommended` is the ONE place templates' models are named; the pytest suite checks agent pins
+# against it offline, and `pytest --live-models` / `check-models --live` check that every ID here (and
+# every pin) is actually served by the vendor's Models API. `vendors` holds env var NAMES only.
+[tool.awesome_templates.model_policy]
+mode = "warn"
+
+[tool.awesome_templates.model_policy.recommended]
+anthropic = [
+    "claude-fable-5-1",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
+]
+openai = []
+google = []
+# Harness-native models for `upgrade` (a Copilot pin has no vendor prefix). "Sol 6.1" is as given by
+# the maintainer; confirm it against the installed Copilot CLI before relying on it.
+copilot = ["Sol 6.1"]
+
+# `upgrade` rules, one table per vendor. NO old->new pairs: `families` classify an old ID by pattern,
+# `targets` say where each family goes, `default` catches the rest. Every target must be in
+# `recommended` above. codex / junie: add a table once their model values are known.
+[tool.awesome_templates.model_policy.upgrade.anthropic]
+families = { opus = "^claude-opus-", sonnet = "^claude-sonnet-", haiku = "^claude-haiku-" }
+targets = { opus = "claude-opus-5-5", sonnet = "claude-sonnet-5-5", haiku = "claude-haiku-5-5" }
+default = "claude-opus-5-5"
+
+[tool.awesome_templates.model_policy.upgrade.copilot]
+default = "Sol 6.1"
+
+[tool.awesome_templates.model_policy.vendors]
+anthropic = { key_env = "ANTHROPIC_API_KEY" }
+openai = { key_env = "OPENAI_API_KEY" }
+google = { key_env = "GEMINI_API_KEY" }
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["live_models: calls vendor Models APIs; needs API keys and network (opt in with --live-models)"]
 
 [tool.flake8_lint_tests]
 include = ["tests/flake8_lint/samples/valid_clean_module.py"]

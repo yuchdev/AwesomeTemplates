@@ -38,7 +38,7 @@ _TEST_LAYOUT_HEADING = "## Actual Test Layout"
 TEST_COVERAGE_DOC = ("docs", "test", "code_test_coverage.md")
 
 
-def _parse_frontmatter(text: str) -> dict[str, str]:
+def parse_frontmatter(text: str) -> dict[str, str]:
     """Hand-rolled, not full YAML: every frontmatter block in templates/ is
     flat `key: value` lines (see any agents/*.md or skills/*/SKILL.md).
     Adding a pyyaml dependency for that is the same call resolver.py already
@@ -94,7 +94,7 @@ def list_agents(project_dir: Path) -> list[AgentInfo]:
         return []
     agents = []
     for path in sorted(agents_dir.glob("*.md")):
-        fm = _parse_frontmatter(path.read_text(encoding="utf-8"))
+        fm = parse_frontmatter(path.read_text(encoding="utf-8"))
         agents.append(
             AgentInfo(
                 name=fm.get("name", path.stem),
@@ -111,7 +111,7 @@ def list_skills(project_dir: Path) -> list[SkillInfo]:
         return []
     skills = []
     for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
-        fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
+        fm = parse_frontmatter(skill_md.read_text(encoding="utf-8"))
         skills.append(
             SkillInfo(
                 name=fm.get("name", skill_md.parent.name),

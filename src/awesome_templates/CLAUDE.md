@@ -40,6 +40,26 @@ its own purpose and rationale; this file is the cross-module map those can't pro
   imports `anthropic` (pinned by
   `tests/test_markers.py::test_docgen_import_does_not_pull_anthropic`) even though `resolver.py`
   imports *it* to reuse `list_agents`/`list_skills`/`list_test_files` rather than re-deriving them.
+- `model_policy.py` — the outdated-model check. `load_policy` reads `[tool.awesome_templates.model_policy]`
+  from `pyproject.toml` (`mode` = `off|warn|error`, `[...model_policy.recommended]` = per-vendor model-ID lists whose union is the allowlist, `vendors` = env var names for the live check; an absent table
+  is `off`, a malformed one raises `ModelPolicyError` so a typo can't silently disable the check).
+  `scan_agents_dir` reads each agent's `model:` via `docgen.parse_frontmatter` (public so this module
+  doesn't grow a second frontmatter parser); a missing `model:` and the floating aliases in
+  `FLOATING_ALIASES` are never findings. `scan_generation` covers exactly what `copy_preset` copies
+  (`common/` + the preset + chosen specializations) while `scan_all` sweeps the tree for `check-models`;
+  `enforce` appends to `warnings` in `warn` mode or raises in `error` mode. `cli.generate` calls it
+  before the `--dry-run` branch, so `error` fails dry runs too and fires before anything is written.
+  Stdlib-only; never imports `anthropic` (pinned in `tests/test_model_policy.py`).
+- `model_catalog.py` — opt-in live check, the second fault mode beside `model_policy`'s allowlist: `fetch_supported`
+  lists the IDs a vendor serves (Anthropic/OpenAI/Google, paginated, key only in headers), `verify` diffs
+  `recommended ∪ pinned` against that and skips vendors with no key. Takes `fetch=` so tests never hit the
+  network; only `check-models --live` and `tests/test_live_models.py` (`--live-models`) call it.
+- `upgrade.py` — plans and applies model-pin bumps in an existing project. `SITES` lists each harness's marker dir,
+  file globs and whether its pin location is `verified` (only Claude); `plan_upgrade` classifies each pin via
+  `ModelPolicy.recommended[vendor]` and `UpgradeRule.target_for` (parsed by `model_policy._parse_upgrade`, which
+  rejects targets outside `recommended`); `apply_changes` re-matches each line before a minimal in-place rewrite;
+  `dirty_files(run=)` is the uncommitted-changes guard. Flag validation lives in `validate_harness_names`, not
+  `cli.sanity_check`, which is specific to `generate`'s AI-stage flags.
 - `templating.py` — the substitution engine: a flat regex find/replace over the small fixed placeholder
   glossary, with an "unresolved placeholder left in <path>" warning rather than a hard failure.
 - `log_helper.py` — `LogSeverity` (error/warning/info/debug) and `LogHelper`, a leveled console tracer
